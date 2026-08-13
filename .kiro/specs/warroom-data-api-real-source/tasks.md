@@ -84,53 +84,54 @@
     - 確認 `normalize_date`、`group_by_project` 私有方法**完全不變動**
     - _需求：2.2、2.3、2.4、2.5、4.1、4.2、4.3、4.4、6.1、6.2_
 
-- [ ]* 6. Property 測試（具代表性範例，比照雛型階段作法，不引入 PBT 套件）
-  - [ ]* 6.1 撰寫 Property 1：空列跳過不影響有效資料數量
+- [x]* 6. Property 測試（具代表性範例，比照雛型階段作法，不引入 PBT 套件）
+  - [x]* 6.1 撰寫 Property 1：空列跳過不影響有效資料數量
     - **Property 1：空列跳過不影響有效資料數量**
     - 準備至少一組含標題列、多筆非空列、與多筆空列（`nil` 列、全空字串列）混合的列陣列，驗證 `parse_rows` 輸出筆數恰好等於非空列數，空列不出現在輸出中
     - **驗證：需求 2.2、2.5**
 
-  - [ ]* 6.2 撰寫 Property 2：列長度不足時 nil 填補完整性
+  - [x]* 6.2 撰寫 Property 2：列長度不足時 nil 填補完整性
     - **Property 2：列長度不足時 nil 填補完整性**
     - 準備長度 0～6 各一組代表性列（例如只有 `project_name`、只到 `owner`、只到 `planned_completion_date`），驗證 `parse_rows` 解析後每筆任務 Hash 都包含全部 7 個 `COLUMN_KEYS`，不足欄位值為 `nil`
     - **驗證：需求 2.4**
 
-  - [ ]* 6.3 撰寫 Property 3：日期欄位格式一致性
+  - [x]* 6.3 撰寫 Property 3：日期欄位格式一致性
     - **Property 3：日期欄位格式一致性**
     - 對 `YYYY/M/D`、`YYYY/MM/DD`、`YYYY-M-D`、`YYYY-MM-DD` 四種格式各準備至少一組範例（含月/日個位數與雙位數），驗證 `normalize_date` 輸出符合 `/\A\d{4}-\d{2}-\d{2}\z/`
     - **驗證：需求 3.1**
 
-  - [ ]* 6.4 撰寫 Property 4：nil 與空字串日期保留為 nil
+  - [x]* 6.4 撰寫 Property 4：nil 與空字串日期保留為 nil
     - **Property 4：nil 與空字串日期保留為 nil**
     - 對 `nil` 與空字串各準備一組範例，驗證 `normalize_date` 輸出必定為 `nil`
     - **驗證：需求 3.2**
 
-  - [ ]* 6.5 撰寫 Property 5：無法解析的日期保留原始值
+  - [x]* 6.5 撰寫 Property 5：無法解析的日期保留原始值
     - **Property 5：無法解析的日期保留原始值**
     - 準備多組不符合支援格式的非空字串範例（如 `"TBD"`、`"未定"`、`"2026.07.31"`），驗證 `normalize_date` 輸出等於輸入值，不拋出例外
     - **驗證：需求 3.3**
 
-  - [ ]* 6.6 撰寫 Property 6：`delay_days` 型別轉換
+  - [x]* 6.6 撰寫 Property 6：`delay_days` 型別轉換
     - **Property 6：`delay_days` 型別轉換**
     - 準備正數、負數、零的整數字串（如 `"5"`、`"-4"`、`"0"`）驗證轉為對應 Integer；準備 `nil`／空字串驗證轉為 `nil`；準備非數字字串（如 `"TBD"`）驗證保留原始字串
     - **驗證：需求 3.4、3.5**
 
-  - [ ]* 6.7 撰寫 Property 7：分組完整性（資料不遺失）
+  - [x]* 6.7 撰寫 Property 7：分組完整性（資料不遺失）
     - **Property 7：分組完整性（資料不遺失）**
     - 準備至少一組單專案與一組多專案（任務數不均）的任務 Hash 陣列，驗證 `group_by_project` 輸出所有陣列元素總數等於輸入筆數
     - **驗證：需求 8.1、8.2**
 
-  - [ ]* 6.8 撰寫 Property 8：分組鍵值完整性
+  - [x]* 6.8 撰寫 Property 8：分組鍵值完整性
     - **Property 8：分組鍵值完整性**
     - 沿用 6.7 的範例，驗證 `group_by_project` 輸出鍵值集合與輸入中 `project_name` 唯一值集合完全相同
     - **驗證：需求 8.1**
 
-  - [ ]* 6.9 撰寫 Property 9：錯誤回應格式一致性
+  - [x]* 6.9 撰寫 Property 9：錯誤回應格式一致性
     - **Property 9：錯誤回應格式一致性**
-    - 對 4 種 stub `SheetsApiClient.fetch_rows` 拋出的例外情境（404、403、驗證失敗、未預期例外）各驗證一次，API 回應 JSON body 必須包含 `error.code` 與 `error.message` 兩個鍵
-    - **驗證：需求 4.1、4.2、4.3、4.4、4.5**
+    - 對 `SheetsApiClient.fetch_rows` 拋出的例外情境（404、403、未預期例外）各驗證一次，API 回應 JSON body 必須包含 `error.code` 與 `error.message` 兩個鍵
+    - 註：Actor 實際行為改為「缺必要欄位的列會被跳過並回傳成功」（見任務 7 Test 8），不再對缺欄資料回傳 `invalid_data_format` 失敗，故此 Property 涵蓋範圍相應調整為 404／403／未預期例外三種情境
+    - **驗證：需求 4.1、4.2、4.4、4.5**
 
-  - [ ]* 6.10 撰寫 Property 10：Blueprint 欄位完整性
+  - [x]* 6.10 撰寫 Property 10：Blueprint 欄位完整性
     - **Property 10：Blueprint 欄位完整性**
     - 對 `MockData` 移除後的真實任務 Hash 範例（至少 2 筆，含欄位值為 `nil` 的情況），驗證 `ProjectTaskBlueprint.render_as_hash` 輸出恰好包含 7 個欄位，不多不少
     - **驗證：需求 6.1、7.3**
@@ -152,8 +153,8 @@
     - 呼叫 Actor 時傳入 `simulate_error` query parameter → 驗證被忽略，回傳正常資料
     - _需求：2.2、2.3、2.4、2.5、3.1–3.5、4.1–4.4、5.1_
 
-- [ ] 8. 微調 `Api::ProjectProgressController`
-  - [ ] 8.1 移除 `simulate_error` 參數傳遞
+- [x] 8. 微調 `Api::ProjectProgressController`
+  - [x] 8.1 移除 `simulate_error` 參數傳遞
     - 編輯 `app/controllers/api/project_progress_controller.rb`
     - 將 `Sheets::FetchProjectProgress.result(simulate_error: params[:simulate_error]&.to_sym)` 改為 `Sheets::FetchProjectProgress.result()`
     - 確認 Controller 內無任何 `simulate_error`、`MockData`、Google API 呼叫或日期轉換邏輯

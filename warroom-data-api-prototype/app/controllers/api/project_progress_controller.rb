@@ -1,9 +1,7 @@
 module Api
   class ProjectProgressController < ApplicationController
     def index
-      result = Sheets::FetchProjectProgress.result(
-        simulate_error: params[:simulate_error]&.to_sym
-      )
+      result = Sheets::FetchProjectProgress.result
 
       if result.success?
         serialized = result.grouped_data.transform_values do |tasks|
