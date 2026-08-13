@@ -1,0 +1,10 @@
+{
+  "name": "Rails Backend Quality Review",
+  "trigger": "PostFileSave",
+  "matcher": "\\.(rb|erb)$",
+  "action": {
+    "type": "agent",
+    "prompt": "A Ruby/ERB file was just saved. Run a read-only quality check and report findings only — do NOT modify any files and do NOT proceed to the next task.\n\nCheck the saved file for the following issues:\n\n1. **service_actor 慣例** — 新增或修改的 Actor 是否遵循 service_actor pattern，封裝單一商業邏輯？是否有邏輯散落在 Controller 或 Model 中，應該抽成 Actor？\n2. **Blueprinter 慣例** — API/View 輸出欄位是否透過 Blueprint 統一定義？是否有欄位定義重複散落在多處（例如 Controller 直接組 Hash）？\n3. **RSpec 測試覆蓋** — 這個檔案是否有對應的 Model Spec 或 Request Spec？既有測試是否可能因這次修改而失敗？\n4. **安全性** — 是否有 mass assignment 風險（例如未使用 strong parameters）、SQL injection 風險（例如字串拼接查詢）、或其他明顯的安全問題？\n5. **N+1 查詢** — 是否有在迴圈中呼叫關聯查詢、缺少 `includes`/`preload`/`eager_load` 導致的明顯 N+1 問題？\n6. **Rubocop 風格** — 是否有明顯不符合 rubocop 慣例的寫法（縮排、命名、方法長度等）？\n\nOutput format (only report problems found; skip categories with no issues):\n\n### [filename]\n- **Issue:** [description]\n  **Fix:** [suggested correction]\n\nIf no issues are found, output: \"✅ No issues found in [filename].\""
+  },
+  "enabled": true
+}

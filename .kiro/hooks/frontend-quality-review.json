@@ -1,0 +1,10 @@
+{
+  "name": "Frontend Quality Review",
+  "trigger": "PostFileSave",
+  "matcher": "^docs/.*\\.(html|css|js)$",
+  "action": {
+    "type": "agent",
+    "prompt": "A file in docs/ was just saved. Run a read-only quality check and report findings only — do NOT modify any files and do NOT proceed to the next task.\n\nCheck the saved file for the following issues:\n\n1. **HTML structure** — Are semantic tags used appropriately (header, main, nav, section, footer, etc.)? Is the document structure logical?\n2. **Responsive CSS** — Does the CSS include media queries that cover both desktop and mobile viewports?\n3. **JavaScript errors** — Are there obvious syntax errors, undefined variables, or broken logic?\n4. **Relative paths** — Do all `<img>`, `<link>`, and `<script>` src/href values use correct relative paths within docs/?\n5. **Accessibility** — Are there missing alt attributes, missing form labels, poor colour contrast hints, or missing ARIA roles where needed?\n6. **Scope creep** — Does the file contain any features NOT required by requirements.md?\n7. **Forbidden technologies** — Does the file reference or use Node.js, Vite, React, Vue, Angular, any backend, any database, or any external npm/CDN package?\n\nOutput format (only report problems found; skip categories with no issues):\n\n### [filename]\n- **Issue:** [description]\n  **Fix:** [suggested correction]\n\nIf no issues are found, output: \"✅ No issues found in [filename].\""
+  },
+  "enabled": true
+}
