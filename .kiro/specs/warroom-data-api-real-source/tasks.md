@@ -17,13 +17,13 @@
 
 ## Tasks
 
-- [~] 1. 安裝 Google Sheets 相關 gem
-  - [ ] 1.1 在 Gemfile 新增並安裝 gem
+- [x] 1. 安裝 Google Sheets 相關 gem
+  - [x] 1.1 在 Gemfile 新增並安裝 gem
     - 在 `Gemfile` 新增 `gem "google-apis-sheets_v4"` 與 `gem "googleauth"`
     - 執行 `bundle install`，確認兩個 gem 均已安裝且無版本衝突
     - _需求：1.1、1.3_
 
-- [ ] 2. Service Account 憑證設定與文件記載
+- [~] 2. Service Account 憑證設定與文件記載
   - [ ] 2.1 建立憑證設定說明（README 更新）
     - 在專案根目錄 `README.md`（或 `docs/warroom-data-api-real-source-setup.md`）新增憑證設定章節
     - 說明兩種注入方式：Rails encrypted credentials（`rails credentials:edit` → `google_sheets.service_account_json`）與環境變數（`GOOGLE_SHEETS_CREDENTIALS_JSON`，值為 JSON 字串）
