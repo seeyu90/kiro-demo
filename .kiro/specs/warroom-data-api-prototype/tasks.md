@@ -102,29 +102,29 @@
 - [x] 3. 檢查點 — Actor 層驗證
   - 確認所有 Actor 單元測試與 Property 測試通過，如有問題請提出。
 
-- [~] 4. API Controller 與路由
-  - [ ] 4.1 建立 `Api::ProjectProgressController`
+- [x] 4. API Controller 與路由
+  - [x] 4.1 建立 `Api::ProjectProgressController`
     - 建立 `app/controllers/api/project_progress_controller.rb`
     - 實作 `index` action：呼叫 `Sheets::FetchProjectProgress.call(simulate_error: params[:simulate_error]&.to_sym)`
     - 成功時以 `ProjectTaskBlueprint.render_as_hash` 序列化各專案任務陣列後 `render json:`；失敗時依 `failure_code` 對應 HTTP 狀態碼並回傳統一錯誤格式
     - Controller 內部不得直接參照 `MockData` 或呼叫任何日期轉換方法
     - _需求：1.1、1.2、3.1–3.5、8.2、8.4_
 
-  - [ ] 4.2 設定路由
+  - [x] 4.2 設定路由
     - 編輯 `config/routes.rb`，新增 `namespace :api { get "project_progress", to: "project_progress#index" }`
     - _需求：1.1_
 
-  - [ ]* 4.3 撰寫 Property 4 測試：錯誤格式一致性
+  - [x]* 4.3 撰寫 Property 4 測試：錯誤格式一致性
     - **Property 4：錯誤格式一致性**
     - 對任意觸發 Actor 失敗的輸入，API 回應 JSON body 必須包含 `error.code` 與 `error.message` 兩個鍵
     - **驗證：需求 3.5**
 
-  - [ ]* 4.4 撰寫 Property 5 測試：Controller 純粹性
+  - [x]* 4.4 撰寫 Property 5 測試：Controller 純粹性
     - **Property 5：Controller 純粹性**
     - Controller action 原始碼中不得直接參照 `MockData` 模組或呼叫任何日期轉換方法
     - **驗證：需求 8.2**
 
-  - [ ]* 4.5 撰寫 API Request Spec
+  - [x]* 4.5 撰寫 API Request Spec
     - `GET /api/project_progress` → 200，回傳符合 `{ "<專案名稱>": [<任務陣列>] }` 格式的 JSON
     - `GET /api/project_progress?simulate_error=sheet_not_found` → 404 及統一錯誤格式
     - `GET /api/project_progress?simulate_error=invalid_data_format` → 422 及統一錯誤格式
