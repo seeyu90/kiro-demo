@@ -7,6 +7,32 @@
         "chatSessionId": "sess_a324db3f-9bf2-4aed-9333-506c06b9f8d4",
         "timestamp": 1786590859425
       }
+    ],
+    "1.1 建立 Rails 專案（略過資料庫）": [
+      {
+        "executionId": "338a8cd9-9a39-404b-a262-141343447fe3",
+        "chatSessionId": "sess_a324db3f-9bf2-4aed-9333-506c06b9f8d4",
+        "timestamp": 1786592205814
+      }
+    ],
+    "1.2 加入 service_actor、turbo-rails、blueprinter 與 rspec-rails gem": [
+      {
+        "executionId": "338a8cd9-9a39-404b-a262-141343447fe3",
+        "chatSessionId": "sess_a324db3f-9bf2-4aed-9333-506c06b9f8d4",
+        "timestamp": 1786592211466
+      },
+      {
+        "executionId": "807b9f6c-2992-45e3-a52e-4063128cfa70",
+        "chatSessionId": "sess_a324db3f-9bf2-4aed-9333-506c06b9f8d4",
+        "timestamp": 1786592574354
+      }
+    ],
+    "1.3 建立 `ApplicationActor` 基底類別": [
+      {
+        "executionId": "73728c2b-af35-463c-b086-ba4edb2c56e1",
+        "chatSessionId": "sess_a324db3f-9bf2-4aed-9333-506c06b9f8d4",
+        "timestamp": 1786592668964
+      }
     ]
   }
 }

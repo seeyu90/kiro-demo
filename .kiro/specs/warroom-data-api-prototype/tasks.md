@@ -13,12 +13,12 @@
 ## Tasks
 
 - [-] 1. 初始化 Rails 專案骨架
-  - [ ] 1.1 建立 Rails 專案（略過資料庫）
+  - [x] 1.1 建立 Rails 專案（略過資料庫）
     - 執行 `rails new warroom-data-api-prototype --skip-active-record --skip-active-storage --skip-action-mailbox --skip-action-text --skip-test`
     - 確認專案目錄結構正確生成
     - _需求：8.1、8.3_
 
-  - [ ] 1.2 加入 service_actor、turbo-rails、blueprinter 與 rspec-rails gem
+  - [x] 1.2 加入 service_actor、turbo-rails、blueprinter 與 rspec-rails gem
     - 在 `Gemfile` 新增 `gem "service_actor"`、`gem "turbo-rails"`、`gem "blueprinter"`
     - 在 `:development, :test` group 新增 `gem "rspec-rails"`（本專案測試框架，`rails new` 已用 `--skip-test` 跳過 Minitest）
     - 執行 `bundle install`
@@ -26,7 +26,7 @@
     - 執行 `rails turbo:install`（安裝 Turbo）
     - _需求：8.1、8.4_
 
-  - [ ] 1.3 建立 `ApplicationActor` 基底類別
+  - [-] 1.3 建立 `ApplicationActor` 基底類別
     - 建立 `app/actors/application_actor.rb`，繼承 `Actor::Base`
     - 確認 `app/actors/` 目錄在 Rails autoload 路徑中（或加入 `config/application.rb`）
     - _需求：8.1_
