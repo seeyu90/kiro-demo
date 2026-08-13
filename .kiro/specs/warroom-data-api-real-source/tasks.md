@@ -23,16 +23,16 @@
     - 執行 `bundle install`，確認兩個 gem 均已安裝且無版本衝突
     - _需求：1.1、1.3_
 
-- [~] 2. Service Account 憑證設定與文件記載
-  - [ ] 2.1 建立憑證設定說明（README 更新）
+- [x] 2. Service Account 憑證設定與文件記載
+  - [x] 2.1 建立憑證設定說明（README 更新）
     - 在專案根目錄 `README.md`（或 `docs/warroom-data-api-real-source-setup.md`）新增憑證設定章節
     - 說明兩種注入方式：Rails encrypted credentials（`rails credentials:edit` → `google_sheets.service_account_json`）與環境變數（`GOOGLE_SHEETS_CREDENTIALS_JSON`，值為 JSON 字串）
     - 說明本機開發建議使用 Rails credentials，CI/CD 或正式部署使用環境變數
     - 確認 `config/credentials.yml.enc`（若以檔案形式）已列入 `.gitignore`，或說明 `master.key` 保護機制
     - _需求：9.1、9.4_
 
-- [ ] 3. 建立 `SheetsApiClient`
-  - [ ] 3.1 建立 `app/clients/sheets_api_client.rb`
+- [x] 3. 建立 `SheetsApiClient`
+  - [x] 3.1 建立 `app/clients/sheets_api_client.rb`
     - 建立 `app/clients/` 目錄（若尚未存在）並確認已納入 Rails autoload 路徑
     - 定義常數 `SPREADSHEET_ID`、`SHEET_RANGE`（`"2026!A:G"`）、`SCOPES`（唯讀 scope）
     - 實作 `self.fetch_rows` class method（委派至 instance `fetch_rows`）
@@ -40,7 +40,7 @@
     - API 呼叫失敗時直接重新拋出例外，不在此層捕捉
     - _需求：1.1、2.1_
 
-  - [ ] 3.2 實作憑證讀取邏輯（`credentials` 私有方法）
+  - [x] 3.2 實作憑證讀取邏輯（`credentials` 私有方法）
     - 實作 `rails_credentials_json`：讀取 `Rails.application.credentials.dig(:google_sheets, :service_account_json)`，失敗時回傳 `nil`
     - 實作 `env_credentials_json`：讀取 `ENV["GOOGLE_SHEETS_CREDENTIALS_JSON"]`，空值時回傳 `nil`
     - 實作 `credentials`：依序嘗試兩種來源，均為 `nil` 時 `raise` 含明確中文描述的 `StandardError`
