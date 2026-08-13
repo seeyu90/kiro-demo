@@ -1,8 +1,8 @@
 require "rails_helper"
 
 RSpec.describe ProjectTaskBlueprint do
-  # Property 7（需求 8.4）：Blueprint 欄位完整性
-  # 對任意任務紀錄，render_as_hash 輸出必須恰好包含全部 7 個欄位，不多不少
+  # Property 10（需求 6.1、7.3）：Blueprint 欄位完整性
+  # 對真實任務 Hash（非 MockData）範例，render_as_hash 輸出必須恰好包含全部 7 個欄位，不多不少
   EXPECTED_FIELDS = %i[
     project_name
     task_name
@@ -13,7 +13,28 @@ RSpec.describe ProjectTaskBlueprint do
     delay_days
   ].freeze
 
-  MockData::ProjectProgress::RECORDS.each do |record|
+  REAL_TASK_EXAMPLES = [
+    {
+      project_name: "Project A",
+      task_name: "Task 1",
+      status: "completed",
+      owner: "Alice",
+      planned_completion_date: "2024-01-05",
+      actual_completion_date: "2024-01-10",
+      delay_days: 5
+    },
+    {
+      project_name: "Project B",
+      task_name: "Task 2",
+      status: "pending",
+      owner: "Carol",
+      planned_completion_date: nil,
+      actual_completion_date: nil,
+      delay_days: nil
+    }
+  ].freeze
+
+  REAL_TASK_EXAMPLES.each do |record|
     it "renders exactly the 7 expected fields for #{record[:task_name].inspect}" do
       expect(described_class.render_as_hash(record).keys).to match_array(EXPECTED_FIELDS)
     end
