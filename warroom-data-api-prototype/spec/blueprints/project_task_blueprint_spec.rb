@@ -11,6 +11,7 @@ RSpec.describe ProjectTaskBlueprint do
     planned_completion_date
     actual_completion_date
     delay_days
+    task_type
   ].freeze
 
   REAL_TASK_EXAMPLES = [
@@ -21,7 +22,8 @@ RSpec.describe ProjectTaskBlueprint do
       owner: "Alice",
       planned_completion_date: "2024-01-05",
       actual_completion_date: "2024-01-10",
-      delay_days: 5
+      delay_days: 5,
+      task_type: "功能"
     },
     {
       project_name: "Project B",
@@ -30,7 +32,8 @@ RSpec.describe ProjectTaskBlueprint do
       owner: "Carol",
       planned_completion_date: nil,
       actual_completion_date: nil,
-      delay_days: nil
+      delay_days: nil,
+      task_type: "PR"
     }
   ].freeze
 
@@ -48,7 +51,8 @@ RSpec.describe ProjectTaskBlueprint do
       owner: "o",
       planned_completion_date: nil,
       actual_completion_date: nil,
-      delay_days: nil
+      delay_days: nil,
+      task_type: nil
     }
 
     expect(described_class.render_as_hash(minimal_record).keys).to match_array(EXPECTED_FIELDS)

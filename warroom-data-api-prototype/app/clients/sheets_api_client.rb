@@ -25,13 +25,34 @@ class SheetsApiClient
 
     SHEET_NAMES.each_with_index do |sheet_name, index|
       rows = fetch_sheet_rows(service, sheet_name)
-      combined.concat(index.zero? ? rows : rows.drop(1))
+      tagged = tag_with_type(rows, sheet_name)
+      combined.concat(index.zero? ? tagged : tagged.drop(1))
     end
 
     combined
   end
 
   private
+
+  DATA_COLUMN_COUNT = 7 # A~G
+
+  # 每個類型分頁本身就代表一種任務類型（功能／PR／調整／遺漏／臭蟲），API 回應本身不包含
+  # 這個資訊，因此在來源處依「這一列是向哪個分頁請求取得」附加第 8 欄：標題列附加固定文字
+  # 「類型」，資料列附加該分頁名稱。
+  #
+  # Google Sheets API 會省略列尾端的空白儲存格（例如「延誤」欄為空時，該列只回傳 6 個
+  # 元素而非 7 個），若不先補滿到 7 欄再附加，類型標記會誤入 delay_days 等欄位。因此附加
+  # 前一律先補滿（或截斷）至恰好 7 欄，確保類型標記固定落在第 8 個位置。
+  def tag_with_type(rows, sheet_name)
+    rows.each_with_index.map do |row, i|
+      normalized = pad_to_data_columns(row)
+      i.zero? ? normalized + ["類型"] : normalized + [sheet_name]
+    end
+  end
+
+  def pad_to_data_columns(row)
+    (row + Array.new(DATA_COLUMN_COUNT, nil)).first(DATA_COLUMN_COUNT)
+  end
 
   def fetch_sheet_rows(service, sheet_name)
     response = service.get_spreadsheet_values(

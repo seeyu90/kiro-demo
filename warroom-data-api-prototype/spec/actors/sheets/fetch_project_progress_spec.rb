@@ -156,6 +156,29 @@ RSpec.describe Sheets::FetchProjectProgress do
         expect(result.grouped_data["Project B"].first[:task_name]).to eq("Task 3")
       end
 
+      it "defaults task_type to nil when the row has no 8th column" do
+        expect(result.grouped_data["Project A"].map { |t| t[:task_type] }).to all(be_nil)
+      end
+    end
+
+    # Test 1b: SheetsApiClient 已依 warroom-data-api-real-source 的約定，於每列附加第 8 欄
+    # 類型分頁名稱 → 驗證 Actor 正確將其解析為 task_type
+    context "with rows tagged with a task_type (8th column)" do
+      let(:tagged_rows) do
+        [
+          ["專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延遲天數", "類型"],
+          ["Project A", "Task 1", "completed", "Alice", "2024/1/5", "2024-01-10", "5", "功能"],
+          ["Project A", "Task 2", "in_progress", "Bob", "2024/2/10", "", "-4", "PR"]
+        ]
+      end
+
+      before { allow(SheetsApiClient).to receive(:fetch_rows).and_return(tagged_rows) }
+
+      it "extracts the 8th column as task_type" do
+        tasks = result.grouped_data["Project A"]
+        expect(tasks.map { |t| t[:task_type] }).to contain_exactly("功能", "PR")
+      end
+
       it "normalizes date fields correctly" do
         project_a_tasks = result.grouped_data["Project A"]
         expect(project_a_tasks[0][:planned_completion_date]).to eq("2024-01-05")
@@ -206,14 +229,14 @@ RSpec.describe Sheets::FetchProjectProgress do
 
       before { allow(SheetsApiClient).to receive(:fetch_rows).and_return(short_rows) }
 
-      it "fills missing columns with nil and includes all 7 keys" do
+      it "fills missing columns with nil and includes all 8 keys" do
         expect(result).to be_success
 
         # Check first task (had 6 columns, missing delay_days)
         task1 = result.grouped_data["Project A"][0]
         expect(task1.keys).to contain_exactly(*%i[
           project_name task_name status owner
-          planned_completion_date actual_completion_date delay_days
+          planned_completion_date actual_completion_date delay_days task_type
         ])
         expect(task1[:delay_days]).to be_nil
 
@@ -221,7 +244,7 @@ RSpec.describe Sheets::FetchProjectProgress do
         task2 = result.grouped_data["Project A"][1]
         expect(task2.keys).to contain_exactly(*%i[
           project_name task_name status owner
-          planned_completion_date actual_completion_date delay_days
+          planned_completion_date actual_completion_date delay_days task_type
         ])
         expect(task2[:status]).to eq("in_progress")
         expect(task2[:owner]).to eq("Bob") # Owner column exists

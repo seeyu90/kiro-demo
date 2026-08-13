@@ -2,11 +2,38 @@
   <h1 class="dashboard-title">戰情室 <span>— 專案進度</span></h1>
 
   <%= form_with url: "/dashboard", method: :get, local: true, class: "project-selector" do %>
-    <label for="project">選擇專案：</label>
-    <%= select_tag :project,
-                   options_for_select([["全部專案", ""]] + @project_names.map { |name| [name, name] },
-                                      @selected_project),
-                   onchange: "this.form.submit()" %>
+    <div class="control-group">
+      <label for="project">選擇專案：</label>
+      <%= select_tag :project,
+                     options_for_select([["全部專案", ""]] + @project_names.map { |name| [name, name] },
+                                        @selected_project),
+                     onchange: "this.form.submit()" %>
+    </div>
+
+    <fieldset class="type-filter">
+      <legend>任務類型</legend>
+      <%# 隱藏欄位：確保「全部取消勾選」時 params[:task_type] 仍會被送出（值為 [""]），
+          與「完全沒有 task_type 參數」（首次載入，套用預設值）明確區分開來 %>
+      <input type="hidden" name="task_type[]" value="">
+      <% @task_types.each do |type| %>
+        <label>
+          <%= check_box_tag "task_type[]", type, @selected_types.include?(type), multiple: true, id: nil, onchange: "this.form.submit()" %>
+          <%= type %>
+        </label>
+      <% end %>
+    </fieldset>
+
+    <fieldset class="scope-filter">
+      <legend>範圍</legend>
+      <label><%= radio_button_tag :scope, "all", @scope == "all", onchange: "this.form.submit()" %> 全部</label>
+      <label><%= radio_button_tag :scope, "due_this_week", @scope == "due_this_week", onchange: "this.form.submit()" %> 本週到期（含已逾期）</label>
+      <label><%= radio_button_tag :scope, "overdue", @scope == "overdue", onchange: "this.form.submit()" %> 已逾期</label>
+    </fieldset>
+
+    <label class="incomplete-toggle">
+      <%= check_box_tag :incomplete_only, "1", @incomplete_only, onchange: "this.form.submit()" %>
+      只顯示未完成
+    </label>
   <% end %>
 </header>
 
@@ -15,14 +42,36 @@
     <div class="error-message">
       <strong>錯誤：</strong><%= @error %>
     </div>
-  <% elsif @display_data.empty? %>
-    <p class="empty-state">目前無資料</p>
   <% else %>
-    <% @display_data.each do |project_name, tasks| %>
-      <section class="project-block">
-        <h2><%= project_name %></h2>
-        <%= render partial: "project_block", locals: { tasks: tasks } %>
-      </section>
+    <div class="summary-bar">
+      <div class="stat-item">
+        <span class="stat-value"><%= @summary[:total] %></span>
+        <span class="stat-label">任務總數</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value"><%= @summary[:completed] %></span>
+        <span class="stat-label">已完成</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value"><%= @summary[:incomplete] %></span>
+        <span class="stat-label">未完成</span>
+      </div>
+      <div class="stat-item stat-overdue">
+        <span class="stat-value"><%= @summary[:overdue] %></span>
+        <span class="stat-label">逾期</span>
+      </div>
+    </div>
+
+    <% visible_data = @display_data.reject { |_, tasks| tasks.empty? } %>
+    <% if visible_data.empty? %>
+      <p class="empty-state">目前無資料</p>
+    <% else %>
+      <% visible_data.each do |project_name, tasks| %>
+        <section class="project-block">
+          <h2><%= project_name %></h2>
+          <%= render partial: "project_block", locals: { tasks: tasks } %>
+        </section>
+      <% end %>
     <% end %>
   <% end %>
 <% end %>

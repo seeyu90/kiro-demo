@@ -30,6 +30,7 @@ warroom-data-api-real-source 是 warroom-data-api-prototype 的延續，目標�
 - **統一錯誤格式**：`{ "error": { "code": "<錯誤代碼>", "message": "<描述>" } }` 的 JSON 結構。
 - **FORMATTED_VALUE**：Google Sheets API 的 `valueRenderOption` 參數值，指示 API 回傳儲存格的顯示字串（日期型別儲存格將回傳 `YYYY/MM/DD` 格式）。
 - **模擬資料**：雛型階段使用的 `lib/mock_data/project_progress.rb` 記憶體常數，本階段由真實 Google Sheets API 取代，不再使用。
+- **task_type**：任務所屬的類型分頁名稱（`功能`、`PR`、`調整`、`遺漏`、`臭蟲`其中之一），本次戰情室 Dashboard UX 強化新增的第 8 個任務欄位；此值並非讀取自試算表的儲存格內容，而是由 **SheetsClient** 依「這一列資料是向哪一個類型分頁請求取得」推導附加，5 個類型分頁本身即代表 5 種任務類型。
 
 ---
 
@@ -58,8 +59,10 @@ warroom-data-api-real-source 是 warroom-data-api-prototype 的延續，目標�
 2. WHEN **SheetsClient** 取得 5 個分頁的回應，THE **SheetsClient** SHALL 將其合併為單一列陣列：僅保留第一個分頁的標題列，其餘分頁只併入資料列（不重複的標題列）。
 3. WHEN **ProjectProgress_Actor** 收到合併後的列陣列，THE **ProjectProgress_Actor** SHALL 跳過第 1 列（標題列），從第 2 列起逐列解析為任務紀錄。
 4. WHEN 解析列資料時，THE **ProjectProgress_Actor** SHALL 依以下欄位對應產生任務 Hash（每個類型分頁欄位結構相同）：A 欄 → `project_name`、B 欄 → `task_name`、C 欄 → `status`、D 欄 → `owner`、E 欄 → `planned_completion_date`、F 欄 → `actual_completion_date`、G 欄 → `delay_days`（試算表既有公式算好的值，直接讀取）。
-5. WHEN 列陣列長度不足 7 個元素，THE **ProjectProgress_Actor** SHALL 以 `nil` 填補不足的欄位，不拋出陣列索引例外。
+5. WHEN 列陣列長度不足 8 個元素，THE **ProjectProgress_Actor** SHALL 以 `nil` 填補不足的欄位，不拋出陣列索引例外。
 6. WHEN **SheetsClient** 收到空列（列陣列為 `nil` 或所有元素皆為空字串），THE **ProjectProgress_Actor** SHALL 跳過該列，不將其納入解析結果。
+7. WHEN **SheetsClient** 對某一類型分頁發起請求並取得資料列，THE **SheetsClient** SHALL 為該分頁的每一筆資料列附加該分頁名稱（`功能`／`PR`／`調整`／`遺漏`／`臭蟲`之一）作為第 8 個元素；THE **SheetsClient** SHALL 為合併後保留的唯一標題列附加固定文字「類型」作為第 8 個元素。
+8. WHEN **ProjectProgress_Actor** 解析已附加第 8 個元素的資料列，THE **ProjectProgress_Actor** SHALL 將該元素對應為任務 Hash 的 `task_type` 欄位。
 
 ---
 
@@ -113,7 +116,7 @@ warroom-data-api-real-source 是 warroom-data-api-prototype 的延續，目標�
 1. WHEN **ProjectProgress_Actor** 成功讀取並解析資料，THE **ProjectProgress_Actor** SHALL 輸出 `grouped_data`：以專案名稱為鍵值、任務 Hash 陣列為值的 Hash，結構與雛型一致。
 2. WHEN **ProjectProgress_Actor** 失敗，THE **ProjectProgress_Actor** SHALL 輸出 `failure_code`（Symbol）與 `message`（String），與雛型一致。
 3. THE **ProjectProgress_Endpoint** 的 Controller SHALL 不包含任何 Google Sheets API 呼叫或資料解析邏輯，所有讀取與轉換邏輯均委派給 **ProjectProgress_Actor**。
-4. THE **ProjectProgress_Endpoint** 及 **Dashboard_Page** SHALL 繼續透過 `ProjectTaskBlueprint` 序列化任務資料，Blueprint 定義不變動。
+4. THE **ProjectProgress_Endpoint** 及 **Dashboard_Page** SHALL 繼續透過 `ProjectTaskBlueprint` 序列化任務資料；Blueprint 新增 `task_type` 欄位（見需求 10），其餘既有欄位定義不變動。
 
 ---
 
@@ -125,7 +128,7 @@ warroom-data-api-real-source 是 warroom-data-api-prototype 的延續，目標�
 
 1. THE **ProjectProgress_Endpoint** SHALL 繼續回應 `GET /api/project_progress`，回傳格式 `{ "<專案名稱>": [ <任務物件陣列> ] }` 不變。
 2. THE **Dashboard_Page** SHALL 繼續回應 `GET /dashboard`，頁面結構與雛型一致，不變動。
-3. WHEN **ProjectProgress_Endpoint** 回傳成功回應，每筆任務物件 SHALL 包含欄位：`project_name`、`task_name`、`status`、`owner`、`planned_completion_date`、`actual_completion_date`、`delay_days`，與雛型一致。
+3. WHEN **ProjectProgress_Endpoint** 回傳成功回應，每筆任務物件 SHALL 包含欄位：`project_name`、`task_name`、`status`、`owner`、`planned_completion_date`、`actual_completion_date`、`delay_days`、`task_type`（新增，見需求 10）。
 
 ---
 
@@ -151,3 +154,22 @@ warroom-data-api-real-source 是 warroom-data-api-prototype 的延續，目標�
 2. THE **SheetsClient** SHALL 在初始化時依序嘗試從 Rails credentials 讀取，若不存在則回退至環境變數讀取，以支援本機開發與正式部署兩種情境。
 3. IF 任一存放方式均無法取得有效 Credentials_JSON，THEN THE **ProjectProgress_Actor** SHALL 以 `failure_code: :internal_error` 及明確的中文錯誤訊息回傳失敗結果。
 4. THE **Credentials_JSON** 檔案路徑（若以檔案形式存放）或任何含金鑰內容的設定檔 SHALL 列入 `.gitignore`，不得提交至版控。
+
+---
+
+### 需求 10：Dashboard 任務類型與未完成／逾期篩選（戰情室 UX 強化延伸）
+
+**使用者故事：** 身為戰情室使用者，我希望 Dashboard 預設顯示全部專案，任務類型可多選並預設聚焦「功能」＋「PR」，範圍預設為「本週到期」（含所有已逾期任務，不限本週內），以便直接看到真實 Google Sheets 資料中最需要處理的工作，不需自己再篩選。
+
+本需求延續 [warroom-dashboard-ux-enhancements](../warroom-dashboard-ux-enhancements/requirements.md) spec 於靜態展示頁（`docs/`）已定義的 UX 邏輯，套用至本 spec 的真實 Rails Dashboard（`app/views/dashboard/`），資料來源改為 `grouped_data`（來自真實 Google Sheets，經 `task_type` 標記）。
+
+#### 驗收標準
+
+1. THE **Dashboard_Page** SHALL 在未帶 `project` 參數（首次載入）時，預設顯示全部專案，不預先收斂至單一專案。
+2. THE **Dashboard_Page** SHALL 提供任務類型**多選**篩選（`task_type[]` query param），選項為試算表中實際出現的類型；「功能」與「PR」排列於其他類型之前。
+3. THE **Dashboard_Page** SHALL 在未帶 `task_type[]` 參數（首次載入）時，預設勾選「功能」與「PR」兩者；若使用者將全部勾選取消（`task_type[]` 帶空值），視為不套用類型篩選，顯示所有類型。
+4. THE **Dashboard_Page** SHALL 提供「只顯示未完成」開關（`incomplete_only` query param），未帶參數時預設為開啟。
+5. THE **Dashboard_Page** SHALL 提供「範圍」篩選（`scope` query param：`all`／`due_this_week`／`overdue`，單選），未帶參數時預設為 `due_this_week`；`due_this_week` 邏輯定義與 [warroom-dashboard-ux-enhancements/requirements.md](../warroom-dashboard-ux-enhancements/requirements.md) 的「本週到期任務」定義一致：`planned_completion_date` 不晚於本週週日、且不限下界（因此涵蓋所有已逾期任務，不論逾期發生於本週內或更早），以 `Date.current`（伺服器當地時間）為判斷基準。
+6. WHEN 任一專案區塊經篩選後仍有逾期任務，THE **Dashboard_Page** SHALL 將逾期任務排列於該區塊清單最前面。
+7. THE **Dashboard_Page** SHALL 在任務列表上方顯示摘要列（任務總數、已完成、進行中、待開始、逾期），統計範圍僅套用「專案」與「任務類型」篩選，不受「只顯示未完成」與「範圍」篩選影響。
+8. THE **Dashboard_Page** SHALL 確保切換專案下拉選單時，保留使用者當下的任務類型／範圍／只顯示未完成篩選狀態。

@@ -11,6 +11,15 @@
       "port": 3000
     },
     {
+      "name": "warroom-real-source-verify",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-c",
+        "cd /Users/ritachou/Desktop/kiro_demo/warroom-data-api-prototype && eval \"$(/opt/homebrew/bin/rbenv init - zsh)\" && exec bundle exec rails server -p 3001"
+      ],
+      "port": 3001
+    },
+    {
       "name": "docs-static",
       "runtimeExecutable": "python3",
       "runtimeArgs": ["-m", "http.server", "8123", "--directory", "docs"],

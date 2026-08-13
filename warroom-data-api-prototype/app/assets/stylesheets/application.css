@@ -46,7 +46,95 @@ body {
 .project-selector {
   display: flex;
   align-items: center;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.control-group {
+  display: flex;
+  align-items: center;
   gap: 0.75rem;
+}
+
+.type-filter,
+.scope-filter {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  border: 1px solid #2d3748;
+  border-radius: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  margin: 0;
+}
+
+.type-filter legend,
+.scope-filter legend {
+  font-weight: 600;
+  padding: 0 0.25rem;
+  color: #a0aec0;
+  font-size: 0.875rem;
+}
+
+.type-filter label,
+.scope-filter label {
+  font-weight: 400;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.875rem;
+}
+
+.incomplete-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+/* ── Summary Bar ── */
+.summary-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.stat-item {
+  flex: 1 1 100px;
+  background: #1a202c;
+  border: 1px solid #2d3748;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #f7fafc;
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  color: #a0aec0;
+}
+
+.stat-overdue .stat-value {
+  color: #fc8181;
+}
+
+.overdue-tag {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: #4a1c1c;
+  color: #fc8181;
 }
 
 .project-selector label {
@@ -158,6 +246,11 @@ body {
 .status-pending     { background: #2d3748; color: #a0aec0; }
 .status-delayed     { background: #4a1c1c; color: #fc8181; }
 
+/* 真實 Google Sheets「狀態」欄位為自由輸入中文文字，實際只出現「完成」「已確認」「未完成」 */
+.status-完成    { background: #1c4532; color: #68d391; }
+.status-已確認  { background: #1c4532; color: #68d391; }
+.status-未完成  { background: #2d3748; color: #a0aec0; }
+
 /* ── Delay Days ── */
 .delay-days {
   font-weight: 600;
@@ -187,6 +280,16 @@ body {
   .dashboard-header {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .project-selector {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .stat-item {
+    flex: 1 1 45%;
   }
 
   .project-tasks {

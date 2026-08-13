@@ -8,7 +8,7 @@ module Sheets
 
     COLUMN_KEYS = %i[
       project_name task_name status owner
-      planned_completion_date actual_completion_date delay_days
+      planned_completion_date actual_completion_date delay_days task_type
     ].freeze
 
     REQUIRED_KEYS = %i[project_name task_name status owner].freeze
@@ -39,8 +39,8 @@ module Sheets
       rows[1..].filter_map do |row|
         next if row.nil? || (!row.empty? && row.all? { |cell| cell.to_s.strip.empty? })
 
-        padded = row + [nil] * [0, 7 - row.length].max
-        values = padded[0, 7]
+        padded = row + [nil] * [0, 8 - row.length].max
+        values = padded[0, 8]
 
         delay_raw = values[6]
         delay_value =
@@ -54,7 +54,7 @@ module Sheets
             end
           end
 
-        COLUMN_KEYS.zip(values[0, 6] + [delay_value]).to_h
+        COLUMN_KEYS.zip(values[0, 6] + [delay_value, values[7]]).to_h
       end
     end
 

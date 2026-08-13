@@ -31,7 +31,7 @@ RSpec.describe "Api::ProjectProgress", type: :request do
 
       json.each_value do |tasks|
         tasks.each do |task|
-          expect(task.keys).to match_array(%w[project_name task_name status owner planned_completion_date actual_completion_date delay_days])
+          expect(task.keys).to match_array(%w[project_name task_name status owner planned_completion_date actual_completion_date delay_days task_type])
         end
       end
     end

@@ -10,12 +10,12 @@ warroom-data-api-real-source 是 warroom-data-api-prototype 的延續，目標�
 
 真實資料難免有少量不完整列（例如缺狀態或負責人），這類列會被個別跳過、不納入結果，不會讓整個 request 失敗——這點與雛型階段用固定乾淨模擬資料的假設不同。
 
-所有對外介面均**與雛型完全一致、不變動**：
-- `GET /api/project_progress` 回應格式不變
-- `GET /dashboard` 頁面結構不變
-- `ProjectTaskBlueprint` 序列化欄位不變
-- `Api::ProjectProgressController` 不變
-- `DashboardController` 不變
+對外介面**與雛型大致一致**，但因應戰情室 Dashboard UX 強化（[warroom-dashboard-ux-enhancements](../warroom-dashboard-ux-enhancements/design.md)）延伸至真實資料，有以下調整：
+- `GET /api/project_progress` 回應格式：任務物件新增 `task_type` 欄位（第 8 個欄位），其餘不變
+- `GET /dashboard` 頁面結構：新增任務類型／範圍／只顯示未完成篩選控制項與摘要列，其餘版面不變
+- `ProjectTaskBlueprint` 序列化欄位：新增 `:task_type`
+- `Api::ProjectProgressController`：不變
+- `DashboardController`：新增篩選與摘要統計邏輯（需求 10）
 - 移除 `simulate_error` 參數，四種錯誤由真實情境自然觸發
 
 新增 gem 依賴：
@@ -117,13 +117,23 @@ class SheetsApiClient
 
     SHEET_NAMES.each_with_index do |sheet_name, index|
       rows = fetch_sheet_rows(service, sheet_name)
-      combined.concat(index.zero? ? rows : rows.drop(1))
+      tagged = tag_with_type(rows, sheet_name)
+      combined.concat(index.zero? ? tagged : tagged.drop(1))
     end
 
     combined
   end
 
   private
+
+  # 每個類型分頁本身就代表一種任務類型（功能／PR／調整／遺漏／臭蟲），API 回應
+  # 本身不包含這個資訊，因此在來源處依「這一列是向哪個分頁請求取得」附加第 8 欄：
+  # 標題列附加固定文字「類型」，資料列附加該分頁名稱。
+  def tag_with_type(rows, sheet_name)
+    rows.each_with_index.map do |row, i|
+      i.zero? ? row + ["類型"] : row + [sheet_name]
+    end
+  end
 
   def fetch_sheet_rows(service, sheet_name)
     response = service.get_spreadsheet_values(
@@ -212,7 +222,7 @@ module Sheets
 
     COLUMN_KEYS = %i[
       project_name task_name status owner
-      planned_completion_date actual_completion_date delay_days
+      planned_completion_date actual_completion_date delay_days task_type
     ].freeze
 
     REQUIRED_KEYS = %i[project_name task_name status owner].freeze
@@ -245,9 +255,9 @@ module Sheets
         # 跳過空列（nil 或所有元素皆為空字串）
         next if row.nil? || row.all? { |cell| cell.to_s.strip.empty? }
 
-        # 長度不足 7 時以 nil 填補
-        padded = row + [nil] * [0, 7 - row.length].max
-        values = padded[0, 7]
+        # 長度不足 8 時以 nil 填補（第 8 欄為 SheetsApiClient 附加的類型分頁名稱）
+        padded = row + [nil] * [0, 8 - row.length].max
+        values = padded[0, 8]
 
         # G 欄 delay_days：nil／空字串轉 nil，有效整數字串轉 Integer，否則保留原值
         delay_raw = values[6]
@@ -262,7 +272,7 @@ module Sheets
             end
           end
 
-        COLUMN_KEYS.zip(values[0, 6] + [delay_value]).to_h
+        COLUMN_KEYS.zip(values[0, 6] + [delay_value, values[7]]).to_h
       end
     end
 
@@ -323,19 +333,42 @@ result = Sheets::FetchProjectProgress.result()
 
 ---
 
-### 不變動：`ProjectTaskBlueprint`
+### 修改：`ProjectTaskBlueprint`
 
 **檔案**：`app/blueprints/project_task_blueprint.rb`
 
-與雛型完全一致，不變動。欄位定義維持 `project_name`、`task_name`、`status`、`owner`、`planned_completion_date`、`actual_completion_date`、`delay_days` 七個欄位。
+新增 `:task_type` 欄位，其餘七個既有欄位定義不變：
+
+```ruby
+class ProjectTaskBlueprint < Blueprinter::Base
+  identifier :task_name
+
+  fields :project_name, :task_name, :status, :owner,
+         :planned_completion_date, :actual_completion_date, :delay_days,
+         :task_type
+end
+```
+
+---
+
+### 修改：`DashboardController`（需求 10）
+
+**檔案**：`app/controllers/dashboard_controller.rb`
+
+沿用 [warroom-dashboard-ux-enhancements/design.md](../warroom-dashboard-ux-enhancements/design.md) 定義的篩選與摘要邏輯（`state` 概念在此改以 query params 表達），將原本純前端 JS 的 `filterTasks`／`computeSummary`／`isOverdue`／`isDueThisWeek`／`sortOverdueFirst` 邏輯以 Ruby private method 重寫於 Controller：
+
+- 讀取 `params[:project]`（未帶參數 = 全部專案）、`params[:task_type]`（陣列，未帶參數時預設 `["功能", "PR"]`；帶空陣列視為不篩選）、`params[:scope]`（`all`／`due_this_week`／`overdue`，未帶參數時預設 `"due_this_week"`）、`params[:incomplete_only]`（未帶參數視為開啟，即預設 `true`；帶 `"0"` 才視為關閉）
+- `@summary`：僅套用 `project` 與 `task_type` 範圍統計（不受 `scope`／`incomplete_only` 影響），對應需求 10.6
+- `@display_data`：套用全部四個篩選條件後、依專案分組，各專案內以逾期優先排序（`sort_overdue_first`），再交由 `ProjectTaskBlueprint` 序列化
+- `@task_types`：由 `grouped_data` 內所有 `task_type` 唯一值排序而成，「功能」「PR」固定排最前
+- 逾期／本週到期判斷以 `Date.current`（Rails 伺服器當地時間）為基準，取代 JS 版的 `new Date()`
 
 ---
 
 ### 不變動：其餘元件
 
-- `DashboardController`：不變動
-- View 層（`app/views/dashboard/`）：不變動
-- 路由（`config/routes.rb`）：不變動
+- View 層（`app/views/dashboard/`）：新增篩選控制項與摘要列 HTML 結構，Turbo Frame 局部更新機制不變
+- 路由（`config/routes.rb`）：不變動（新篩選條件均以既有 `/dashboard` 路由的 query params 表達）
 
 ---
 
@@ -486,7 +519,7 @@ Controller 根據 `result.failure_code` 對應 HTTP 狀態碼，統一回傳：
 
 ### Property 2: 列長度不足時 nil 填補完整性
 
-*For any* 長度介於 0 至 6 的列陣列，`parse_rows` 解析後每筆任務 Hash 必須包含全部 7 個鍵（`COLUMN_KEYS`），且不足的欄位值為 `nil`。
+*For any* 長度介於 0 至 7 的列陣列，`parse_rows` 解析後每筆任務 Hash 必須包含全部 8 個鍵（`COLUMN_KEYS`），且不足的欄位值為 `nil`。
 
 **Validates: Requirements 2.4**
 
@@ -550,7 +583,7 @@ Controller 根據 `result.failure_code` 對應 HTTP 狀態碼，統一回傳：
 
 ### Property 10: Blueprint 欄位完整性
 
-*For any* 任務 Hash，`ProjectTaskBlueprint.render_as_hash` 的輸出必須恰好包含 `project_name`、`task_name`、`status`、`owner`、`planned_completion_date`、`actual_completion_date`、`delay_days` 這 7 個鍵，不多不少。
+*For any* 任務 Hash，`ProjectTaskBlueprint.render_as_hash` 的輸出必須恰好包含 `project_name`、`task_name`、`status`、`owner`、`planned_completion_date`、`actual_completion_date`、`delay_days`、`task_type` 這 8 個鍵，不多不少。
 
 **Validates: Requirements 6.1, 7.3**
 
