@@ -6,8 +6,7 @@
       <label for="project">選擇專案：</label>
       <%= select_tag :project,
                      options_for_select([["全部專案", ""]] + @project_names.map { |name| [name, name] },
-                                        @selected_project),
-                     onchange: "this.form.submit()" %>
+                                        @selected_project) %>
     </div>
 
     <fieldset class="type-filter">
@@ -17,7 +16,7 @@
       <input type="hidden" name="task_type[]" value="">
       <% @task_types.each do |type| %>
         <label>
-          <%= check_box_tag "task_type[]", type, @selected_types.include?(type), multiple: true, id: nil, onchange: "this.form.submit()" %>
+          <%= check_box_tag "task_type[]", type, @selected_types.include?(type), multiple: true, id: nil %>
           <%= type %>
         </label>
       <% end %>
@@ -25,15 +24,17 @@
 
     <fieldset class="scope-filter">
       <legend>範圍</legend>
-      <label><%= radio_button_tag :scope, "all", @scope == "all", onchange: "this.form.submit()" %> 全部</label>
-      <label><%= radio_button_tag :scope, "due_this_week", @scope == "due_this_week", onchange: "this.form.submit()" %> 本週到期（含已逾期）</label>
-      <label><%= radio_button_tag :scope, "overdue", @scope == "overdue", onchange: "this.form.submit()" %> 已逾期</label>
+      <label><%= radio_button_tag :scope, "all", @scope == "all" %> 全部</label>
+      <label><%= radio_button_tag :scope, "due_this_week", @scope == "due_this_week" %> 本週到期（含已逾期）</label>
+      <label><%= radio_button_tag :scope, "overdue", @scope == "overdue" %> 已逾期</label>
     </fieldset>
 
     <label class="incomplete-toggle">
-      <%= check_box_tag :incomplete_only, "1", @incomplete_only, onchange: "this.form.submit()" %>
+      <%= check_box_tag :incomplete_only, "1", @incomplete_only %>
       只顯示未完成
     </label>
+
+    <%= submit_tag "套用篩選", class: "apply-filters-btn" %>
   <% end %>
 </header>
 

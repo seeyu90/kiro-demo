@@ -164,6 +164,24 @@ body {
   outline: none;
 }
 
+.apply-filters-btn {
+  background: #63b3ed;
+  color: #1a202c;
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.5rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.apply-filters-btn:hover,
+.apply-filters-btn:focus {
+  background: #4299e1;
+  outline: none;
+}
+
 /* ── Project Block ── */
 .project-block {
   background: #1a202c;
