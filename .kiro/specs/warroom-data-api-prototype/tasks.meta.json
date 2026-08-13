@@ -129,6 +129,41 @@
         "chatSessionId": "sess_02a2a9bf-ddbd-4e45-b1bc-6da1a4dcdd3e",
         "timestamp": 1786595126257
       }
+    ],
+    "6.1 建立 `DashboardController`": [
+      {
+        "executionId": "088f1288-4b48-40c8-ad73-98b8f0dfef91",
+        "chatSessionId": "sess_176e8c7d-795d-41b5-8883-8beefa090e6d",
+        "timestamp": 1786595229607
+      }
+    ],
+    "6.2 設定 Dashboard 路由": [
+      {
+        "executionId": "088f1288-4b48-40c8-ad73-98b8f0dfef91",
+        "chatSessionId": "sess_176e8c7d-795d-41b5-8883-8beefa090e6d",
+        "timestamp": 1786595231383
+      }
+    ],
+    "6.3 建立 Dashboard 主樣板 `app/views/dashboard/index.html.erb`": [
+      {
+        "executionId": "088f1288-4b48-40c8-ad73-98b8f0dfef91",
+        "chatSessionId": "sess_176e8c7d-795d-41b5-8883-8beefa090e6d",
+        "timestamp": 1786595231747
+      }
+    ],
+    "6.4 建立 `_project_block.html.erb` 局部樣板": [
+      {
+        "executionId": "088f1288-4b48-40c8-ad73-98b8f0dfef91",
+        "chatSessionId": "sess_176e8c7d-795d-41b5-8883-8beefa090e6d",
+        "timestamp": 1786595236318
+      }
+    ],
+    "6.5 撰寫 Dashboard Request Spec": [
+      {
+        "executionId": "088f1288-4b48-40c8-ad73-98b8f0dfef91",
+        "chatSessionId": "sess_176e8c7d-795d-41b5-8883-8beefa090e6d",
+        "timestamp": 1786595236589
+      }
     ]
   }
 }
