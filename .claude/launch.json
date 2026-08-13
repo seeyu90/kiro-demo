@@ -9,6 +9,12 @@
         "cd warroom-data-api-prototype && eval \"$(/opt/homebrew/bin/rbenv init - zsh)\" && bundle exec rails server -p 3000"
       ],
       "port": 3000
+    },
+    {
+      "name": "docs-static",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8123", "--directory", "docs"],
+      "port": 8123
     }
   ]
 }

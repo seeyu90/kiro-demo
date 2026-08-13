@@ -15,9 +15,29 @@
 
   <main>
     <form class="project-selector" onsubmit="return false">
-      <label for="project">選擇專案：</label>
-      <select id="project" name="project"></select>
+      <div class="control-group">
+        <label for="project">選擇專案：</label>
+        <select id="project" name="project"></select>
+      </div>
+
+      <fieldset class="type-filter" id="type-filter">
+        <legend>任務類型</legend>
+      </fieldset>
+
+      <fieldset class="scope-filter">
+        <legend>範圍</legend>
+        <label><input type="radio" name="scope" value="all"> 全部</label>
+        <label><input type="radio" name="scope" value="due_this_week" checked> 本週到期（含已逾期）</label>
+        <label><input type="radio" name="scope" value="overdue"> 已逾期</label>
+      </fieldset>
+
+      <label class="incomplete-toggle">
+        <input type="checkbox" id="incomplete-only" checked>
+        只顯示未完成
+      </label>
     </form>
+
+    <div id="summary" class="summary-bar" aria-live="polite"></div>
 
     <div id="content" aria-live="polite"></div>
   </main>
