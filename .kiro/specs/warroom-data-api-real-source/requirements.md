@@ -19,7 +19,8 @@ warroom-data-api-real-source 是 warroom-data-api-prototype 的延續，目標�
 - **Actor**：遵循 service_actor 模式的服務物件，封裝單一商業邏輯。
 - **ProjectProgress_Actor**：`Sheets::FetchProjectProgress` Actor，負責提供 305 專案進度資料；本階段替換其內部資料讀取邏輯，對外輸出介面維持不變。
 - **ProjectProgress_Endpoint**：回傳 305 專案進度資料的 HTTP 端點（`GET /api/project_progress`）；介面與雛型一致，不變動。
-- **SheetsClient**：封裝 Google Sheets API 呼叫的內部物件（`SheetsApiClient` 或同等模組），負責初始化 `google-apis-sheets_v4` service 物件、執行 `spreadsheets.values.get` 呼叫、回傳原始列陣列。
+- **SheetsClient**：封裝 Google Sheets API 呼叫的內部物件（`SheetsApiClient` 或同等模組），負責初始化 `google-apis-sheets_v4` service 物件、對 5 個類型分頁分別執行 `spreadsheets.values.get` 呼叫、合併回傳單一原始列陣列。
+- **類型分頁**：試算表中依任務類型各自獨立的分頁，本階段涵蓋 `功能`、`PR`、`調整`、`遺漏`、`臭蟲` 共 5 個，欄位結構完全相同。與 `warroom-data-api-prototype` requirements.md 排除的「306 臭蟲議題」是不同的資料來源，`臭蟲` 分頁本身是 305 進度表的一種任務類型，兩者無關。
 - **Service_Account**：Google Cloud Service Account，用於以程式方式向 Google Sheets API 認證，不需人工登入。
 - **Credentials_JSON**：Service Account 的 JSON 金鑰檔，存放於 Rails credentials 或環境變數，不寫在程式碼或版控中。
 - **ISO 8601**：國際日期格式，本文件中指 `YYYY-MM-DD` 字串格式。
@@ -53,11 +54,12 @@ warroom-data-api-real-source 是 warroom-data-api-prototype 的延續，目標�
 
 #### 驗收標準
 
-1. WHEN **ProjectProgress_Actor** 被呼叫，THE **SheetsClient** SHALL 對試算表 ID `11gwDnOqEiGqj_VF2XF7AzxiJTiOW_k2knF6-4yQCej8`、分頁 `2026`、範圍 `A:G` 發起 `spreadsheets.values.get` 請求，並指定 `valueRenderOption: 'FORMATTED_VALUE'`。
-2. WHEN **SheetsClient** 收到 API 回應，THE **ProjectProgress_Actor** SHALL 跳過第 1 列（標題列），從第 2 列起逐列解析為任務紀錄。
-3. WHEN 解析列資料時，THE **ProjectProgress_Actor** SHALL 依以下欄位對應產生任務 Hash：A 欄 → `project_name`、B 欄 → `task_name`、C 欄 → `status`、D 欄 → `owner`、E 欄 → `planned_completion_date`、F 欄 → `actual_completion_date`、G 欄 → `delay_days`。
-4. WHEN 列陣列長度不足 7 個元素，THE **ProjectProgress_Actor** SHALL 以 `nil` 填補不足的欄位，不拋出陣列索引例外。
-5. WHEN **SheetsClient** 收到空列（列陣列為 `nil` 或所有元素皆為空字串），THE **ProjectProgress_Actor** SHALL 跳過該列，不將其納入解析結果。
+1. WHEN **ProjectProgress_Actor** 被呼叫，THE **SheetsClient** SHALL 對試算表 ID `11gwDnOqEiGqj_VF2XF7AzxiJTiOW_k2knF6-4yQCej8` 的 5 個類型分頁（`功能`、`PR`、`調整`、`遺漏`、`臭蟲`）各自以範圍 `A:G` 發起 `spreadsheets.values.get` 請求，並指定 `valueRenderOption: 'FORMATTED_VALUE'`。
+2. WHEN **SheetsClient** 取得 5 個分頁的回應，THE **SheetsClient** SHALL 將其合併為單一列陣列：僅保留第一個分頁的標題列，其餘分頁只併入資料列（不重複的標題列）。
+3. WHEN **ProjectProgress_Actor** 收到合併後的列陣列，THE **ProjectProgress_Actor** SHALL 跳過第 1 列（標題列），從第 2 列起逐列解析為任務紀錄。
+4. WHEN 解析列資料時，THE **ProjectProgress_Actor** SHALL 依以下欄位對應產生任務 Hash（每個類型分頁欄位結構相同）：A 欄 → `project_name`、B 欄 → `task_name`、C 欄 → `status`、D 欄 → `owner`、E 欄 → `planned_completion_date`、F 欄 → `actual_completion_date`、G 欄 → `delay_days`（試算表既有公式算好的值，直接讀取）。
+5. WHEN 列陣列長度不足 7 個元素，THE **ProjectProgress_Actor** SHALL 以 `nil` 填補不足的欄位，不拋出陣列索引例外。
+6. WHEN **SheetsClient** 收到空列（列陣列為 `nil` 或所有元素皆為空字串），THE **ProjectProgress_Actor** SHALL 跳過該列，不將其納入解析結果。
 
 ---
 
@@ -82,10 +84,10 @@ warroom-data-api-real-source 是 warroom-data-api-prototype 的延續，目標�
 
 #### 驗收標準
 
-1. IF Google Sheets API 回傳 HTTP 404，或指定的分頁名稱（`2026`）在試算表中不存在，THEN THE **ProjectProgress_Actor** SHALL 以 `failure_code: :sheet_not_found` 及 HTTP 404 回傳失敗結果。
+1. IF Google Sheets API 回傳 HTTP 404，或任一類型分頁名稱在試算表中不存在（API 回傳訊息包含 `"Unable to parse range"`），THEN THE **ProjectProgress_Actor** SHALL 以 `failure_code: :sheet_not_found` 及 HTTP 404 回傳失敗結果。
 2. IF Google Sheets API 回傳 HTTP 403，THEN THE **ProjectProgress_Actor** SHALL 以 `failure_code: :access_denied` 及 HTTP 403 回傳失敗結果。
-3. IF **ProjectProgress_Actor** 在 `validate_records!` 驗證時發現任意紀錄的 `project_name`、`task_name`、`status` 或 `owner` 為空白，THEN THE **ProjectProgress_Actor** SHALL 以 `failure_code: :invalid_data_format` 及 HTTP 422 回傳失敗結果，且所有紀錄均不回傳。
-4. IF Google Sheets API 請求逾時、配額超過，或發生上述三種情況以外的未預期例外，THEN THE **ProjectProgress_Actor** SHALL 以 `failure_code: :internal_error` 及 HTTP 500 回傳失敗結果。
+3. IF 任意紀錄的 `project_name`、`task_name`、`status` 或 `owner` 為空白，THEN THE **ProjectProgress_Actor** SHALL 跳過該筆紀錄、不納入 `grouped_data`，其餘正常紀錄仍照常回傳成功結果；不因單筆紀錄不完整而讓整個 request 失敗（真實試算表資料難免有少量不完整列，需與其他正常列分開處理）。
+4. IF Google Sheets API 請求逾時、配額超過，或發生上述情況以外的未預期例外（含憑證載入失敗），THEN THE **ProjectProgress_Actor** SHALL 以 `failure_code: :internal_error` 及 HTTP 500 回傳失敗結果。
 5. THE **API** SHALL 以統一錯誤格式 `{ "error": { "code": "<錯誤代碼>", "message": "<描述>" } }` 回傳所有錯誤回應；此格式與雛型一致，不變動。
 
 ---

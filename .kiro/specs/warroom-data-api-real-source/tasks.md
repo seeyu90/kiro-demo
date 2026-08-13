@@ -47,8 +47,8 @@
     - 使用 `Google::Auth::ServiceAccountCredentials.make_creds` 建立認證物件，scope 為唯讀
     - _需求：1.1、1.2、1.3、1.4、9.1、9.2、9.3_
 
-- [ ] 4. `SheetsApiClient` 單元測試
-  - [ ] 4.1 撰寫 `spec/clients/sheets_api_client_spec.rb`
+- [x] 4. `SheetsApiClient` 單元測試
+  - [x] 4.1 撰寫 `spec/clients/sheets_api_client_spec.rb`
     - stub `Rails.application.credentials`：憑證存在時，`fetch_rows` 呼叫正確 API 參數
     - stub `Rails.application.credentials` 回傳 `nil`，設定 `ENV["GOOGLE_SHEETS_CREDENTIALS_JSON"]`：驗證 fallback 至環境變數
     - Rails credentials 與環境變數均不存在時：驗證 `fetch_rows` 拋出含中文描述的 `StandardError`
@@ -57,14 +57,14 @@
     - stub Google API 拋出 `Google::Apis::ClientError`（404）：驗證例外被重新拋出
     - _需求：1.1、1.2、1.3、1.4、9.2、9.3_
 
-- [ ] 5. 修改 `Sheets::FetchProjectProgress` Actor
-  - [ ] 5.1 移除 `simulate_error` 與 `MockData` 依賴
+- [x] 5. 修改 `Sheets::FetchProjectProgress` Actor
+  - [x] 5.1 移除 `simulate_error` 與 `MockData` 依賴
     - 刪除 `input :simulate_error` 宣告及其對應條件分支邏輯
     - 刪除 `require` 或參照 `MockData::ProjectProgress` 的所有程式碼
     - 確認 `output :grouped_data`、`output :failure_code`、`output :message` 宣告維持不變
     - _需求：5.1、5.2_
 
-  - [ ] 5.2 實作 `parse_rows` 私有方法
+  - [x] 5.2 實作 `parse_rows` 私有方法
     - 新增 `COLUMN_KEYS` 常數（7 個 Symbol：`project_name`、`task_name`、`status`、`owner`、`planned_completion_date`、`actual_completion_date`、`delay_days`）
     - 實作 `parse_rows(rows)`：輸入為原始列陣列（含標題列）
       - `nil` 或空陣列直接回傳 `[]`
@@ -75,7 +75,7 @@
       - 以 `COLUMN_KEYS.zip(...)` 產生任務 Hash
     - _需求：2.2、2.3、2.4、2.5、3.4、3.5_
 
-  - [ ] 5.3 修改 `call` 方法：改為呼叫 `SheetsApiClient`，更新錯誤處理
+  - [x] 5.3 修改 `call` 方法：改為呼叫 `SheetsApiClient`，更新錯誤處理
     - `call` 方法改為：`rows = SheetsApiClient.fetch_rows`，後續 `parse_rows`、`normalize_record`、`validate_records!`、`group_by_project` 流程不變
     - 例外捕捉順序（三個 `rescue` 區塊）：
       1. `ValidationError` → `fail!(failure_code: :invalid_data_format, message: e.message)`
@@ -135,7 +135,7 @@
     - 對 `MockData` 移除後的真實任務 Hash 範例（至少 2 筆，含欄位值為 `nil` 的情況），驗證 `ProjectTaskBlueprint.render_as_hash` 輸出恰好包含 7 個欄位，不多不少
     - **驗證：需求 6.1、7.3**
 
-- [ ] 7. Actor 單元測試（stub `SheetsApiClient`）
+- [x] 7. Actor 單元測試（stub `SheetsApiClient`）
   - [ ] 7.1 撰寫 `spec/actors/sheets/fetch_project_progress_spec.rb`（更新現有或新增）
     - stub `SheetsApiClient.fetch_rows` 回傳正常列陣列 → 驗證 `grouped_data` 結構與分組正確性
     - stub 回傳含空列的陣列 → 驗證空列被跳過，不出現在輸出中

@@ -4,7 +4,11 @@
 
 warroom-data-api-real-source 是 warroom-data-api-prototype 的延續，目標是將資料來源從記憶體內固定常數替換為真實的 Google Sheets 305 專案進度表。
 
-替換範圍僅限於 `Sheets::FetchProjectProgress` Actor 的**內部資料讀取層**：新增 `SheetsApiClient` 封裝 Google Sheets API 的初始化與呼叫，Actor 改為呼叫 `SheetsApiClient` 取得原始列陣列，再執行與雛型相同的解析、正規化、驗證與分組邏輯。
+替換範圍僅限於 `Sheets::FetchProjectProgress` Actor 的**內部資料讀取層**：新增 `SheetsApiClient` 封裝 Google Sheets API 的初始化與呼叫，Actor 改為呼叫 `SheetsApiClient` 取得原始列陣列，再執行與雛型相同的解析、正規化、分組邏輯。
+
+305 進度資料實際分散在試算表的 5 個「類型」分頁（`功能`、`PR`、`調整`、`遺漏`、`臭蟲`），並非單一分頁；`SheetsApiClient` 對 5 個分頁分別呼叫 API 後合併為單一列陣列。每個分頁欄位結構完全相同，且「延誤」欄位是試算表既有公式已經算好的值，直接讀取，不在程式中重新計算日期差。
+
+真實資料難免有少量不完整列（例如缺狀態或負責人），這類列會被個別跳過、不納入結果，不會讓整個 request 失敗——這點與雛型階段用固定乾淨模擬資料的假設不同。
 
 所有對外介面均**與雛型完全一致、不變動**：
 - `GET /api/project_progress` 回應格式不變
@@ -59,10 +63,10 @@ HTTP 請求
 1. HTTP 請求進入 Rails Router
 2. Router 分派至對應 Controller action（與雛型相同）
 3. Controller 呼叫 `Sheets::FetchProjectProgress.result()`（不再傳入 `simulate_error`）
-4. Actor 呼叫 `SheetsApiClient.fetch_rows`，取得 Google Sheets 原始列陣列
+4. Actor 呼叫 `SheetsApiClient.fetch_rows`，`SheetsApiClient` 內部對 5 個類型分頁分別發起請求並合併為單一列陣列
 5. Actor 跳過標題列（第 1 列），過濾空列，將各列映射為任務 Hash
 6. Actor 執行欄位正規化（日期格式、`delay_days` 型別轉換）
-7. Actor 執行 `validate_records!` 驗證必要欄位
+7. Actor 執行 `reject_invalid_records` 篩掉缺少必要欄位的紀錄（該筆跳過，不影響其餘紀錄）
 8. Actor 回傳 success result（含 `grouped_data`）或 failure result（含 `failure_code` 與 `message`）
 9. Controller 將 Actor 結果渲染為 JSON（API）或傳入 View（Dashboard）
 
@@ -83,18 +87,23 @@ HTTP 請求
 
 **檔案**：`app/clients/sheets_api_client.rb`
 
-負責初始化 `google-apis-sheets_v4` service 物件、執行 `spreadsheets.values.get` 呼叫，並回傳原始列陣列（`Array<Array<String>>` 或 `nil`）。將 Google API 的具體細節完全隔離於此類，Actor 不直接依賴任何 Google gem。
+負責初始化 `google-apis-sheets_v4` service 物件、對 5 個類型分頁分別執行 `spreadsheets.values.get` 呼叫並合併結果，回傳原始列陣列（`Array<Array<String>>`）。將 Google API 的具體細節完全隔離於此類，Actor 不直接依賴任何 Google gem。
 
 ```ruby
 # frozen_string_literal: true
 
 class SheetsApiClient
   SPREADSHEET_ID = "11gwDnOqEiGqj_VF2XF7AzxiJTiOW_k2knF6-4yQCej8"
-  SHEET_RANGE    = "2026!A:G"
+  SHEET_NAMES    = ["功能", "PR", "調整", "遺漏", "臭蟲"].freeze
+  RANGE_SUFFIX   = "!A:G"
   SCOPES         = ["https://www.googleapis.com/auth/spreadsheets.readonly"].freeze
 
-  # 回傳原始列陣列（含標題列），若 API 呼叫失敗則重新拋出例外
-  # @return [Array<Array<String>>] 原始列資料
+  # 305 進度資料分散在 5 個「類型」分頁，每個分頁欄位結構完全相同（A~G：專案名稱、
+  # 任務名稱、狀態、負責人、預計完成日期、實際完成日期、延誤；「延誤」為試算表既有
+  # 公式算好的值，直接讀取即可，不在程式中重新計算）。
+  # 回傳單一合併後的列陣列：僅保留第一個分頁的標題列，其餘分頁只取資料列。
+  #
+  # @return [Array<Array<String>>] 合併後的原始列陣列（第 1 列為標題列）
   # @raise [Google::Apis::ClientError]  403 / 404 等 API 層級錯誤
   # @raise [Google::Apis::ServerError]  5xx 伺服器端錯誤
   # @raise [StandardError]              憑證載入失敗或其他未預期錯誤
@@ -104,15 +113,36 @@ class SheetsApiClient
 
   def fetch_rows
     service = build_service
-    response = service.get_spreadsheet_values(
-      SPREADSHEET_ID,
-      SHEET_RANGE,
-      value_render_option: "FORMATTED_VALUE"
-    )
-    response.values || []
+    combined = []
+
+    SHEET_NAMES.each_with_index do |sheet_name, index|
+      rows = fetch_sheet_rows(service, sheet_name)
+      combined.concat(index.zero? ? rows : rows.drop(1))
+    end
+
+    combined
   end
 
   private
+
+  def fetch_sheet_rows(service, sheet_name)
+    response = service.get_spreadsheet_values(
+      SPREADSHEET_ID,
+      "#{sheet_name}#{RANGE_SUFFIX}",
+      value_render_option: "FORMATTED_VALUE"
+    )
+    (response.values || []).map { |row| retag_utf8(row) }
+  end
+
+  # google-apis-sheets_v4 回傳的儲存格字串會被標記為 ASCII-8BIT，即使實際內容是
+  # 合法 UTF-8 位元組（試算表本身就是 UTF-8）。標記錯誤會讓後續任何跟程式碼裡的
+  # UTF-8 常值字串（例如中文錯誤訊息）併在一起時噴 Encoding::CompatibilityError，
+  # 因此在來源處統一重新標記為 UTF-8（純改標記，不改變位元組內容）。
+  def retag_utf8(row)
+    row.map do |cell|
+      cell.is_a?(String) ? cell.dup.force_encoding(Encoding::UTF_8) : cell
+    end
+  end
 
   def build_service
     service = Google::Apis::SheetsV4::SheetsService.new
@@ -167,7 +197,7 @@ end
 
 **檔案**：`app/actors/sheets/fetch_project_progress.rb`
 
-移除 `simulate_error` 輸入、移除 `MockData` 依賴、移除 `error_mapping` 私有方法。`call` 方法改為呼叫 `SheetsApiClient.fetch_rows`，其餘私有方法（`normalize_record`、`normalize_date`、`validate_records!`、`group_by_project`）維持不變。
+移除 `simulate_error` 輸入、移除 `MockData` 依賴、移除 `error_mapping` 私有方法。`call` 方法改為呼叫 `SheetsApiClient.fetch_rows`；`validate_records!`（不合法就拋例外、讓整包失敗）改為 `reject_invalid_records`（篩掉不合法紀錄、其餘正常回傳），其餘私有方法（`normalize_record`、`normalize_date`、`group_by_project`）維持不變。
 
 ```ruby
 # frozen_string_literal: true
@@ -180,21 +210,19 @@ module Sheets
     output :failure_code
     output :message
 
-    class ValidationError < StandardError; end
-
     COLUMN_KEYS = %i[
       project_name task_name status owner
       planned_completion_date actual_completion_date delay_days
     ].freeze
 
+    REQUIRED_KEYS = %i[project_name task_name status owner].freeze
+
     def call
       rows = SheetsApiClient.fetch_rows
       records = parse_rows(rows)
       normalized = records.map { |record| normalize_record(record) }
-      validate_records!(normalized)
-      self.grouped_data = group_by_project(normalized)
-    rescue ValidationError => e
-      fail!(failure_code: :invalid_data_format, message: e.message)
+      valid_records = reject_invalid_records(normalized)
+      self.grouped_data = group_by_project(valid_records)
     rescue Google::Apis::ClientError => e
       if e.status_code == 404 || e.message.to_s.include?("Unable to parse range")
         fail!(failure_code: :sheet_not_found, message: "找不到指定分頁或試算表：#{e.message}")
@@ -256,10 +284,11 @@ module Sheets
       "#{year}-#{month.rjust(2, '0')}-#{day.rjust(2, '0')}"
     end
 
-    def validate_records!(records)
-      records.each do |record|
-        missing = %i[project_name task_name status owner].select { |k| record[k].to_s.strip.empty? }
-        raise ValidationError, "缺少必要欄位：#{missing.join(', ')}" if missing.any?
+    # 缺少必要欄位（project_name／task_name／status／owner 任一）的列會被跳過，
+    # 不納入結果，也不影響其餘正常列的顯示（真實資料難免有少量不完整列）。
+    def reject_invalid_records(records)
+      records.reject do |record|
+        REQUIRED_KEYS.any? { |key| record[key].to_s.strip.empty? }
       end
     end
 
@@ -324,9 +353,11 @@ result = Sheets::FetchProjectProgress.result()
 | `owner` | String | 負責人，對應 D 欄；多人時保留頓號分隔原字串 |
 | `planned_completion_date` | String \| nil | 預計完成日期（正規化後為 ISO 8601），對應 E 欄 |
 | `actual_completion_date` | String \| nil | 實際完成日期（正規化後為 ISO 8601），對應 F 欄 |
-| `delay_days` | Integer \| String \| nil | 延誤天數，對應 G 欄；可為負數（提早完成） |
+| `delay_days` | Integer \| String \| nil | 延誤天數，對應 G 欄；試算表既有公式算好的值，可為負數（提早完成） |
 
 ### Google Sheets 欄位對應
+
+以下對應適用於 5 個類型分頁（`功能`、`PR`、`調整`、`遺漏`、`臭蟲`）**各自的** A~G 欄，欄位結構完全相同：
 
 | 欄位 | 鍵值 | 說明 |
 |------|------|------|
@@ -336,7 +367,7 @@ result = Sheets::FetchProjectProgress.result()
 | D | `owner` | 負責人 |
 | E | `planned_completion_date` | 預計完成日期（Sheets 回傳 `YYYY/MM/DD` 格式） |
 | F | `actual_completion_date` | 實際完成日期（同上） |
-| G | `delay_days` | 延誤天數（數字字串，可為負） |
+| G | `delay_days` | 延誤天數（試算表公式算好的數字字串，可為負） |
 
 ### API 回應結構（成功）
 
@@ -401,18 +432,18 @@ Actor 使用 `service_actor` 的 `fail!` 機制回傳結構化失敗結果：
 
 | 觸發情境 | failure_code | HTTP 狀態 |
 |----------|--------------|-----------|
-| Google Sheets API 回傳 HTTP 404，或分頁名稱不存在（API 回傳 "Unable to parse range"） | `:sheet_not_found` | 404 |
+| Google Sheets API 回傳 HTTP 404，或任一類型分頁名稱不存在（API 回傳 "Unable to parse range"） | `:sheet_not_found` | 404 |
 | Google Sheets API 回傳 HTTP 403 | `:access_denied` | 403 |
-| 任意紀錄的 `project_name`、`task_name`、`status` 或 `owner` 為空白 | `:invalid_data_format` | 422 |
 | 憑證載入失敗、逾時、配額超過（`RateLimitError`）、其他未預期例外 | `:internal_error` | 500 |
+
+**注意**：`:invalid_data_format`／HTTP 422 這個 failure_code 目前**不會被本 Actor 觸發**——雛型階段「任一紀錄缺必要欄位就整包失敗」的規則，在真實資料下已改為「該筆紀錄跳過、其餘正常回傳」（見需求 4.3、`reject_invalid_records`），因此沒有任何路徑會產生 `:invalid_data_format`。Controller 的 `error_status` 對應表仍保留這個 mapping（見下方），供未來若有其他情境需要用到時沿用，目前不會被觸發到。
 
 **例外捕捉順序**（Actor `call` 方法）：
 
-1. `ValidationError`（內部，`validate_records!` 拋出）→ `:invalid_data_format`
-2. `Google::Apis::ClientError`（判斷 status_code 404/403）→ `:sheet_not_found` / `:access_denied`
-3. `StandardError`（所有其他例外，含憑證錯誤、`ServerError`、`RateLimitError`）→ `:internal_error`
+1. `Google::Apis::ClientError`（判斷 status_code 404/403）→ `:sheet_not_found` / `:access_denied`
+2. `StandardError`（所有其他例外，含憑證錯誤、`ServerError`、`RateLimitError`）→ `:internal_error`
 
-`Google::Apis::RateLimitError` 與 `Google::Apis::ServerError` 均繼承自 `StandardError`（非 `ClientError`），因此自然落入最後一個 `rescue` 分支。
+`Google::Apis::RateLimitError` 與 `Google::Apis::ServerError` 均繼承自 `StandardError`（非 `ClientError`），因此自然落入最後一個 `rescue` 分支。（已實際解壓 `google-apis-core` gem 原始碼驗證此繼承關係屬實。）
 
 ### Controller 層錯誤處理
 
@@ -513,7 +544,7 @@ Controller 根據 `result.failure_code` 對應 HTTP 狀態碼，統一回傳：
 
 *For any* 觸發 Actor 失敗的情境（透過 mock `SheetsApiClient` 拋出各類例外），API 回應的 JSON body 必須包含 `error.code` 與 `error.message` 兩個鍵，缺一不可。
 
-**Validates: Requirements 4.1, 4.2, 4.3, 4.4, 4.5**
+**Validates: Requirements 4.1, 4.2, 4.4, 4.5**
 
 ---
 
@@ -522,6 +553,14 @@ Controller 根據 `result.failure_code` 對應 HTTP 狀態碼，統一回傳：
 *For any* 任務 Hash，`ProjectTaskBlueprint.render_as_hash` 的輸出必須恰好包含 `project_name`、`task_name`、`status`、`owner`、`planned_completion_date`、`actual_completion_date`、`delay_days` 這 7 個鍵，不多不少。
 
 **Validates: Requirements 6.1, 7.3**
+
+---
+
+### Property 11: 不完整紀錄篩選正確性
+
+*For any* 任務 Hash 陣列（混合完整與缺欄位紀錄），`reject_invalid_records` 的輸出必須恰好排除所有 `project_name`／`task_name`／`status`／`owner` 任一欄為空白的紀錄，其餘完整紀錄必須全數保留、不受影響。
+
+**Validates: Requirements 4.3**
 
 ---
 

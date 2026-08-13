@@ -74,6 +74,65 @@
         "chatSessionId": "sess_99d428d9-24de-4a7b-9882-2ff458dddcb0",
         "timestamp": 1786600935934
       }
+    ],
+    "4.1 撰寫 `spec/clients/sheets_api_client_spec.rb`": [
+      {
+        "executionId": "649d19ec-366a-47ea-81e2-6820348dadf3",
+        "chatSessionId": "sess_1fa4d954-24be-4849-b5fb-d9eacc174107",
+        "timestamp": 1786601025734
+      },
+      {
+        "executionId": "649d19ec-366a-47ea-81e2-6820348dadf3",
+        "chatSessionId": "sess_1fa4d954-24be-4849-b5fb-d9eacc174107",
+        "timestamp": 1786601247932
+      }
+    ],
+    "4. `SheetsApiClient` 單元測試": [
+      {
+        "executionId": "649d19ec-366a-47ea-81e2-6820348dadf3",
+        "chatSessionId": "sess_1fa4d954-24be-4849-b5fb-d9eacc174107",
+        "timestamp": 1786601247989
+      }
+    ],
+    "5. 修改 `Sheets::FetchProjectProgress` Actor": [
+      {
+        "executionId": "4e0de494-eae9-42e5-9763-6db599d3b4f0",
+        "chatSessionId": "sess_6ac10955-4ff7-45f8-a130-19408635809d",
+        "timestamp": 1786601426621
+      }
+    ],
+    "5.1 移除 `simulate_error` 與 `MockData` 依賴": [
+      {
+        "executionId": "4e0de494-eae9-42e5-9763-6db599d3b4f0",
+        "chatSessionId": "sess_6ac10955-4ff7-45f8-a130-19408635809d",
+        "timestamp": 1786601432714
+      }
+    ],
+    "5.2 實作 `parse_rows` 私有方法": [
+      {
+        "executionId": "4e0de494-eae9-42e5-9763-6db599d3b4f0",
+        "chatSessionId": "sess_6ac10955-4ff7-45f8-a130-19408635809d",
+        "timestamp": 1786601441852
+      }
+    ],
+    "5.3 修改 `call` 方法：改為呼叫 `SheetsApiClient`，更新錯誤處理": [
+      {
+        "executionId": "4e0de494-eae9-42e5-9763-6db599d3b4f0",
+        "chatSessionId": "sess_6ac10955-4ff7-45f8-a130-19408635809d",
+        "timestamp": 1786601445291
+      }
+    ],
+    "7. Actor 單元測試（stub `SheetsApiClient`）": [
+      {
+        "executionId": "07331137-41c0-464a-bc3d-5803cab5a16e",
+        "chatSessionId": "sess_4623a958-320e-4b6e-adf2-08dd2bb98837",
+        "timestamp": 1786601627918
+      },
+      {
+        "executionId": "07331137-41c0-464a-bc3d-5803cab5a16e",
+        "chatSessionId": "sess_4623a958-320e-4b6e-adf2-08dd2bb98837",
+        "timestamp": 1786601895271
+      }
     ]
   }
 }

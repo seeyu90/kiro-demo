@@ -2,11 +2,16 @@
 
 class SheetsApiClient
   SPREADSHEET_ID = "11gwDnOqEiGqj_VF2XF7AzxiJTiOW_k2knF6-4yQCej8"
-  SHEET_RANGE    = "2026!A:G"
+  SHEET_NAMES    = ["功能", "PR", "調整", "遺漏", "臭蟲"].freeze
+  RANGE_SUFFIX   = "!A:G"
   SCOPES         = ["https://www.googleapis.com/auth/spreadsheets.readonly"].freeze
 
-  # 回傳原始列陣列（含標題列），若 API 呼叫失敗則重新拋出例外
-  # @return [Array<Array<String>>] 原始列資料
+  # 305 進度資料分散在 5 個「類型」分頁（功能／PR／調整／遺漏／臭蟲），每個分頁欄位結構
+  # 完全相同（A~G：專案名稱、任務名稱、狀態、負責人、預計完成日期、實際完成日期、延誤，
+  # 「延誤」為試算表既有公式算好的值，直接讀取即可，不在程式中重新計算）。
+  # 回傳單一合併後的列陣列：僅保留第一個分頁的標題列，其餘分頁只取資料列。
+  #
+  # @return [Array<Array<String>>] 合併後的原始列陣列（第 1 列為標題列）
   # @raise [Google::Apis::ClientError]  403 / 404 等 API 層級錯誤
   # @raise [Google::Apis::ServerError]  5xx 伺服器端錯誤
   # @raise [StandardError]              憑證載入失敗或其他未預期錯誤
@@ -16,15 +21,36 @@ class SheetsApiClient
 
   def fetch_rows
     service = build_service
-    response = service.get_spreadsheet_values(
-      SPREADSHEET_ID,
-      SHEET_RANGE,
-      value_render_option: "FORMATTED_VALUE"
-    )
-    response.values || []
+    combined = []
+
+    SHEET_NAMES.each_with_index do |sheet_name, index|
+      rows = fetch_sheet_rows(service, sheet_name)
+      combined.concat(index.zero? ? rows : rows.drop(1))
+    end
+
+    combined
   end
 
   private
+
+  def fetch_sheet_rows(service, sheet_name)
+    response = service.get_spreadsheet_values(
+      SPREADSHEET_ID,
+      "#{sheet_name}#{RANGE_SUFFIX}",
+      value_render_option: "FORMATTED_VALUE"
+    )
+    (response.values || []).map { |row| retag_utf8(row) }
+  end
+
+  # google-apis-sheets_v4 回傳的儲存格字串會被標記為 ASCII-8BIT，即使實際內容是
+  # 合法 UTF-8 位元組（試算表本身就是 UTF-8）。標記錯誤會讓後續任何跟程式碼裡的
+  # UTF-8 常值字串（例如中文錯誤訊息）併在一起時噴 Encoding::CompatibilityError，
+  # 因此在來源處統一重新標記為 UTF-8（純改標記，不改變位元組內容）。
+  def retag_utf8(row)
+    row.map do |cell|
+      cell.is_a?(String) ? cell.dup.force_encoding(Encoding::UTF_8) : cell
+    end
+  end
 
   def build_service
     service = Google::Apis::SheetsV4::SheetsService.new
