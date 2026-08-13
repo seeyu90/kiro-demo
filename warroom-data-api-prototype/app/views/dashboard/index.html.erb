@@ -1,0 +1,28 @@
+<header class="dashboard-header">
+  <h1 class="dashboard-title">戰情室 <span>— 專案進度</span></h1>
+
+  <%= form_with url: "/dashboard", method: :get, local: true, class: "project-selector" do %>
+    <label for="project">選擇專案：</label>
+    <%= select_tag :project,
+                   options_for_select([["全部專案", ""]] + @project_names.map { |name| [name, name] },
+                                      @selected_project),
+                   onchange: "this.form.submit()" %>
+  <% end %>
+</header>
+
+<%= turbo_frame_tag "project-content" do %>
+  <% if @error.present? %>
+    <div class="error-message">
+      <strong>錯誤：</strong><%= @error %>
+    </div>
+  <% elsif @display_data.empty? %>
+    <p class="empty-state">目前無資料</p>
+  <% else %>
+    <% @display_data.each do |project_name, tasks| %>
+      <section class="project-block">
+        <h2><%= project_name %></h2>
+        <%= render partial: "project_block", locals: { tasks: tasks } %>
+      </section>
+    <% end %>
+  <% end %>
+<% end %>

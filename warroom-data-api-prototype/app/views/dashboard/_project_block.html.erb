@@ -1,0 +1,37 @@
+<% if tasks.empty? %>
+  <p class="empty-state">目前無資料</p>
+<% else %>
+  <table class="project-tasks">
+    <thead>
+      <tr>
+        <th>任務名稱</th>
+        <th>狀態</th>
+        <th>負責人</th>
+        <th>預計完成日期</th>
+        <th>實際完成日期</th>
+        <th>延誤天數</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% tasks.each do |task| %>
+        <tr>
+          <td><%= task[:task_name] %></td>
+          <td>
+            <span class="status-badge status-<%= task[:status]&.to_s&.gsub(' ', '_') %>">
+              <%= task[:status] %>
+            </span>
+          </td>
+          <td><%= task[:owner] %></td>
+          <td><%= task[:planned_completion_date] %></td>
+          <td><%= task[:actual_completion_date].presence || "—" %></td>
+          <td>
+            <% delay = task[:delay_days].to_i %>
+            <span class="delay-days <%= delay > 0 ? 'delayed' : 'on-time' %>">
+              <%= delay > 0 ? "+#{delay} 天" : (task[:delay_days].nil? ? "—" : "準時") %>
+            </span>
+          </td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+<% end %>

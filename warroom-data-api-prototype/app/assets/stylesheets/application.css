@@ -1,10 +1,207 @@
 /*
  * This is a manifest file that'll be compiled into application.css.
- *
- * With Propshaft, assets are served efficiently without preprocessing steps. You can still include
- * application-wide styles in this file, but keep in mind that CSS precedence will follow the standard
- * cascading order, meaning styles declared later in the document or manifest will override earlier ones,
- * depending on specificity.
- *
- * Consider organizing styles into separate files for maintainability.
  */
+
+/* ── Reset & Base ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: "Noto Sans TC", "PingFang TC", "Helvetica Neue", Arial, sans-serif;
+  background: #0f1117;
+  color: #e2e8f0;
+  min-height: 100vh;
+}
+
+/* ── Layout Shell ── */
+.dashboard-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+
+/* ── Header ── */
+.dashboard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid #2d3748;
+}
+
+.dashboard-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #f7fafc;
+}
+
+.dashboard-title span {
+  color: #63b3ed;
+}
+
+/* ── Project Selector ── */
+.project-selector {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.project-selector label {
+  font-size: 0.875rem;
+  color: #a0aec0;
+  white-space: nowrap;
+}
+
+.project-selector select {
+  background: #1a202c;
+  color: #e2e8f0;
+  border: 1px solid #4a5568;
+  border-radius: 0.5rem;
+  padding: 0.5rem 2rem 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23a0aec0' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  transition: border-color 0.2s;
+}
+
+.project-selector select:hover,
+.project-selector select:focus {
+  border-color: #63b3ed;
+  outline: none;
+}
+
+/* ── Project Block ── */
+.project-block {
+  background: #1a202c;
+  border: 1px solid #2d3748;
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  transition: border-color 0.2s;
+}
+
+.project-block:hover {
+  border-color: #4a5568;
+}
+
+.project-block h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #63b3ed;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.project-block h2::before {
+  content: "";
+  display: inline-block;
+  width: 3px;
+  height: 1.1em;
+  background: #63b3ed;
+  border-radius: 2px;
+}
+
+/* ── Table ── */
+.project-tasks {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.project-tasks th {
+  text-align: left;
+  padding: 0.625rem 1rem;
+  color: #718096;
+  font-weight: 500;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid #2d3748;
+  white-space: nowrap;
+}
+
+.project-tasks td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #1e2533;
+  color: #cbd5e0;
+  vertical-align: middle;
+}
+
+.project-tasks tr:last-child td {
+  border-bottom: none;
+}
+
+.project-tasks tbody tr:hover td {
+  background: #232b3a;
+}
+
+/* ── Status Badge ── */
+.status-badge {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.status-completed   { background: #1c4532; color: #68d391; }
+.status-in_progress { background: #1a365d; color: #63b3ed; }
+.status-pending     { background: #2d3748; color: #a0aec0; }
+.status-delayed     { background: #4a1c1c; color: #fc8181; }
+
+/* ── Delay Days ── */
+.delay-days {
+  font-weight: 600;
+}
+.delay-days.delayed { color: #fc8181; }
+.delay-days.on-time { color: #68d391; }
+
+/* ── Empty / Error State ── */
+.empty-state {
+  padding: 2rem;
+  text-align: center;
+  color: #4a5568;
+  font-size: 0.875rem;
+}
+
+.error-message {
+  background: #4a1c1c;
+  border: 1px solid #e53e3e;
+  border-radius: 0.5rem;
+  padding: 1rem 1.25rem;
+  color: #feb2b2;
+  font-size: 0.875rem;
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .dashboard-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .project-tasks {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .project-tasks th,
+  .project-tasks td {
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 480px) {
+  .dashboard-container { padding: 1rem; }
+  .dashboard-title { font-size: 1.4rem; }
+}

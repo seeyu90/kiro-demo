@@ -135,8 +135,8 @@
 - [x] 5. 檢查點 — API 層驗證
   - 確認所有 API 測試通過，curl 可取得正確 JSON 回應，如有問題請提出。
 
-- [~] 6. Dashboard Controller 與 View
-  - [-] 6.1 建立 `DashboardController`
+- [x] 6. Dashboard Controller 與 View
+  - [x] 6.1 建立 `DashboardController`
     - 建立 `app/controllers/dashboard_controller.rb`
     - 實作 `index` action：呼叫 Actor，設定 `@grouped_data`、`@project_names`、`@selected_project`
     - 依 `@selected_project` 過濾出 `filtered`（有選擇專案時用 `Hash#slice`，否則等於 `@grouped_data`），
@@ -144,22 +144,22 @@
     - 設定 `@error`
     - _需求：5.1、5.2、6.2、6.3、7.1、8.4_
 
-  - [-] 6.2 設定 Dashboard 路由
+  - [x] 6.2 設定 Dashboard 路由
     - 編輯 `config/routes.rb`，新增 `root "dashboard#index"` 與 `get "/dashboard", to: "dashboard#index"`
     - _需求：5.1_
 
-  - [-] 6.3 建立 Dashboard 主樣板 `app/views/dashboard/index.html.erb`
+  - [x] 6.3 建立 Dashboard 主樣板 `app/views/dashboard/index.html.erb`
     - 實作下拉選單（GET 表單提交 `?project=XXX`），列出所有專案名稱及「全部專案」選項
     - 以 `turbo_frame_tag "project-content"` 包裹主內容區
     - 於 Turbo Frame 內迭代 `@display_data`（而非 `@grouped_data`）渲染各專案區塊；`@error` 不為 nil 時顯示錯誤訊息
     - _需求：5.2、5.3、6.1、6.3、7.1_
 
-  - [-] 6.4 建立 `_project_block.html.erb` 局部樣板
+  - [x] 6.4 建立 `_project_block.html.erb` 局部樣板
     - 顯示欄位：任務名稱、狀態、負責人、預計完成日期、實際完成日期、延誤天數
     - 無資料時顯示「目前無資料」
     - _需求：5.4、7.2_
 
-  - [-]* 6.5 撰寫 Dashboard Request Spec
+  - [x]* 6.5 撰寫 Dashboard Request Spec
     - `GET /dashboard` → 200，回傳包含下拉選單與專案區塊的 HTML
     - `GET /dashboard?project=系統優化` → Turbo Frame 局部更新，僅顯示指定專案
     - _需求：5.1、5.2、5.3、6.2_
