@@ -76,12 +76,12 @@
     - _需求：2.2、2.3、2.4、2.5、3.4、3.5_
 
   - [x] 5.3 修改 `call` 方法：改為呼叫 `SheetsApiClient`，更新錯誤處理
-    - `call` 方法改為：`rows = SheetsApiClient.fetch_rows`，後續 `parse_rows`、`normalize_record`、`validate_records!`、`group_by_project` 流程不變
-    - 例外捕捉順序（三個 `rescue` 區塊）：
-      1. `ValidationError` → `fail!(failure_code: :invalid_data_format, message: e.message)`
-      2. `Google::Apis::ClientError`：status 404 或 message 含 `"Unable to parse range"` → `:sheet_not_found`；status 403 → `:access_denied`；其他 → `:internal_error`
-      3. `StandardError`（兜底，含 `RateLimitError`、`ServerError`、憑證錯誤）→ `:internal_error`
-    - 確認 `normalize_date`、`validate_records!`、`group_by_project` 私有方法**完全不變動**
+    - `call` 方法改為：`rows = SheetsApiClient.fetch_rows`，後續 `parse_rows`、`normalize_record`、`reject_invalid_records`、`group_by_project` 流程不變
+    - 例外捕捉順序（兩個 `rescue` 區塊）：
+      1. `Google::Apis::ClientError`：status 404 或 message 含 `"Unable to parse range"` → `:sheet_not_found`；status 403 → `:access_denied`；其他 → `:internal_error`
+      2. `StandardError`（兜底，含 `RateLimitError`、`ServerError`、憑證錯誤）→ `:internal_error`
+    - **注意**：`validate_records!`（不合法就整包失敗）已改為 `reject_invalid_records`（該筆跳過、其餘正常回傳），`:invalid_data_format` 不再由此 Actor 觸發，見需求 4.3
+    - 確認 `normalize_date`、`group_by_project` 私有方法**完全不變動**
     - _需求：2.2、2.3、2.4、2.5、4.1、4.2、4.3、4.4、6.1、6.2_
 
 - [ ]* 6. Property 測試（具代表性範例，比照雛型階段作法，不引入 PBT 套件）
@@ -136,7 +136,7 @@
     - **驗證：需求 6.1、7.3**
 
 - [x] 7. Actor 單元測試（stub `SheetsApiClient`）
-  - [ ] 7.1 撰寫 `spec/actors/sheets/fetch_project_progress_spec.rb`（更新現有或新增）
+  - [x] 7.1 撰寫 `spec/actors/sheets/fetch_project_progress_spec.rb`（更新現有或新增）
     - stub `SheetsApiClient.fetch_rows` 回傳正常列陣列 → 驗證 `grouped_data` 結構與分組正確性
     - stub 回傳含空列的陣列 → 驗證空列被跳過，不出現在輸出中
     - stub 回傳列長度不足 7 的陣列 → 驗證以 `nil` 填補後仍產生含全部 7 個鍵的 Hash
@@ -144,7 +144,7 @@
     - stub 回傳日期欄位為空值的資料 → 驗證輸出為 `nil`
     - stub 回傳 `delay_days` 為 `"-4"` → 驗證輸出為 Integer `-4`
     - stub 回傳 `delay_days` 為 `"TBD"` → 驗證保留原始字串
-    - stub 回傳 `project_name`、`task_name`、`status` 或 `owner` 任一欄為空白的資料 → 驗證 `failure_code: :invalid_data_format`
+    - stub 回傳 `project_name`、`task_name`、`status` 或 `owner` 任一欄為空白的資料 → 驗證該筆被跳過、不納入 `grouped_data`，其餘正常紀錄仍回傳成功結果（見需求 4.3；不再觸發 `:invalid_data_format`）
     - stub 拋出 `Google::Apis::ClientError`（status 404）→ 驗證 `failure_code: :sheet_not_found`
     - stub 拋出 `Google::Apis::ClientError`（status 403）→ 驗證 `failure_code: :access_denied`
     - stub 拋出 `StandardError`（模擬憑證錯誤）→ 驗證 `failure_code: :internal_error`
