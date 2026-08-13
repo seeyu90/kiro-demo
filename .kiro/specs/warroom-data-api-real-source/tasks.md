@@ -187,6 +187,49 @@
     - 憑證缺失 → 500 情境已由 `spec/requests/api/project_progress_spec.rb` 的 StandardError mock 案例覆蓋，未對現有可用憑證做破壞性測試
   - 已知後續清理項（不影響本次驗收）：`lib/mock_data/project_progress.rb` 已無任何程式碼參照，屬於雛型階段遺留的死碼，可視情況移除。
 
+- [x] 11. Dashboard 任務類型標記與篩選（需求 10，戰情室 UX 強化延伸）
+  - [x] 11.1 `SheetsApiClient` 標記類型分頁（`tag_with_type`）
+    - 每個類型分頁的資料列附加第 8 欄：標題列附加固定文字「類型」，資料列附加該分頁名稱（`功能`／`PR`／`調整`／`遺漏`／`臭蟲`）
+    - _需求：10（見需求 2.7、2.8）_
+
+  - [x] 11.2 `Sheets::FetchProjectProgress` Actor 解析 `task_type`
+    - `COLUMN_KEYS` 新增 `task_type`（第 8 個鍵），`parse_rows` 改為 8 欄填補與映射
+    - _需求：2.5, 2.8_
+
+  - [x] 11.3 `ProjectTaskBlueprint` 新增 `:task_type` 欄位
+    - _需求：6.4_
+
+  - [x] 11.4 `DashboardController` 篩選與摘要邏輯
+    - 支援 `project`／`task_type[]`（多選，預設「功能」＋「PR」）／`scope`（`all`／`due_this_week`／`overdue`，預設 `due_this_week`）／`incomplete_only`（預設開啟）四個 query params
+    - `due_by_this_week_end?` 不限下界，涵蓋所有已逾期任務
+    - `@summary` 僅套用 `project`／`task_type` 範圍，不受 `scope`／`incomplete_only` 影響
+    - `sort_overdue_first` 將逾期任務排在各專案清單最前面
+    - _需求：10.1–10.8_
+
+  - [x] 11.5 View 層新增篩選控制項與摘要列
+    - `index.html.erb`：專案下拉選單、任務類型 checkbox 群組（含隱藏欄位處理全部取消勾選情境）、範圍 radio、只顯示未完成 checkbox、摘要列
+    - `_project_block.html.erb`：任務表格新增「類型」欄位
+    - _需求：10.1–10.7_
+
+  - [x] 11.6 CSS 樣式
+    - 狀態 badge、逾期標示、摘要列、篩選控制項排版
+    - _需求：（響應式與視覺樣式，延續 project-standards.md 精神）_
+
+  - [x] 11.7 對應測試更新
+    - `spec/actors/sheets/fetch_project_progress_spec.rb`：新增 `task_type`（第 8 欄）解析案例
+    - `spec/clients/sheets_api_client_spec.rb`：驗證每列附加分頁名稱、標題列附加「類型」
+    - `spec/blueprints/project_task_blueprint_spec.rb`：驗證輸出含 `task_type`
+    - `spec/requests/api/project_progress_spec.rb`、`spec/requests/dashboard_spec.rb`：更新為 8 欄列陣列，涵蓋預設篩選、`scope`、`incomplete_only`、`task_type[]` 組合情境
+    - _需求：10（測試涵蓋）_
+
+- [x] 12. 檢查點 — 真實資料驗證後修正與 UX 調整
+  - 開發過程中對照真實 Google Sheets 資料實際驗證，發現並修正以下問題：
+    - **Bug**：`DashboardController` 原以 `"已確認"` 作為完成狀態比對依據，但真實資料的「狀態」欄位實際只有「完成」「已確認」「未完成」三種值，且從無「已確認」以外的字串符合原判斷式，導致摘要列「已完成／進行中／待開始」恆為 0、逾期數把已完成任務也算入。改為 `COMPLETED_STATUSES = ["完成", "已確認"]`（「已確認」的紀錄一律已有實際完成日期，視為完成狀態的一種），並將摘要列改為 4 欄（任務總數／已完成／未完成／逾期），移除不適用真實資料的「進行中」「待開始」細分
+    - 篩選後無符合條件任務的專案區塊，改為整塊不顯示（原本會顯示專案標題與「目前無符合條件的任務」）
+    - 篩選控制項（專案／任務類型／範圍／只顯示未完成）由「逐項變更即自動送出」改為統一透過「套用篩選」按鈕送出，避免任務類型多選 checkbox 逐項送出造成 Turbo Frame 多次重繪
+  - 驗證方式：`bundle exec rspec` 84/84 全數通過；針對已修正項目以瀏覽器／`curl` 對真實執行中的 server 驗證（摘要列數字、狀態 badge 顏色、空專案區塊隱藏、篩選按鈕送出時機）
+  - 已知非阻斷問題：測試套件偶發性隨機順序失敗（觀察到約 4 次執行中 1 次），與本次改動無關，尚未查出根因
+
 ---
 
 ## Notes
@@ -209,7 +252,12 @@
     { "id": 3, "tasks": ["5.1"] },
     { "id": 4, "tasks": ["5.2", "5.3"] },
     { "id": 5, "tasks": ["6.1", "6.2", "6.3", "6.4", "6.5", "6.6", "6.7", "6.8", "6.9", "6.10", "7.1", "8.1"] },
-    { "id": 6, "tasks": ["9.1", "9.2"] }
+    { "id": 6, "tasks": ["9.1", "9.2"] },
+    { "id": 7, "tasks": ["11.1"] },
+    { "id": 8, "tasks": ["11.2", "11.3"] },
+    { "id": 9, "tasks": ["11.4"] },
+    { "id": 10, "tasks": ["11.5", "11.6", "11.7"] },
+    { "id": 11, "tasks": ["12"] }
   ]
 }
 ```
