@@ -88,5 +88,51 @@ RSpec.describe Sheets::FetchProjectProgress do
         end
       end
     end
+
+    context "with normal data" do
+      it "succeeds and returns grouped_data keyed by project_name" do
+        expect(result).to be_success
+        expect(result.grouped_data.keys).to match_array(MockData::ProjectProgress::RECORDS.map { |r| r[:project_name] }.uniq)
+        expect(result.grouped_data.values.sum(&:size)).to eq(MockData::ProjectProgress::RECORDS.size)
+      end
+
+      it "normalizes the date fields of every task" do
+        result.grouped_data.each_value do |tasks|
+          tasks.each do |task|
+            expect(task[:planned_completion_date]).to match(/\A\d{4}-\d{2}-\d{2}\z/).or(be_nil)
+            expect(task[:actual_completion_date]).to match(/\A\d{4}-\d{2}-\d{2}\z/).or(be_nil)
+          end
+        end
+      end
+    end
+
+    context "with a real fixture that is missing a required field" do
+      before do
+        stub_const("MockData::ProjectProgress::RECORDS", [
+          base_record.merge(project_name: "P", task_name: "T", status: "")
+        ])
+      end
+
+      it "fails with failure_code: :invalid_data_format" do
+        expect(result).not_to be_success
+        expect(result.failure_code).to eq(:invalid_data_format)
+      end
+    end
+
+    context "with simulate_error" do
+      {
+        sheet_not_found: :sheet_not_found,
+        invalid_data_format: :invalid_data_format,
+        access_denied: :access_denied,
+        internal_error: :internal_error
+      }.each do |simulate_error, expected_failure_code|
+        it "returns failure_code: #{expected_failure_code.inspect} for simulate_error: #{simulate_error.inspect}" do
+          result = described_class.result(simulate_error: simulate_error)
+
+          expect(result).not_to be_success
+          expect(result.failure_code).to eq(expected_failure_code)
+        end
+      end
+    end
   end
 end

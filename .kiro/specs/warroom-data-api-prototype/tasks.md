@@ -79,7 +79,7 @@
     - `grouped_data` 鍵值集合必須與原始 `RECORDS` 中 `project_name` 唯一值集合完全相同
     - **驗證：需求 2.1、2.3**
 
-  - [ ]* 2.8 撰寫 Actor 單元測試
+  - [x]* 2.8 撰寫 Actor 單元測試
     - 正常資料 → 驗證 `grouped_data` 結構與分組正確性
     - 缺少必要欄位資料（真實不合法 fixture，非 `simulate_error`）→ 驗證回傳 `failure_code: :invalid_data_format`
     - `simulate_error: :sheet_not_found` → 驗證回傳 `failure_code: :sheet_not_found`
@@ -99,10 +99,10 @@
     - 對任意任務紀錄，`ProjectTaskBlueprint.render_as_hash` 輸出必須恰好包含全部 7 個欄位，不多不少
     - **驗證：需求 8.4**
 
-- [ ] 3. 檢查點 — Actor 層驗證
+- [x] 3. 檢查點 — Actor 層驗證
   - 確認所有 Actor 單元測試與 Property 測試通過，如有問題請提出。
 
-- [ ] 4. API Controller 與路由
+- [~] 4. API Controller 與路由
   - [ ] 4.1 建立 `Api::ProjectProgressController`
     - 建立 `app/controllers/api/project_progress_controller.rb`
     - 實作 `index` action：呼叫 `Sheets::FetchProjectProgress.call(simulate_error: params[:simulate_error]&.to_sym)`
