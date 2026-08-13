@@ -12,7 +12,7 @@
 
 ## Tasks
 
-- [-] 1. 初始化 Rails 專案骨架
+- [ ] 1. 初始化 Rails 專案骨架
   - [x] 1.1 建立 Rails 專案（略過資料庫）
     - 執行 `rails new warroom-data-api-prototype --skip-active-record --skip-active-storage --skip-action-mailbox --skip-action-text --skip-test`
     - 確認專案目錄結構正確生成
@@ -26,17 +26,17 @@
     - 執行 `rails turbo:install`（安裝 Turbo）
     - _需求：8.1、8.4_
 
-  - [-] 1.3 建立 `ApplicationActor` 基底類別
+  - [x] 1.3 建立 `ApplicationActor` 基底類別
     - 建立 `app/actors/application_actor.rb`，繼承 `Actor::Base`
     - 確認 `app/actors/` 目錄在 Rails autoload 路徑中（或加入 `config/application.rb`）
     - _需求：8.1_
 
-  - [ ]* 1.4 驗證 Rails server 可正常啟動
+  - [ ] 1.4 驗證 Rails server 可正常啟動
     - 執行 `rails server -p 3000`，確認無啟動錯誤
     - _需求：8.1_
 
-- [ ] 2. 模擬資料層與 Actor 資料邏輯
-  - [ ] 2.1 建立 `MockData::ProjectProgress::RECORDS`
+- [~] 2. 模擬資料層與 Actor 資料邏輯
+  - [x] 2.1 建立 `MockData::ProjectProgress::RECORDS`
     - 建立 `lib/mock_data/project_progress.rb`
     - 實作含至少 2 個專案、每專案至少 3 筆任務的模擬資料陣列（frozen）
     - 日期欄位混用 `YYYY/M/D`、`YYYY/MM/DD`、`YYYY-M-D`、`YYYY-MM-DD` 四種格式，並包含 `nil` 值
@@ -44,7 +44,7 @@
     - 確認 `lib/` 已加入 Rails autoload（`config.autoload_lib`）
     - _需求：8.3_
 
-  - [ ] 2.2 建立 `Sheets::FetchProjectProgress` Actor — 日期正規化
+  - [-] 2.2 建立 `Sheets::FetchProjectProgress` Actor — 日期正規化
     - 建立 `app/actors/sheets/fetch_project_progress.rb`
     - 實作 `normalize_date` 私有方法：支援 `YYYY/M/D`、`YYYY/MM/DD`、`YYYY-M-D`、`YYYY-MM-DD` 轉換為 `YYYY-MM-DD`
     - `nil` 或空字串輸入必須回傳 `nil`；無法解析的值保留原始字串

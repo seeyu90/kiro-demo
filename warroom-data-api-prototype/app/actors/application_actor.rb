@@ -1,2 +1,2 @@
-class ApplicationActor < Actor::Base
+class ApplicationActor < Actor
 end

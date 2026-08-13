@@ -32,6 +32,44 @@
         "executionId": "73728c2b-af35-463c-b086-ba4edb2c56e1",
         "chatSessionId": "sess_a324db3f-9bf2-4aed-9333-506c06b9f8d4",
         "timestamp": 1786592668964
+      },
+      {
+        "executionId": "73728c2b-af35-463c-b086-ba4edb2c56e1",
+        "chatSessionId": "sess_a324db3f-9bf2-4aed-9333-506c06b9f8d4",
+        "timestamp": 1786592934524
+      }
+    ],
+    "1.4 驗證 Rails server 可正常啟動": [
+      {
+        "executionId": "bf29a6a4-7893-47b0-b47c-1516d5880655",
+        "chatSessionId": "sess_98e78e5d-459c-441c-a6f5-244111a944ef",
+        "timestamp": 1786592970047
+      }
+    ],
+    "2. 模擬資料層與 Actor 資料邏輯": [
+      {
+        "executionId": "e58fd71d-d0c7-4664-86ce-26fcb86b0b96",
+        "chatSessionId": "sess_c7c08478-185f-4386-a15e-23b427f399ec",
+        "timestamp": 1786593067291
+      }
+    ],
+    "2.1 建立 `MockData::ProjectProgress::RECORDS`": [
+      {
+        "executionId": "e58fd71d-d0c7-4664-86ce-26fcb86b0b96",
+        "chatSessionId": "sess_c7c08478-185f-4386-a15e-23b427f399ec",
+        "timestamp": 1786593072105
+      },
+      {
+        "executionId": "e58fd71d-d0c7-4664-86ce-26fcb86b0b96",
+        "chatSessionId": "sess_c7c08478-185f-4386-a15e-23b427f399ec",
+        "timestamp": 1786593154520
+      }
+    ],
+    "2.2 建立 `Sheets::FetchProjectProgress` Actor — 日期正規化": [
+      {
+        "executionId": "e58fd71d-d0c7-4664-86ce-26fcb86b0b96",
+        "chatSessionId": "sess_c7c08478-185f-4386-a15e-23b427f399ec",
+        "timestamp": 1786593164024
       }
     ]
   }
