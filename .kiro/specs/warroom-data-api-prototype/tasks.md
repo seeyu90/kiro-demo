@@ -12,7 +12,7 @@
 
 ## Tasks
 
-- [ ] 1. 初始化 Rails 專案骨架
+- [x] 1. 初始化 Rails 專案骨架
   - [x] 1.1 建立 Rails 專案（略過資料庫）
     - 執行 `rails new warroom-data-api-prototype --skip-active-record --skip-active-storage --skip-action-mailbox --skip-action-text --skip-test`
     - 確認專案目錄結構正確生成
@@ -31,11 +31,11 @@
     - 確認 `app/actors/` 目錄在 Rails autoload 路徑中（或加入 `config/application.rb`）
     - _需求：8.1_
 
-  - [ ] 1.4 驗證 Rails server 可正常啟動
+  - [x] 1.4 驗證 Rails server 可正常啟動
     - 執行 `rails server -p 3000`，確認無啟動錯誤
     - _需求：8.1_
 
-- [~] 2. 模擬資料層與 Actor 資料邏輯
+- [x] 2. 模擬資料層與 Actor 資料邏輯
   - [x] 2.1 建立 `MockData::ProjectProgress::RECORDS`
     - 建立 `lib/mock_data/project_progress.rb`
     - 實作含至少 2 個專案、每專案至少 3 筆任務的模擬資料陣列（frozen）
@@ -44,23 +44,23 @@
     - 確認 `lib/` 已加入 Rails autoload（`config.autoload_lib`）
     - _需求：8.3_
 
-  - [-] 2.2 建立 `Sheets::FetchProjectProgress` Actor — 日期正規化
+  - [x] 2.2 建立 `Sheets::FetchProjectProgress` Actor — 日期正規化
     - 建立 `app/actors/sheets/fetch_project_progress.rb`
     - 實作 `normalize_date` 私有方法：支援 `YYYY/M/D`、`YYYY/MM/DD`、`YYYY-M-D`、`YYYY-MM-DD` 轉換為 `YYYY-MM-DD`
     - `nil` 或空字串輸入必須回傳 `nil`；無法解析的值保留原始字串
     - _需求：4.1、4.2、4.3、4.4_
 
-  - [ ]* 2.3 撰寫 Property 2 測試：日期格式一致性
+  - [x]* 2.3 撰寫 Property 2 測試：日期格式一致性
     - **Property 2：日期格式一致性**
     - 對任意符合支援格式的日期輸入，輸出必須符合 `/\A\d{4}-\d{2}-\d{2}\z/`
     - **驗證：需求 4.1、4.2**
 
-  - [ ]* 2.4 撰寫 Property 3 測試：空值保留
+  - [x]* 2.4 撰寫 Property 3 測試：空值保留
     - **Property 3：空值保留**
     - 對任意 `nil` 或空字串輸入，`normalize_date` 輸出必定為 `nil`
     - **驗證：需求 4.3**
 
-  - [ ] 2.5 實作 Actor — 分組、驗證與錯誤處理
+  - [x] 2.5 實作 Actor — 分組、驗證與錯誤處理
     - 定義 `Sheets::FetchProjectProgress::ValidationError < StandardError`（供 `validate_records!` 使用）
     - 宣告 `input :simulate_error`（可選 Symbol，涵蓋 `sheet_not_found`／`invalid_data_format`／`access_denied`／`internal_error` 四種）、`output :grouped_data`、`output :failure_code`、`output :message`
     - `call` 方法開頭：若 `simulate_error` 有值，直接以 `fail!` 回傳對應模擬錯誤，不執行後續讀取
@@ -69,12 +69,12 @@
     - 以 `fail!` 回傳結構化失敗結果（`failure_code` + `message`）
     - _需求：1.2、1.3、1.4、1.5、1.6、2.1、2.2、2.3、3.1–3.5、8.1、8.3_
 
-  - [ ]* 2.6 撰寫 Property 1 測試：分組完整性
+  - [x]* 2.6 撰寫 Property 1 測試：分組完整性
     - **Property 1：分組完整性**
     - 對任意非空 `RECORDS`，`grouped_data` 所有陣列元素總數必須等於 `RECORDS` 筆數
     - **驗證：需求 2.1、2.2**
 
-  - [ ]* 2.7 撰寫 Property 6 測試：分組鍵值完整性
+  - [x]* 2.7 撰寫 Property 6 測試：分組鍵值完整性
     - **Property 6：分組鍵值完整性**
     - `grouped_data` 鍵值集合必須與原始 `RECORDS` 中 `project_name` 唯一值集合完全相同
     - **驗證：需求 2.1、2.3**
@@ -88,13 +88,13 @@
     - `simulate_error: :internal_error` → 驗證回傳 `failure_code: :internal_error`
     - _需求：2.1、2.2、2.3、3.2_
 
-  - [ ] 2.9 建立 `ProjectTaskBlueprint` 序列化層
+  - [x] 2.9 建立 `ProjectTaskBlueprint` 序列化層
     - 建立 `app/blueprints/project_task_blueprint.rb`，繼承 `Blueprinter::Base`
     - 定義欄位：`project_name`、`task_name`、`status`、`owner`、`planned_completion_date`、`actual_completion_date`、`delay_days`
     - 欄位清單只在此定義一次，供 API Controller 與 Dashboard Controller 共用
     - _需求：8.4_
 
-  - [ ]* 2.10 撰寫 Property 7 測試：Blueprint 欄位完整性
+  - [x]* 2.10 撰寫 Property 7 測試：Blueprint 欄位完整性
     - **Property 7：Blueprint 欄位完整性**
     - 對任意任務紀錄，`ProjectTaskBlueprint.render_as_hash` 輸出必須恰好包含全部 7 個欄位，不多不少
     - **驗證：需求 8.4**

@@ -51,6 +51,16 @@
         "executionId": "e58fd71d-d0c7-4664-86ce-26fcb86b0b96",
         "chatSessionId": "sess_c7c08478-185f-4386-a15e-23b427f399ec",
         "timestamp": 1786593067291
+      },
+      {
+        "executionId": "9d7e4ab1-7aad-449c-9701-704ba35a753d",
+        "chatSessionId": "sess_c7937f1f-e256-4ad2-8bc8-570e47fdca7b",
+        "timestamp": 1786594214978
+      },
+      {
+        "executionId": "9d7e4ab1-7aad-449c-9701-704ba35a753d",
+        "chatSessionId": "sess_c7937f1f-e256-4ad2-8bc8-570e47fdca7b",
+        "timestamp": 1786594384263
       }
     ],
     "2.1 建立 `MockData::ProjectProgress::RECORDS`": [
@@ -70,6 +80,18 @@
         "executionId": "e58fd71d-d0c7-4664-86ce-26fcb86b0b96",
         "chatSessionId": "sess_c7c08478-185f-4386-a15e-23b427f399ec",
         "timestamp": 1786593164024
+      },
+      {
+        "executionId": "e58fd71d-d0c7-4664-86ce-26fcb86b0b96",
+        "chatSessionId": "sess_c7c08478-185f-4386-a15e-23b427f399ec",
+        "timestamp": 1786593263606
+      }
+    ],
+    "2.5 實作 Actor — 分組、驗證與錯誤處理": [
+      {
+        "executionId": "e58fd71d-d0c7-4664-86ce-26fcb86b0b96",
+        "chatSessionId": "sess_c7c08478-185f-4386-a15e-23b427f399ec",
+        "timestamp": 1786593266971
       }
     ]
   }
