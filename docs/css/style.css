@@ -1,0 +1,162 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "PingFang TC", "Microsoft JhengHei", "Helvetica Neue", Arial, sans-serif;
+  background: #0f1117;
+  color: #e2e8f0;
+  min-height: 100vh;
+}
+
+main {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 0 1.5rem 2rem;
+}
+
+.dashboard-header {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 1.5rem;
+  border-bottom: 1px solid #2d3748;
+  margin-bottom: 2rem;
+}
+
+.dashboard-header h1 {
+  margin: 0 0 0.25rem;
+  font-size: 1.75rem;
+  font-weight: 700;
+}
+
+.dashboard-header h1 span {
+  color: #63b3ed;
+}
+
+.subtitle {
+  margin: 0;
+  color: #a0aec0;
+  font-size: 0.9rem;
+}
+
+.project-selector {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.project-selector label {
+  font-weight: 600;
+}
+
+.project-selector select {
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid #4a5568;
+  background: #1a202c;
+  color: #e2e8f0;
+  font-size: 1rem;
+}
+
+.project-block {
+  margin-bottom: 2rem;
+}
+
+.project-block h2 {
+  font-size: 1.25rem;
+  margin-bottom: 0.75rem;
+  color: #f7fafc;
+}
+
+.empty-state {
+  color: #a0aec0;
+}
+
+table.project-tasks {
+  width: 100%;
+  border-collapse: collapse;
+  background: #1a202c;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+table.project-tasks th,
+table.project-tasks td {
+  padding: 0.6rem 0.8rem;
+  text-align: left;
+  border-bottom: 1px solid #2d3748;
+  font-size: 0.9rem;
+}
+
+table.project-tasks th {
+  background: #171923;
+  font-weight: 600;
+  color: #cbd5e0;
+}
+
+table.project-tasks tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.delay-negative {
+  color: #68d391;
+}
+
+.delay-positive {
+  color: #fc8181;
+}
+
+/* ── Tablet ── */
+@media (max-width: 768px) {
+  .dashboard-header,
+  main {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  table.project-tasks th,
+  table.project-tasks td {
+    padding: 0.5rem 0.5rem;
+    font-size: 0.85rem;
+  }
+}
+
+/* ── Mobile: switch table to stacked cards ── */
+@media (max-width: 560px) {
+  table.project-tasks,
+  table.project-tasks thead,
+  table.project-tasks tbody,
+  table.project-tasks tr,
+  table.project-tasks td {
+    display: block;
+    width: 100%;
+  }
+
+  table.project-tasks thead {
+    display: none;
+  }
+
+  table.project-tasks tr {
+    margin-bottom: 0.75rem;
+    border: 1px solid #2d3748;
+    border-radius: 8px;
+    padding: 0.5rem 0.75rem;
+  }
+
+  table.project-tasks td {
+    border-bottom: none;
+    padding: 0.3rem 0;
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  table.project-tasks td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: #a0aec0;
+  }
+}

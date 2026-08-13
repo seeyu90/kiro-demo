@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <title>戰情室 — 專案進度（靜態展示版）</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="戰情室專案進度靜態展示頁，使用模擬資料呈現各專案任務進度。">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="dashboard-header">
+    <h1>戰情室 <span>— 專案進度</span></h1>
+    <p class="subtitle">靜態展示版（模擬資料）</p>
+  </header>
+
+  <main>
+    <form class="project-selector" onsubmit="return false">
+      <label for="project">選擇專案：</label>
+      <select id="project" name="project"></select>
+    </form>
+
+    <div id="content" aria-live="polite"></div>
+  </main>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
