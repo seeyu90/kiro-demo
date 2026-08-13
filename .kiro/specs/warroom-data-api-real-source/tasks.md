@@ -161,19 +161,20 @@
     - success/failure 分支、`error_status` 方法、Blueprint 序列化均**不變動**
     - _需求：5.1、5.2、5.3、6.3、6.4_
 
-- [ ] 9. API 與 Dashboard 整合測試（Request Spec）
-  - [ ] 9.1 更新 `spec/requests/api/project_progress_spec.rb`
+- [x] 9. API 與 Dashboard 整合測試（Request Spec）
+  - [x] 9.1 更新 `spec/requests/api/project_progress_spec.rb`
     - stub `SheetsApiClient.fetch_rows` 回傳有效列陣列：`GET /api/project_progress` → 200，JSON 結構符合 `{ "<專案名稱>": [{ project_name, task_name, status, owner, planned_completion_date, actual_completion_date, delay_days }] }`，日期欄位為 ISO 8601 格式
     - stub 拋出 `ClientError`（404）→ 404 及統一錯誤格式 `{ "error": { "code": "sheet_not_found", "message": "..." } }`
     - stub 拋出 `ClientError`（403）→ 403 及統一錯誤格式
-    - stub 回傳含空白 `project_name` 的資料 → 422 及統一錯誤格式
+    - stub 回傳含空白 `project_name` 的資料 → 該筆被跳過、不納入結果，其餘正常資料仍回傳 HTTP 200（見需求 4.3；不再是 422）
     - stub 拋出 `StandardError` → 500 及統一錯誤格式
     - `GET /api/project_progress?simulate_error=sheet_not_found` → 正常回傳（200，參數被忽略）
     - _需求：4.1–4.5、5.3、7.1、7.3_
 
-  - [ ] 9.2 更新 `spec/requests/dashboard_spec.rb`
+  - [x] 9.2 更新 `spec/requests/dashboard_spec.rb`
     - stub `SheetsApiClient.fetch_rows` 回傳有效資料：`GET /dashboard` → 200，HTML 包含下拉選單與專案區塊
     - `GET /dashboard?project=<專案名稱>` → Turbo Frame 局部更新，`@display_data` 只含該專案資料
+    - 額外補充：stub `SheetsApiClient.fetch_rows` 拋出例外 → `GET /dashboard` 仍回傳 200 並顯示錯誤訊息（不整頁報錯，對應需求 7.1）
     - _需求：7.2_
 
 - [ ] 10. 最終檢查點 — 全面驗證
