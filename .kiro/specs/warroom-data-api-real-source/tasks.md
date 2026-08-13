@@ -177,8 +177,15 @@
     - 額外補充：stub `SheetsApiClient.fetch_rows` 拋出例外 → `GET /dashboard` 仍回傳 200 並顯示錯誤訊息（不整頁報錯，對應需求 7.1）
     - _需求：7.2_
 
-- [ ] 10. 最終檢查點 — 全面驗證
+- [x] 10. 最終檢查點 — 全面驗證
   - 確認所有測試通過，如有問題請提出。
+  - 驗證結果：`bundle exec rspec` 75/75 全數通過；`app`/`lib`/`spec` 內無殘留的 `MockData::ProjectProgress::RECORDS` 參照。
+  - 端對端驗證（真實 Google Sheets，憑證位於 `config/credentials/development.yml.enc`）：
+    - `GET /api/project_progress` → 200，回傳 8 個專案、546 筆任務，日期已正規化為 ISO 8601，`delay_days` 正確轉型
+    - `GET /dashboard` → 正確渲染真實資料
+    - 切換下拉選單（測試案例：RAG Chatbot）→ Network 僅一次 `GET /dashboard?project=...`，確認 Turbo Frame 局部更新、無整頁重載
+    - 憑證缺失 → 500 情境已由 `spec/requests/api/project_progress_spec.rb` 的 StandardError mock 案例覆蓋，未對現有可用憑證做破壞性測試
+  - 已知後續清理項（不影響本次驗收）：`lib/mock_data/project_progress.rb` 已無任何程式碼參照，屬於雛型階段遺留的死碼，可視情況移除。
 
 ---
 
