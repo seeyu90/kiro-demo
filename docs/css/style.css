@@ -375,12 +375,247 @@ table.project-tasks tbody tr:hover td {
   background: var(--table-row-hover-bg);
 }
 
+.sort-button {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+
+.sort-button:hover {
+  color: var(--color-accent);
+}
+
+.sort-button:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
 .delay-negative {
   color: var(--delay-negative);
 }
 
 .delay-positive {
   color: var(--delay-positive);
+}
+
+.issue-id-link {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.issue-id-link:hover,
+.issue-id-link:focus {
+  text-decoration: underline;
+}
+
+/* ── 入口頁 ── */
+.entry-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.25rem;
+  margin-top: 1rem;
+}
+
+.entry-card {
+  display: block;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 1.5rem;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s ease;
+}
+
+.entry-card:hover,
+.entry-card:focus {
+  border-color: var(--color-accent);
+}
+
+.entry-card h2 {
+  margin: 0 0 0.5rem;
+  color: var(--color-text-strong);
+  font-size: 1.15rem;
+}
+
+.entry-card p {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.back-link {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.back-link:hover,
+.back-link:focus {
+  text-decoration: underline;
+}
+
+/* ── 306 議題頁面區塊 ── */
+.issue-section {
+  margin-bottom: 2.5rem;
+}
+
+.issue-section h2 {
+  font-size: 1.25rem;
+  margin-bottom: 0.75rem;
+  color: var(--color-text-strong);
+}
+
+.section-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.section-heading-row h2 {
+  margin: 0;
+}
+
+.section-note {
+  margin: 0 0 0.75rem;
+  font-size: 0.8rem;
+  color: var(--color-text-faint, var(--color-text-muted));
+}
+
+/* ── Tabs（純 CSS，radio + label，無需 JS） ── */
+.tab-radio {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.tab-buttons {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.tab-button {
+  padding: 0.6rem 1.25rem;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  border-bottom: 2px solid transparent;
+  font-weight: 600;
+  font-size: 0.95rem;
+  user-select: none;
+}
+
+.tab-button:hover {
+  color: var(--color-text-strong);
+}
+
+.tab-panel {
+  display: none;
+}
+
+#tab-stats:checked ~ .tab-buttons label[for="tab-stats"],
+#tab-detail:checked ~ .tab-buttons label[for="tab-detail"] {
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
+}
+
+#tab-stats:focus-visible ~ .tab-buttons label[for="tab-stats"],
+#tab-detail:focus-visible ~ .tab-buttons label[for="tab-detail"] {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+#tab-stats:checked ~ #tab-panel-stats,
+#tab-detail:checked ~ #tab-panel-detail {
+  display: block;
+}
+
+.breakdown-wrap {
+  margin-top: 0.75rem;
+}
+
+.breakdown-heading {
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+}
+
+.attribution-badge {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.attribution-shared {
+  background: var(--overdue-bg);
+  color: var(--overdue-text);
+}
+
+.attribution-individual {
+  background: var(--badge-progress-bg);
+  color: var(--badge-progress-text);
+}
+
+.attribution-other {
+  background: var(--badge-pending-bg);
+  color: var(--badge-pending-text);
+}
+
+.trend-chart-wrap {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.trend-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.trend-line {
+  fill: none;
+  stroke: var(--color-accent);
+  stroke-width: 2;
+}
+
+.trend-point {
+  fill: var(--color-surface);
+  stroke: var(--color-accent);
+  stroke-width: 2;
+  cursor: pointer;
+}
+
+.trend-point:hover,
+.trend-point:focus {
+  fill: var(--color-accent);
+}
+
+.trend-gridline {
+  stroke: var(--color-border);
+  stroke-width: 1;
+}
+
+.trend-axis-label {
+  fill: var(--color-text-muted);
+  font-size: 10px;
 }
 
 /* ── Tablet ── */
@@ -418,6 +653,11 @@ table.project-tasks tbody tr:hover td {
 
   .stat-item {
     flex: 1 1 45%;
+  }
+
+  .section-heading-row {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 

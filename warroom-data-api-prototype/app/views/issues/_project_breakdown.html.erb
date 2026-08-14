@@ -1,0 +1,26 @@
+<% if rows.empty? %>
+  <p class="empty-state">所選月份無議題資料</p>
+<% else %>
+  <table class="project-tasks">
+    <thead>
+      <tr>
+        <th>專案</th>
+        <th><%= breakdown_sort_link(:complaint, "客訴") %></th>
+        <th><%= breakdown_sort_link(:testing, "測試") %></th>
+        <th><%= breakdown_sort_link(:other, "其他") %></th>
+        <th><%= breakdown_sort_link(:total, "總計") %></th>
+      </tr>
+    </thead>
+    <tbody>
+      <% rows.each do |row| %>
+        <tr>
+          <td><%= row[:project] %></td>
+          <td><%= row[:complaint] %></td>
+          <td><%= row[:testing] %></td>
+          <td><%= row[:other] %></td>
+          <td><%= row[:total] %></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+<% end %>

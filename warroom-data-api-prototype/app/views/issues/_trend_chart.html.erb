@@ -1,0 +1,24 @@
+<% if daily_kpi.empty? %>
+  <p class="empty-state">所選月份無每日趨勢資料</p>
+<% else %>
+  <% points = trend_chart_points(daily_kpi) %>
+  <svg viewBox="0 0 <%= IssuesHelper::TREND_WIDTH %> <%= IssuesHelper::TREND_HEIGHT %>" class="trend-svg" role="img" aria-label="每日議題總數趨勢圖">
+    <% trend_chart_y_ticks(daily_kpi).each do |tick| %>
+      <line x1="<%= IssuesHelper::TREND_PADDING_LEFT %>" x2="<%= IssuesHelper::TREND_WIDTH - IssuesHelper::TREND_PADDING_RIGHT %>"
+            y1="<%= tick[:y] %>" y2="<%= tick[:y] %>" class="trend-gridline"></line>
+      <text x="<%= IssuesHelper::TREND_PADDING_LEFT - 8 %>" y="<%= tick[:y] + 3 %>" text-anchor="end" class="trend-axis-label trend-y-label"><%= tick[:value] %></text>
+    <% end %>
+
+    <% trend_chart_x_labels(daily_kpi).each do |label| %>
+      <% label_y = IssuesHelper::TREND_HEIGHT - IssuesHelper::TREND_PADDING_BOTTOM + 18 %>
+      <text x="<%= label[:x] %>" y="<%= label_y %>" text-anchor="end" transform="rotate(-45 <%= label[:x] %> <%= label_y %>)" class="trend-axis-label trend-x-label"><%= label[:text] %></text>
+    <% end %>
+
+    <polyline points="<%= trend_chart_polyline(points) %>" class="trend-line"></polyline>
+    <% points.each do |point| %>
+      <circle cx="<%= point[:x] %>" cy="<%= point[:y] %>" r="4" class="trend-point" tabindex="0">
+        <title><%= point[:date] %> ｜ 客訴 <%= point[:complaint] %>・測試 <%= point[:testing] %>・其他 <%= point[:other] %>・總計 <%= point[:total] %></title>
+      </circle>
+    <% end %>
+  </svg>
+<% end %>

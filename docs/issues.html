@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem("warroom-theme");
+        if (saved === "light") {
+          document.documentElement.setAttribute("data-theme", "light");
+        }
+      } catch (e) {
+        // localStorage 不可用：靜默忽略，維持預設深色
+      }
+    })();
+  </script>
+  <title>戰情室 — 306 臭蟲議題（靜態展示版）</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="戰情室 306 臭蟲議題靜態展示頁，使用模擬資料呈現月度／每日 KPI 與議題明細。">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="dashboard-header">
+    <div class="header-titles">
+      <h1 class="dashboard-title">戰情室 <span>— 306 臭蟲議題</span></h1>
+      <p class="subtitle">靜態展示版（模擬資料） · <a class="back-link" href="index.html">返回入口頁</a></p>
+    </div>
+    <button type="button" id="theme-toggle" class="theme-toggle" aria-label="切換至淺色模式">🌙 深色</button>
+  </header>
+
+  <main>
+    <div class="tabs">
+      <input type="radio" name="issue-tab" id="tab-stats" class="tab-radio" checked>
+      <input type="radio" name="issue-tab" id="tab-detail" class="tab-radio">
+
+      <div class="tab-buttons">
+        <label for="tab-stats" class="tab-button">統計摘要</label>
+        <label for="tab-detail" class="tab-button">議題資料</label>
+      </div>
+
+      <div class="tab-panel" id="tab-panel-stats">
+        <section class="issue-section">
+          <div class="section-heading-row">
+            <h2>月度 KPI</h2>
+            <div class="control-group">
+              <label for="month-select">月份：</label>
+              <select id="month-select" name="month"></select>
+            </div>
+          </div>
+          <p class="section-note">月度 KPI 為月結數字，當月進行中尚未結算；每日趨勢與依專案分類統計則依此處所選月份即時呈現；「議題資料」分頁的議題明細不受月份篩選影響（顯示全部議題）</p>
+          <div id="kpi-cards" class="summary-bar" aria-live="polite"></div>
+        </section>
+
+        <section class="issue-section">
+          <h2>每日趨勢</h2>
+          <div id="trend-chart" class="trend-chart-wrap"></div>
+        </section>
+
+        <section class="issue-section">
+          <h2>依專案分類</h2>
+          <div id="project-breakdown" class="breakdown-wrap" aria-live="polite"></div>
+        </section>
+      </div>
+
+      <div class="tab-panel" id="tab-panel-detail">
+        <section class="issue-section">
+          <div class="section-heading-row">
+            <h2>議題明細</h2>
+            <div class="control-group">
+              <label for="issue-project">專案：</label>
+              <select id="issue-project" name="issue-project"></select>
+              <label for="issue-status">狀態：</label>
+              <select id="issue-status" name="issue-status"></select>
+            </div>
+          </div>
+          <div id="issue-table" aria-live="polite"></div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/issues.js"></script>
+</body>
+</html>

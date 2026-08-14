@@ -1,0 +1,128 @@
+<% content_for :title, "戰情室 — 306 臭蟲議題" %>
+
+<header class="dashboard-header">
+  <div class="header-top">
+    <h1 class="dashboard-title">戰情室 <span>— 306 臭蟲議題</span></h1>
+    <button type="button" id="theme-toggle" class="theme-toggle" aria-label="切換至淺色模式">🌙 深色</button>
+  </div>
+  <p class="back-link-row"><%= link_to "← 返回入口頁", "/", class: "back-link" %></p>
+</header>
+
+<%= turbo_frame_tag "issue-content" do %>
+  <% if @error.present? %>
+    <div class="error-message">
+      <strong>錯誤：</strong><%= @error %>
+    </div>
+  <% else %>
+    <div class="tabs">
+      <input type="radio" name="issue-tab" id="tab-stats" class="tab-radio" <%= "checked" if @active_tab == "stats" %>>
+      <input type="radio" name="issue-tab" id="tab-detail" class="tab-radio" <%= "checked" if @active_tab == "detail" %>>
+
+      <div class="tab-buttons">
+        <label for="tab-stats" class="tab-button">統計摘要</label>
+        <label for="tab-detail" class="tab-button">議題資料</label>
+      </div>
+
+      <div class="tab-panel" id="tab-panel-stats">
+        <%= form_with url: "/issues", method: :get, local: true, class: "project-selector" do %>
+          <%= hidden_field_tag :tab, "stats" %>
+          <%# 兩個分頁籤的表單各自獨立送出，但 Controller 是無狀態的：若不帶入「議題資料」分頁目前
+              的篩選值，送出本表單時 project／status 會被重設為預設值，等於覆蓋掉使用者在另一個
+              分頁的選擇。故補上這兩個 hidden fields，讓它們原樣跟著送出。 %>
+          <%= hidden_field_tag :project, @selected_project %>
+          <%= hidden_field_tag :status, @selected_status %>
+          <div class="control-group">
+            <label for="month">月份：</label>
+            <%= select_tag :month, options_for_select(@available_months, @selected_month) %>
+          </div>
+          <%= submit_tag "套用篩選", class: "apply-filters-btn" %>
+        <% end %>
+
+        <section class="issue-section">
+          <h2>月度 KPI</h2>
+          <p class="section-note">月度 KPI 為月結數字，當月進行中尚未結算；每日趨勢與依專案分類統計則依此處所選月份即時呈現；「議題資料」分頁的議題明細不受月份篩選影響（顯示全部議題）</p>
+          <% if @selected_month_record %>
+            <div class="summary-bar">
+              <div class="stat-item">
+                <span class="stat-value"><%= @selected_month_record[:complaint] %></span>
+                <span class="stat-label">客訴</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-value"><%= @selected_month_record[:testing] %></span>
+                <span class="stat-label">測試</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-value"><%= @selected_month_record[:total_bug] %></span>
+                <span class="stat-label">總Bug</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-value"><%= @selected_month_record[:block_rate] %>%</span>
+                <span class="stat-label">攔截率</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-value"><%= @selected_month_record[:completed] %></span>
+                <span class="stat-label">完成數</span>
+              </div>
+              <div class="stat-item stat-overdue">
+                <span class="stat-value"><%= @selected_month_record[:unresolved] %></span>
+                <span class="stat-label">未結案</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-value"><%= @selected_month_record[:avg_days] %></span>
+                <span class="stat-label">平均天數</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-value"><%= @selected_month_record[:sla_rate] %>%</span>
+                <span class="stat-label">SLA達標率</span>
+              </div>
+            </div>
+          <% elsif @selected_month_pending %>
+            <p class="empty-state">尚未結算（本月進行中，月底才會產生統計數字）</p>
+          <% else %>
+            <p class="empty-state">尚無月度 KPI 資料</p>
+          <% end %>
+        </section>
+
+        <section class="issue-section">
+          <h2>每日趨勢</h2>
+          <div class="trend-chart-wrap">
+            <%= render partial: "trend_chart", locals: { daily_kpi: @daily_kpi } %>
+          </div>
+        </section>
+
+        <section class="issue-section">
+          <h2>依專案分類</h2>
+          <%= render partial: "project_breakdown", locals: { rows: @project_breakdown } %>
+        </section>
+      </div>
+
+      <div class="tab-panel" id="tab-panel-detail">
+        <%= form_with url: "/issues", method: :get, local: true, class: "project-selector" do %>
+          <%= hidden_field_tag :tab, "detail" %>
+          <%# 同上：帶入「統計摘要」分頁目前的月份與排序選擇，避免送出本表單時把它們重設為預設值。 %>
+          <%= hidden_field_tag :month, @selected_month %>
+          <%= hidden_field_tag :breakdown_sort, @breakdown_sort %>
+          <%= hidden_field_tag :breakdown_dir, @breakdown_dir %>
+          <div class="control-group">
+            <label for="project">專案：</label>
+            <%= select_tag :project,
+                           options_for_select([["全部專案", ""]] + @projects.map { |p| [p, p] }, @selected_project) %>
+          </div>
+
+          <div class="control-group">
+            <label for="status">狀態：</label>
+            <%= select_tag :status,
+                           options_for_select([["全部狀態", ""]] + @statuses.map { |s| [s, s] }, @selected_status) %>
+          </div>
+
+          <%= submit_tag "套用篩選", class: "apply-filters-btn" %>
+        <% end %>
+
+        <section class="issue-section">
+          <h2>議題明細</h2>
+          <%= render partial: "issue_list", locals: { issues: @issues } %>
+        </section>
+      </div>
+    </div>
+  <% end %>
+<% end %>
