@@ -11,7 +11,7 @@ class DashboardController < ApplicationController
   helper_method :overdue?
 
   def index
-    result = Sheets::FetchProjectProgress.result(force: params[:refresh] == "1")
+    result = Sheets::FetchProjectProgress.result(force: params[:refresh].present?)
     if result.success?
       build_success(result.grouped_data, result.fetched_at)
     else

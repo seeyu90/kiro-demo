@@ -97,7 +97,8 @@
   - `bundle exec rspec` 235/235 全數通過
   - 無法解密本機憑證（沙盒環境無 `master.key`），改用 `ActionDispatch::Integration::Session`
     + stub `ProjectProgressSheetsClient` 直接渲染成功路徑，確認：`freshness-label` 依 `fetched_at` 有無
-    正確顯示／隱藏、「重新整理資料」按鈕存在且 `value="1"`
+    正確顯示／隱藏、「重新整理資料」按鈕存在且 `value="1"`（事後才發現這個 `value="1"`
+    正是任務 9 抓到的 bug 本身——當時只確認了參數存在，沒發現它把顯示文字也蓋掉了）
   - 已知限制：全程未透過瀏覽器實機點擊驗證（Chrome 工具本次連線失敗），視覺效果（按鈕停用、
     frame 變半透明、文字切換）依據既有已驗證過的 Turbo 事件機制與 CSS 選擇器推導，建議之後有
     瀏覽器可用、且有真實憑證時補做一次端對端手動驗證
@@ -134,6 +135,25 @@
       皆帶 `data-turbo-frame="issue-content"`
     - 未透過瀏覽器實機點擊驗證載入狀態視覺效果（Chrome 工具本次連線失敗），行為依據與任務 3
       相同的 Turbo 事件機制推導
+
+- [x] 9. 補做瀏覽器實機點擊驗證（PR #3 建立後補做）
+  - Chrome 工具（claude-in-chrome）本次仍連線失敗，且沙盒環境無 `master.key` 無法解密真實憑證，
+    故改用 Playwright（headless Chromium，已預裝）+ 一支不進 repo 的一次性開機腳本：載入實際
+    `config/environment.rb` 後，把 `ProjectProgressSheetsClient` / `IssueSheetsClient` 的
+    class method 換成回傳假資料（並加 0.8s 延遲以確保能觀察到載入中狀態），在真實 Puma 上跑
+    起 `/dashboard`、`/issues`，用 Playwright 實際點擊
+  - 驗證項目與結果（11/11 通過）：篩選送出後底層仍是一般 GET request、網址列不變、送出期間
+    按鈕停用＋`turbo-frame[busy]` 屬性生效、送出完成後按鈕恢復、「重新整理資料」送出期間同樣
+    停用、資料時效文字正確顯示、306 議題頁兩個分頁籤的表單皆有相同行為
+  - **意外抓到一個真的 bug**：`submit_tag "重新整理資料", name: "refresh", value: "1", ...`
+    ——`submit_tag` 的第一個參數本來就是 `<input>` 的 `value`（同時是顯示文字與送出值），
+    `options[:value]` 會覆蓋掉它，導致按鈕實際顯示成「1」而非「重新整理資料」（screenshot
+    才發現）。修法：拿掉 `value:` 選項（維持顯示文字），`DashboardController` 改用
+    `params[:refresh].present?` 判斷是否要 `force: true`，不再比對固定字串 `"1"`
+  - 修好後重新整理伺服器（dev `enable_reloading` 會在偵測到檔案變更後重載所有 autoload 的
+    class，把一次性 monkeypatch 一起洗掉，需整個重啟腳本才能重新套用）並重跑，11/11 全過；
+    `bundle exec rspec` 235/235 維持全過
+  - _需求：2、3、5、7（實機驗證補齊）_
 
 ---
 
