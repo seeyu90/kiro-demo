@@ -113,14 +113,18 @@
     - 9 examples, 0 failures；全專案回歸 144 examples, 0 failures
     - _需求：7.4_
 
-- [ ] 8. API Endpoint
-  - [ ] 8.1 新增路由 `GET /api/issue_dashboard`、`Api::IssueDashboardController`
-    - 回傳 `{ month_kpi, daily_kpi, issues, project_breakdown }`，透過 Blueprint 序列化
+- [x] 8. API Endpoint
+  - [x] 8.1 新增路由 `GET /api/issue_dashboard`、`Api::IssueDashboardController`
+    - 回傳 `{ month_kpi, daily_kpi, issues, project_breakdown }`，透過 Blueprint 序列化；
+      `error_status` 對應表比照既有 `Api::ProjectProgressController` 慣例獨立實作（未抽共用，
+      沿用既有專案未曾為此抽象化的先例）
     - _需求：7.1, 7.3, 7.4_
 
-  - [ ] 8.2 Request spec：`spec/requests/api/issue_dashboard_spec.rb`
-    - 驗證成功／各類錯誤情境回傳格式
-    - _需求：7.3, 6.1_
+  - [x] 8.2 Request spec：`spec/requests/api/issue_dashboard_spec.rb`
+    - 驗證成功回傳（四個頂層 key、各 Blueprint 序列化正確、`issues` 不外洩 `type`／`tracker`
+      以外欄位）、404／403／500 三種錯誤情境回傳統一錯誤格式
+    - 9 examples, 0 failures；全專案回歸 153 examples, 0 failures（實際透過 Rails router／
+      middleware stack 發出請求驗證，非僅單元測試）
 
 - [ ] 9. Dashboard 頁面
   - [ ] 9.1 新增路由 `GET /issues`、`IssuesController#index`

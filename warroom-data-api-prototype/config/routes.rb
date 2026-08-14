@@ -16,5 +16,6 @@ Rails.application.routes.draw do
   # API routes
   namespace :api do
     get "project_progress", to: "project_progress#index"
+    get "issue_dashboard", to: "issue_dashboard#index"
   end
 end
