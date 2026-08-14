@@ -206,12 +206,38 @@ Webhook／排程更新、資料庫或本地快取層、OAuth 使用者登入、�
 #### 驗收標準
 
 1. THE **IssueDashboard_Page** SHALL 以 `GET /issues` 路由提供 HTML 頁面。
-2. THE **IssueDashboard_Page** SHALL 顯示與 prototype 相同的三個區塊：月度 KPI 摘要卡片（含月份選擇、
-   依專案分類統計）、每日趨勢圖、議題明細清單（可依專案／狀態篩選，含歸屬類型標示與 Redmine 連結）。
+2. THE **IssueDashboard_Page** SHALL 顯示與 prototype 相同的四個內容區塊：月度 KPI 摘要卡片（含月份
+   選擇）、每日趨勢圖、依專案分類統計、議題明細清單（可依專案／狀態篩選，含歸屬類型標示與 Redmine
+   連結），並依 prototype 的分頁籤分組方式呈現（見需求 7a）。
 3. THE **IssueDashboard_Endpoint** SHALL 以 `GET /api/issue_dashboard` 回傳 JSON，結構為
    `{ month_kpi: [...], daily_kpi: [...], issues: [...], project_breakdown: [...] }`。
 4. THE **IssueDashboard_Endpoint** 及 **IssueDashboard_Page** SHALL 透過 Blueprint 序列化各資料類別
    （欄位定義單一來源），不在 Controller 或 View 中重複列舉欄位。
+
+---
+
+### 需求 7a：分頁籤呈現（統計摘要／議題資料，對齊 prototype 需求 5）
+
+**使用者故事：** 身為戰情室使用者，我希望「月結統計」與「即時明細資料」在畫面上明確分開，不要混在
+一起，以便清楚知道哪些內容受月份篩選影響、哪些不受影響。
+
+**背景：** 初版實作將全部四個區塊排列在同一頁面、頁首單一表單同時包含月份／專案／狀態三個下拉選單，
+容易讓使用者誤以為月份篩選會影響下方所有區塊（實際上只有月度 KPI 受月份篩選影響）。改為分頁籤後，
+篩選控制項各自歸屬到其實際影響的分頁籤內，並同步套用 prototype 已驗證過的分頁籤結構（見
+[warroom-issue-dashboard-static-prototype/requirements.md](../warroom-issue-dashboard-static-prototype/requirements.md) 需求 5）。
+
+#### 驗收標準
+
+1. THE **IssueDashboard_Page** SHALL 以兩個分頁籤呈現內容：「統計摘要」（月度 KPI ＋每日趨勢）與
+   「議題資料」（依專案分類統計＋議題明細）。
+2. THE **IssueDashboard_Page** SHALL 將月份篩選表單置於「統計摘要」分頁籤內；THE
+   **IssueDashboard_Page** SHALL 將專案／狀態篩選表單置於「議題資料」分頁籤內，兩者為獨立表單，
+   不共用同一個提交按鈕。
+3. THE **IssueDashboard_Page** SHALL 於頁面載入時預設顯示「統計摘要」分頁籤。
+4. WHEN 使用者提交「統計摘要」分頁籤的月份篩選表單，THE **IssueDashboard_Page** SHALL 於 Turbo
+   Frame 局部更新後仍停留在「統計摘要」分頁籤；WHEN 使用者提交「議題資料」分頁籤的專案／狀態篩選
+   表單，THE **IssueDashboard_Page** SHALL 於局部更新後停留在「議題資料」分頁籤，不因表單提交而
+   跳回預設分頁籤。
 
 ---
 

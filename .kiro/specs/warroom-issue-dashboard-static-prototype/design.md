@@ -23,6 +23,35 @@ docs/
     └── issues.js             ← 新：306 模擬資料 + 渲染邏輯
 ```
 
+### 分頁籤結構（需求 5，`issues.html`）
+
+`<main>` 內以純 CSS（`<input type="radio">` + `<label>` + 相鄰兄弟選擇器 `~`）實作兩個分頁籤，不需
+JS：
+
+```html
+<div class="tabs">
+  <input type="radio" name="issue-tab" id="tab-stats" class="tab-radio" checked>
+  <input type="radio" name="issue-tab" id="tab-detail" class="tab-radio">
+
+  <div class="tab-buttons">
+    <label for="tab-stats" class="tab-button">統計摘要</label>
+    <label for="tab-detail" class="tab-button">議題資料</label>
+  </div>
+
+  <div class="tab-panel" id="tab-panel-stats">
+    <!-- 月度 KPI（含月份選單、section-note）＋ 每日趨勢 -->
+  </div>
+  <div class="tab-panel" id="tab-panel-detail">
+    <!-- 依專案分類 ＋ 議題明細（含專案／狀態篩選） -->
+  </div>
+</div>
+```
+
+CSS 以 `#tab-stats:checked ~ #tab-panel-stats { display: block; }`（`.tab-panel` 預設
+`display: none`）切換顯示；`#tab-stats:checked ~ .tab-buttons label[for="tab-stats"]` 標示當前分頁籤
+的作用中樣式。純 CSS 方案避免引入額外 JS 事件綁定，`issues.js` 既有的 `getElementById` 查找邏輯
+不受 DOM 巢狀層級變動影響（ID 不變，只是父層容器改變）。
+
 `issues.js` 內部結構（比照 `project-progress.js` 的 IIFE + 模組內 state 慣例）：
 
 ```
@@ -161,6 +190,9 @@ var REDMINE_ISSUE_URL_BASE = "https://redmine.amastek.com.tw/issues/";
 1. 開啟 `docs/index.html`，確認可見兩個入口連結，點擊後分別正確導向 `project-progress.html`／`issues.html`（需求 1.2）。
 2. 開啟 `docs/project-progress.html`，確認與搬移前的 `index.html` 行為完全一致（篩選、摘要列、逾期標示皆正常）（需求 1.3）。
 3. 開啟 `docs/issues.html`：
+   - 確認頁面載入時預設顯示「統計摘要」分頁籤；點擊「議題資料」分頁籤可切換顯示，不觸發頁面重新
+     載入（需求 5.1、5.3、5.4）；確認月份選單位於「統計摘要」分頁籤內，專案／狀態選單位於
+     「議題資料」分頁籤內（需求 5.2）。
    - 確認 KPI 卡片預設顯示最新月份數值；切換月份下拉選單，確認卡片數值隨之更新（需求 2.2、2.3）。
    - 確認「依專案分類」統計表正確顯示各專案的客訴／測試／其他數量與總計（需求 2.4）。
    - 確認每日趨勢圖正確繪製，滑鼠移到資料點可看到當日數值（需求 3.1、3.3）。
@@ -170,5 +202,5 @@ var REDMINE_ISSUE_URL_BASE = "https://redmine.amastek.com.tw/issues/";
      `https://redmine.amastek.com.tw/issues/{issue_id}`，以新分頁開啟；確認頁面載入時預設專案為
      「全部專案」、狀態預設為「新建立」（非全部狀態）；切換專案／狀態篩選後清單正確過濾；篩選至無
      結果時顯示提示文字（需求 4.1、4.1a、4.1b、4.2、4.3、4.4、4.5）。
-   - 縮小視窗至手機寬度，確認所有區塊（KPI 卡片、趨勢圖、表格）不破版，表格切換為堆疊卡片版型（需求 5.3，沿用既有 560px 斷點慣例）。
+   - 縮小視窗至手機寬度，確認所有區塊（KPI 卡片、趨勢圖、表格）不破版，表格切換為堆疊卡片版型（需求 6.3，沿用既有 560px 斷點慣例；分頁籤結構新增後之驗證見 Task 15）。
 4. 確認整頁繁體中文，無 console 錯誤。

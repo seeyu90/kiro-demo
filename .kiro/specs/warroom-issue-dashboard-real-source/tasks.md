@@ -209,7 +209,25 @@
       影響下方議題明細清單，僅「月份」不影響），故收斂為單一位置，與 prototype 的修正同步
     - 測試：`issues_spec.rb` 新增 2 examples（`.section-note` 恰好出現一次、文字含「月結」與
       「即時」關鍵字），全專案回歸 198 examples, 0 failures
+    - 文字內容後於 Task 9.12（分頁籤）再次調整，見下
     - _需求：9.3, 9.4_
+
+  - [x] 9.12 改為分頁籤呈現：統計摘要（月度 KPI＋每日趨勢） / 議題資料（依專案分類＋議題明細）
+        （見需求 7a，對齊 prototype 需求 5）
+    - 起因：使用者反映頁首單一篩選列同時放月份／專案／狀態三個選單，容易誤以為月份篩選會影響
+      下方所有區塊；改為分頁籤後，篩選控制項各自歸屬到其實際影響的分頁籤內
+    - `IssuesController`：新增 `TABS`／`DEFAULT_TAB` 常數與 `@active_tab`（讀取 `params[:tab]`，
+      無效值 fallback 為 `"stats"`）
+    - `app/views/issues/index.html.erb`：改用純 CSS radio+label 分頁籤結構；月份篩選表單移入
+      「統計摘要」分頁籤（隱藏欄位 `tab=stats`）；專案／狀態篩選表單移入「議題資料」分頁籤（隱藏
+      欄位 `tab=detail`）；「依專案分類」區塊隨之移至「議題資料」分頁籤；`section-note` 文字改為
+      「「議題資料」分頁的依專案分類統計與議題明細皆為即時資料」，反映內容已移至不同分頁籤
+    - `application.css`：新增 `.tab-radio`／`.tab-buttons`／`.tab-button`／`.tab-panel`（沿用
+      prototype 相同的 CSS 選擇器邏輯）
+    - 測試：`issues_spec.rb` 新增 5 examples（預設顯示統計摘要分頁籤、四區塊正確分組、月份表單
+      送出後停留在統計摘要分頁籤、專案/狀態表單送出後停留在議題資料分頁籤、無效 tab 參數 fallback）
+    - 全專案回歸 208 examples, 0 failures
+    - _需求：7a.1, 7a.2, 7a.3, 7a.4_
 
 - [x] 10. Rails 入口頁（對齊 docs/index.html 模式）
   - [x] 10.1 新增 `app/controllers/home_controller.rb`（`GET /`，純靜態，不讀取任何資料來源）
@@ -275,7 +293,7 @@
     { "id": 8, "tasks": ["8.2", "9.1"] },
     { "id": 9, "tasks": ["9.2", "9.3"] },
     { "id": 10, "tasks": ["9.4", "9.5", "9.6", "9.7"] },
-    { "id": 11, "tasks": ["9.8", "9.9", "9.10", "9.11"] },
+    { "id": 11, "tasks": ["9.8", "9.9", "9.10", "9.11", "9.12"] },
     { "id": 12, "tasks": ["10.1"] },
     { "id": 13, "tasks": ["10.2"] },
     { "id": 14, "tasks": ["10.3"] },

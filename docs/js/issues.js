@@ -72,14 +72,28 @@
 
   // ── KPI 摘要卡片 ──────────────────────────────────────────
 
+  // 依瀏覽器當地時間取得「今天」所屬月份（YYYY-MM），用於將進行中的當月納入月份選單，
+  // 即使 MONTH_KPI（月結資料）尚未有該月份的列（見需求 2.7）。
+  function currentYearMonth() {
+    var d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+  }
+
   function populateMonthSelect() {
     var select = document.getElementById("month-select");
-    MONTH_KPI.forEach(function (m) {
+    var months = MONTH_KPI.map(function (m) { return m.year_month; });
+    var current = currentYearMonth();
+    if (months.indexOf(current) === -1) months.push(current);
+    months.sort();
+
+    months.forEach(function (yearMonth) {
       var option = document.createElement("option");
-      option.value = m.year_month;
-      option.textContent = m.year_month;
+      option.value = yearMonth;
+      option.textContent = yearMonth;
       select.appendChild(option);
     });
+    // 預設仍選中最新「已結算」月份（MONTH_KPI 最後一筆），而非進行中的當月，
+    // 確保頁面載入時直接看到有意義的月結數字（需求 2.2）。
     select.value = MONTH_KPI[MONTH_KPI.length - 1].year_month;
 
     select.addEventListener("change", function () {
@@ -91,6 +105,15 @@
   function renderKpiCards(monthRecord) {
     var el = document.getElementById("kpi-cards");
     el.innerHTML = "";
+
+    if (!monthRecord) {
+      var pending = document.createElement("p");
+      pending.className = "empty-state";
+      pending.textContent = "尚未結算（本月進行中，月底才會產生統計數字）";
+      el.appendChild(pending);
+      renderProjectBreakdown();
+      return;
+    }
 
     var items = [
       { label: "客訴", value: monthRecord.complaint },

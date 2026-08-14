@@ -153,4 +153,87 @@ RSpec.describe "Issues", type: :request do
       expect(response.body).to include("錯誤")
     end
   end
+
+  describe "GET /issues when the current month has no month_kpi row yet (not settled)" do
+    include ActiveSupport::Testing::TimeHelpers
+
+    around do |example|
+      travel_to(Time.zone.local(2026, 9, 15)) { example.run }
+    end
+
+    before { get "/issues" }
+
+    it "includes the in-progress current month (2026-09) in the month dropdown" do
+      expect(response.body).to match(/<option[^>]*value="2026-09"[^>]*>2026-09<\/option>/)
+    end
+
+    it "still defaults the selection to the latest settled month (2026-08), not 2026-09" do
+      expect(response.body).to match(/<option [^>]*selected="selected"[^>]*>2026-08<\/option>/)
+    end
+
+    it "shows real KPI numbers by default (the settled month)" do
+      expect(response.body).to include("37.5")
+    end
+
+    context "when the user explicitly selects the in-progress month" do
+      before { get "/issues", params: { month: "2026-09" } }
+
+      it "shows a 尚未結算 placeholder instead of numbers" do
+        expect(response.body).to include("尚未結算")
+      end
+
+      it "still renders the project breakdown (unaffected by month selection)" do
+        expect(response.body).to include("Virtuous HRM")
+      end
+    end
+  end
+
+  describe "tabs: 統計摘要 (stats) vs 議題資料 (detail)" do
+    def tab_checked?(body, tab_id)
+      match = body.match(%r{<input type="radio" name="issue-tab" id="#{tab_id}" class="tab-radio"\s*(checked)?\s*>})
+      match[1].present?
+    end
+
+    it "defaults to the 統計摘要 (stats) tab on first load" do
+      get "/issues"
+
+      expect(tab_checked?(response.body, "tab-stats")).to be true
+      expect(tab_checked?(response.body, "tab-detail")).to be false
+    end
+
+    it "puts 月度 KPI and 每日趨勢 inside the stats tab panel, and 依專案分類／議題明細 inside the detail tab panel" do
+      get "/issues"
+
+      stats_panel = response.body[/<div class="tab-panel" id="tab-panel-stats">.*?(?=<div class="tab-panel" id="tab-panel-detail">)/m]
+      detail_panel = response.body[/<div class="tab-panel" id="tab-panel-detail">.*/m]
+
+      expect(stats_panel).to include("<h2>月度 KPI</h2>").and include("<h2>每日趨勢</h2>")
+      expect(stats_panel).not_to include("<h2>依專案分類</h2>")
+      expect(stats_panel).not_to include("<h2>議題明細</h2>")
+
+      expect(detail_panel).to include("<h2>依專案分類</h2>").and include("<h2>議題明細</h2>")
+      expect(detail_panel).not_to include("<h2>月度 KPI</h2>")
+      expect(detail_panel).not_to include("<h2>每日趨勢</h2>")
+    end
+
+    it "stays on the stats tab after submitting the month filter (hidden tab=stats field)" do
+      get "/issues", params: { month: "2026-07", tab: "stats" }
+
+      expect(tab_checked?(response.body, "tab-stats")).to be true
+      expect(tab_checked?(response.body, "tab-detail")).to be false
+    end
+
+    it "switches to and stays on the detail tab after submitting the project/status filter (hidden tab=detail field)" do
+      get "/issues", params: { project: "Virtuous HRM", status: "", tab: "detail" }
+
+      expect(tab_checked?(response.body, "tab-detail")).to be true
+      expect(tab_checked?(response.body, "tab-stats")).to be false
+    end
+
+    it "ignores an invalid tab param and falls back to the stats tab" do
+      get "/issues", params: { tab: "not-a-real-tab" }
+
+      expect(tab_checked?(response.body, "tab-stats")).to be true
+    end
+  end
 end

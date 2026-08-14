@@ -202,43 +202,81 @@ end
 
 ```ruby
 class IssuesController < ApplicationController
+  DEFAULT_STATUS = "新建立".freeze
+  TABS = %w[stats detail].freeze
+  DEFAULT_TAB = "stats".freeze
+
   def index
     result = Sheets::FetchIssueDashboard.result
-    return render_error(result) unless result.success?
-
-    @month_kpi          = result.month_kpi
-    @project_breakdown  = result.project_breakdown
-    @selected_month = params[:month].presence || @month_kpi.map { |m| m[:year_month] }.max
-
-    @selected_status = params.key?(:status) ? params[:status] : "新建立"
-    @filtered_issues = filter_issues(result.issues, params[:project], @selected_status)
+    if result.success?
+      build_success(result)
+    else
+      build_failure(result.message)
+    end
   end
 
   private
 
-  # status 預設「新建立」（需求 8.2）；params.key?(:status) 用於區分「使用者主動清空狀態篩選」
-  # （query string 帶 status=，值為空字串）與「未帶 status 參數」（首次載入），兩者處理不同。
-  def filter_issues(issues, project, status)
+  def build_success(result)
+    # 兩個分頁籤（統計摘要／議題資料）各自獨立表單，各帶隱藏欄位 tab= 標明來源，
+    # 送出後仍停留在原本的分頁籤，而非固定跳回預設分頁籤（需求 7a.4）。
+    @active_tab = TABS.include?(params[:tab]) ? params[:tab] : DEFAULT_TAB
+
+    @month_kpi         = MonthKpiBlueprint.render_as_hash(result.month_kpi)
+    @daily_kpi          = DailyKpiBlueprint.render_as_hash(result.daily_kpi)
+    @project_breakdown = ProjectBreakdownBlueprint.render_as_hash(result.project_breakdown)
+
+    # 月份選單納入進行中的當月（即使 month_kpi 尚無該月列），預設選中仍是最新已結算月份。
+    current_year_month = Date.current.strftime("%Y-%m")
+    @available_months = (@month_kpi.map { |m| m[:year_month] } + [current_year_month]).uniq.sort
+    @selected_month = params[:month].presence || @month_kpi.map { |m| m[:year_month] }.max
+    @selected_month_record = @month_kpi.find { |m| m[:year_month] == @selected_month }
+    @selected_month_pending = @selected_month_record.nil? && @selected_month == current_year_month
+
+    all_issues = IssueBlueprint.render_as_hash(result.issues)
+    @projects = all_issues.map { |i| i[:project] }.compact.uniq
+    @statuses = all_issues.map { |i| i[:status] }.compact.uniq
+    @selected_project = params[:project].presence
+    # 未帶 status 參數（首次載入）時預設「新建立」；使用者主動清空（status= 空字串）則視為不篩選。
+    @selected_status = params.key?(:status) ? params[:status] : DEFAULT_STATUS
+
+    @issues = filter_issues(all_issues)
+    @error = nil
+  end
+
+  def build_failure(message)
+    @active_tab = DEFAULT_TAB
+    @month_kpi = @daily_kpi = @project_breakdown = @available_months = @projects = @statuses = @issues = []
+    @selected_month = @selected_month_record = @selected_project = nil
+    @selected_month_pending = false
+    @selected_status = DEFAULT_STATUS
+    @error = message
+  end
+
+  def filter_issues(issues)
     issues
-      .select { |i| project.blank? || i[:project] == project }
-      .select { |i| status.blank? || i[:status] == status }
+      .select { |i| @selected_project.blank? || i[:project] == @selected_project }
+      .select { |i| @selected_status.blank? || i[:status] == @selected_status }
   end
 end
 ```
 
-- 篩選邏輯（`project`／`status` query params）在 Controller 完成，Actor 僅負責讀取＋正規化全量資料，
-  與 305 的 `warroom-dashboard-ux-enhancements` 需求 10（Controller 層篩選）慣例一致。
-- 月份切換／議題篩選皆透過**單一** `turbo_frame_tag "issue-content"` 局部更新整個動態內容區塊
-  （KPI 卡片＋依專案分類統計＋趨勢圖＋議題明細一起更新），實作階段確認沿用既有
-  `dashboard/index.html.erb`「單一 frame + 表單按鈕送出」的模式即可滿足「不觸發整頁重載」的需求，
-  不需為 KPI 卡片與議題明細各自拆分獨立 frame（原草案設想的多 frame 方案徒增複雜度，且與既有頁面
-  的既定模式不一致）。
+- 篩選邏輯（`project`／`status`／`month` query params）在 Controller 完成，Actor 僅負責讀取＋正規化
+  全量資料，與 305 的 `warroom-dashboard-ux-enhancements` 需求 10（Controller 層篩選）慣例一致。
+- 錯誤處理比照既有 `DashboardController` 的 `build_success`／`build_failure` 模式：HTTP 一律 200，
+  失敗時 `@error` 於頁面內顯示，不同於 JSON API 走 HTTP 狀態碼分流。
+- 月份切換／議題篩選皆透過**單一** `turbo_frame_tag "issue-content"` 局部更新整個動態內容區塊，
+  沿用既有 `dashboard/index.html.erb`「單一 frame + 表單按鈕送出」的模式；但**表單本身拆分為兩個**
+  （見需求 7a.2），各自置於對應分頁籤內、各帶隱藏欄位 `tab=stats` / `tab=detail`，Controller 依此
+  決定 `@active_tab`，View 據此決定哪個 radio 帶 `checked`，確保局部更新後仍停留在使用者原本所在
+  的分頁籤（見需求 7a.4）。
 
 ### View 結構（`app/views/issues/index.html.erb`）
 
-比照 `docs/issues.html` 的三個區塊（月度 KPI＋依專案分類統計／每日趨勢／議題明細），差異：
+比照 `docs/issues.html`（見 [warroom-issue-dashboard-static-prototype/design.md](../warroom-issue-dashboard-static-prototype/design.md) 的分頁籤結構段落）以純 CSS radio+label 分頁籤呈現四個區塊，
+分為「統計摘要」（月度 KPI＋每日趨勢）與「議題資料」（依專案分類統計＋議題明細）兩個分頁籤，差異：
 - 月份選單、專案／狀態篩選改為 `<select>` + `form_with` 觸發 GET 請求（Turbo Frame 局部更新），
-  取代 prototype 的純前端 JS 事件監聽。
+  取代 prototype 的純前端 JS 事件監聽；兩個分頁籤各自的表單獨立送出，互不影響對方目前的篩選值。
 - 每日趨勢圖：手刻 SVG 邏輯移植自 `docs/js/issues.js` 的 `renderTrendChart`，改為伺服器端
   `IssuesHelper`（`trend_chart_points`／`trend_chart_polyline`／`trend_chart_y_ticks`／
   `trend_chart_x_labels`）計算座標，ERB 迴圈輸出 `<svg>`（不引入前端框架，符合 rails-standards 的
