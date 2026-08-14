@@ -1,0 +1,59 @@
+<% content_for :title, "戰情室 — 307 人時燃盡追蹤" %>
+
+<header class="dashboard-header">
+  <div class="header-top">
+    <h1 class="dashboard-title">戰情室 <span>— 307 人時燃盡追蹤</span></h1>
+    <button type="button" id="theme-toggle" class="theme-toggle" aria-label="切換至淺色模式">🌙 深色</button>
+  </div>
+  <p class="back-link-row"><%= link_to "← 返回入口頁", "/", class: "back-link" %></p>
+</header>
+
+<% if @error.present? %>
+  <div class="error-message">
+    <strong>錯誤：</strong><%= @error %>
+  </div>
+<% else %>
+  <%= form_with url: "/burndown", method: :get, class: "project-selector" do %>
+    <div class="control-group">
+      <label for="project">專案：</label>
+      <%= select_tag :project,
+                     options_for_select([["全部專案", ""]] + @projects.map { |p| [p, p] }, @selected_project) %>
+    </div>
+
+    <div class="control-group">
+      <label for="assignee">人員：</label>
+      <%= select_tag :assignee,
+                     options_for_select([["全部人員", ""]] + @assignees.map { |a| [a, a] }, @selected_assignee) %>
+    </div>
+
+    <%= submit_tag "套用篩選", class: "apply-filters-btn" %>
+  <% end %>
+
+  <section class="issue-section">
+    <h2>依專案彙總燃盡圖</h2>
+    <% if @project_series.empty? %>
+      <p class="empty-state">無專案彙總資料</p>
+    <% else %>
+      <% @project_series.each do |project_name, series| %>
+        <%= render partial: "burndown_chart",
+                   locals: { title: project_name, actual_series: series[:actual_series], ideal_series: series[:ideal_series] } %>
+      <% end %>
+    <% end %>
+  </section>
+
+  <section class="issue-section">
+    <h2>議題燃盡圖</h2>
+    <% if @filtered_issues.empty? %>
+      <p class="empty-state">目前無符合條件的議題</p>
+    <% else %>
+      <% @filtered_issues.each do |issue| %>
+        <%= render partial: "burndown_chart",
+                   locals: {
+                     title: "#{issue[:project]}／#{issue[:issue_title]}（#{issue[:assignee]}）",
+                     actual_series: issue[:actual_series],
+                     ideal_series: issue[:ideal_series]
+                   } %>
+      <% end %>
+    <% end %>
+  </section>
+<% end %>

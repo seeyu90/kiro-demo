@@ -1,0 +1,33 @@
+<div class="burndown-chart-block">
+  <h3><%= title %></h3>
+  <% if actual_series.blank? %>
+    <p class="empty-state">無燃盡資料</p>
+  <% else %>
+    <% max = burndown_chart_max(actual_series, ideal_series) %>
+    <% actual_points = burndown_chart_points(actual_series, max) %>
+    <% ideal_points = ideal_series.present? ? burndown_chart_points(ideal_series, max) : [] %>
+    <svg viewBox="0 0 <%= BurndownHelper::BURNDOWN_WIDTH %> <%= BurndownHelper::BURNDOWN_HEIGHT %>" class="trend-svg" role="img" aria-label="<%= title %> 燃盡圖">
+      <% burndown_chart_y_ticks(max).each do |tick| %>
+        <line x1="<%= BurndownHelper::BURNDOWN_PADDING_LEFT %>" x2="<%= BurndownHelper::BURNDOWN_WIDTH - BurndownHelper::BURNDOWN_PADDING_RIGHT %>"
+              y1="<%= tick[:y] %>" y2="<%= tick[:y] %>" class="trend-gridline"></line>
+        <text x="<%= BurndownHelper::BURNDOWN_PADDING_LEFT - 8 %>" y="<%= tick[:y] + 3 %>" text-anchor="end" class="trend-axis-label trend-y-label"><%= tick[:value] %></text>
+      <% end %>
+
+      <% burndown_chart_x_labels(actual_series).each do |label| %>
+        <% label_y = BurndownHelper::BURNDOWN_HEIGHT - BurndownHelper::BURNDOWN_PADDING_BOTTOM + 18 %>
+        <text x="<%= label[:x] %>" y="<%= label_y %>" text-anchor="end" transform="rotate(-45 <%= label[:x] %> <%= label_y %>)" class="trend-axis-label trend-x-label"><%= label[:text] %></text>
+      <% end %>
+
+      <% if ideal_points.any? %>
+        <polyline points="<%= burndown_chart_polyline(ideal_points) %>" class="burndown-ideal-line"></polyline>
+      <% end %>
+      <polyline points="<%= burndown_chart_polyline(actual_points) %>" class="burndown-actual-line"></polyline>
+
+      <% actual_points.each do |point| %>
+        <circle cx="<%= point[:x] %>" cy="<%= point[:y] %>" r="4" class="burndown-actual-point" tabindex="0">
+          <title><%= point[:date] %> ｜ 實際剩餘 <%= point[:hours] %> 小時</title>
+        </circle>
+      <% end %>
+    </svg>
+  <% end %>
+</div>

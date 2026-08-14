@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem("warroom-theme");
+        if (saved === "light") {
+          document.documentElement.setAttribute("data-theme", "light");
+        }
+      } catch (e) {
+        // localStorage 不可用：靜默忽略，維持預設深色
+      }
+    })();
+  </script>
+  <title>戰情室 — 307 人時燃盡追蹤（靜態展示版）</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="戰情室 307 專案人時燃盡追蹤靜態展示頁，使用模擬資料呈現理想與實際燃盡線。">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="dashboard-header">
+    <div class="header-titles">
+      <h1 class="dashboard-title">戰情室 <span>— 307 人時燃盡追蹤</span></h1>
+      <p class="subtitle">靜態展示版（模擬資料） · <a class="back-link" href="index.html">返回入口頁</a></p>
+    </div>
+    <button type="button" id="theme-toggle" class="theme-toggle" aria-label="切換至淺色模式">🌙 深色</button>
+  </header>
+
+  <main>
+    <section class="issue-section">
+      <div class="section-heading-row">
+        <h2>依專案彙總燃盡圖</h2>
+        <div class="control-group">
+          <label for="burndown-project">專案：</label>
+          <select id="burndown-project" name="burndown-project"></select>
+          <label for="burndown-assignee">人員：</label>
+          <select id="burndown-assignee" name="burndown-assignee"></select>
+        </div>
+      </div>
+      <div id="project-series" aria-live="polite"></div>
+    </section>
+
+    <section class="issue-section">
+      <h2>議題燃盡圖</h2>
+      <div id="issue-series" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <script src="js/burndown.js"></script>
+</body>
+</html>

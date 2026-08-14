@@ -13,83 +13,83 @@
 
 ## 任務
 
-- [ ] 1. `BurndownSheetsClient`
-  - [ ] 1.1 新增 `app/clients/burndown_sheets_client.rb`
+- [x] 1. `BurndownSheetsClient`
+  - [x] 1.1 新增 `app/clients/burndown_sheets_client.rb`
     - 依 [design.md](design.md) 實作動態欄寬讀取（先讀表頭列換算最後一欄字母，再讀整份資料範圍）
     - 沿用既有 UTF-8 重標記、憑證讀取（Rails credentials → ENV fallback）邏輯
     - `SHEET_NAME` 常數先以佔位值 `"工作表1"` 實作，並加註解說明需在實際串接時確認真實分頁名稱
     - _需求：1.1_
-  - [ ] 1.2 單元測試：`spec/clients/burndown_sheets_client_spec.rb`
+  - [x] 1.2 單元測試：`spec/clients/burndown_sheets_client_spec.rb`
     - stub `SheetsService`，驗證動態欄寬換算（含欄數超過 26 需要雙字母欄位代號的邊界情況）、
       UTF-8 重標記、憑證 fallback、Google API 錯誤原樣拋出
 
-- [ ] 2. `Sheets::FetchProjectBurndown` — 固定欄位解析
-  - [ ] 2.1 新增 `app/actors/sheets/fetch_project_burndown.rb`，實作固定欄位（A~H）解析
+- [x] 2. `Sheets::FetchProjectBurndown` — 固定欄位解析
+  - [x] 2.1 新增 `app/actors/sheets/fetch_project_burndown.rb`，實作固定欄位（A~H）解析
     - `project`／`issue_title`／`issue_id` 任一空白則跳過該列；空列跳過
     - _需求：1.2, 1.3_
-  - [ ] 2.2 週欄位空白視為 0 人時
+  - [x] 2.2 週欄位空白視為 0 人時
     - _需求：1.4_
 
-- [ ] 3. 週欄位年份推算
-  - [ ] 3.1 實作表頭週欄位解析（`MM/DD` 格式偵測）與年份推算演算法
+- [x] 3. 週欄位年份推算
+  - [x] 3.1 實作表頭週欄位解析（`MM/DD` 格式偵測）與年份推算演算法
     - 第一欄（最近一週）以 `Date.current` 為錨點；若依當年年份組出的日期**晚於錨點 3 天以上**才視為
       去年同週（年份減 1），3 天內仍算今年（容錯窗口，避免週初填表時的邊界誤判）
     - 後續欄位「依目前推算年份組出的日期晚於前一欄（較近一週）的日期」時年份減 1 重新組出日期
     - 無法組成合法日期的欄位整欄跳過，不拋出例外
     - _需求：2.1, 2.2, 2.3, 2.4_
-  - [ ] 3.2 單元測試：涵蓋跨年邊界（例如 01/05 → 12/29）、非法日期（如 2/30）跳過
+  - [x] 3.2 單元測試：涵蓋跨年邊界（例如 01/05 → 12/29）、非法日期（如 2/30）跳過
 
-- [ ] 4. 理想／實際燃盡序列計算
-  - [ ] 4.1 實作實際序列：依日期由舊到新排序後累加人時，`estimated_hours` 逐週扣減
+- [x] 4. 理想／實際燃盡序列計算
+  - [x] 4.1 實作實際序列：依日期由舊到新排序後累加人時，`estimated_hours` 逐週扣減
     - _需求：3.3_
-  - [ ] 4.2 實作理想序列：線性比例分攤，起訖日缺失或不合法時回傳空陣列
+  - [x] 4.2 實作理想序列：線性比例分攤，起訖日缺失或不合法時回傳空陣列
     - _需求：3.1, 3.2_
-  - [ ] 4.3 實作依專案彙總（依日期加總同專案所有議題的兩條序列）
+  - [x] 4.3 實作依專案彙總（依日期加總同專案所有議題的兩條序列）
     - _需求：3.4_
-  - [ ] 4.4 單元測試：涵蓋起訖日缺失、單一議題序列計算、多議題彙總
+  - [x] 4.4 單元測試：涵蓋起訖日缺失、單一議題序列計算、多議題彙總
 
-- [ ] 5. 錯誤處理
-  - [ ] 5.1 在 `call` 補上 `rescue Google::Apis::ClientError` 三段式對應與 `rescue => e`
+- [x] 5. 錯誤處理
+  - [x] 5.1 在 `call` 補上 `rescue Google::Apis::ClientError` 三段式對應與 `rescue => e`
     - _需求：5.1, 5.2, 5.3_
-  - [ ] 5.2 單元測試：404／403／其他例外皆對應正確 `failure_code`
+  - [x] 5.2 單元測試：404／403／其他例外皆對應正確 `failure_code`
 
-- [ ] 6. `BurndownIssueBlueprint`
-  - [ ] 6.1 新增 `app/blueprints/burndown_issue_blueprint.rb`（依 design.md 欄位清單）
+- [x] 6. `BurndownIssueBlueprint`
+  - [x] 6.1 新增 `app/blueprints/burndown_issue_blueprint.rb`（依 design.md 欄位清單）
 
-- [ ] 7. `BurndownController`
-  - [ ] 7.1 新增 `app/controllers/burndown_controller.rb`：呼叫 Actor、篩選（含專案＋人員同時篩選時
+- [x] 7. `BurndownController`
+  - [x] 7.1 新增 `app/controllers/burndown_controller.rb`：呼叫 Actor、篩選（含專案＋人員同時篩選時
     取交集）、`build_failure`
     - _需求：4.2, 4.3, 4.4, 4.5_
-  - [ ] 7.2 `config/routes.rb` 新增 `get "/burndown", to: "burndown#index"`
+  - [x] 7.2 `config/routes.rb` 新增 `get "/burndown", to: "burndown#index"`
 
-- [ ] 8. View 與 Helper
-  - [ ] 8.1 新增 `app/helpers/burndown_helper.rb`（燃盡圖座標計算，仿 `IssuesHelper` trend chart）
-  - [ ] 8.2 新增 `app/views/burndown/_burndown_chart.html.erb`（雙折線 SVG partial）
-  - [ ] 8.3 新增 `app/views/burndown/index.html.erb`（篩選表單＋專案彙總圖＋議題燃盡圖清單）
+- [x] 8. View 與 Helper
+  - [x] 8.1 新增 `app/helpers/burndown_helper.rb`（燃盡圖座標計算，仿 `IssuesHelper` trend chart）
+  - [x] 8.2 新增 `app/views/burndown/_burndown_chart.html.erb`（雙折線 SVG partial）
+  - [x] 8.3 新增 `app/views/burndown/index.html.erb`（篩選表單＋專案彙總圖＋議題燃盡圖清單）
     - _需求：4.1_
-  - [ ] 8.4 CSS：於 `app/assets/stylesheets/application.css` 新增理想線／實際線樣式類別
+  - [x] 8.4 CSS：於 `app/assets/stylesheets/application.css` 新增理想線／實際線樣式類別
 
-- [ ] 9. Request spec
-  - [ ] 9.1 新增 `spec/requests/burndown_spec.rb`：stub `BurndownSheetsClient.fetch_rows`，驗證成功／
+- [x] 9. Request spec
+  - [x] 9.1 新增 `spec/requests/burndown_spec.rb`：stub `BurndownSheetsClient.fetch_rows`，驗證成功／
     失敗渲染、專案與人員篩選（含兩者同時篩選的交集情境）、空資料 empty state
     - _需求：4.4, 4.5_
 
-- [ ] 10. 全專案回歸
-  - [ ] 10.1 執行 `bundle exec rspec`，確認全數通過、不影響既有 305／306 測試
+- [x] 10. 全專案回歸
+  - [x] 10.1 執行 `bundle exec rspec`，確認全數通過、不影響既有 305／306 測試
 
-- [ ] 11. `docs/burndown.html` 靜態展示頁
-  - [ ] 11.1 新增 `docs/js/burndown.js`：模擬資料常數（比照 design.md「docs/ 靜態展示頁」段落的欄位
+- [x] 11. `docs/burndown.html` 靜態展示頁
+  - [x] 11.1 新增 `docs/js/burndown.js`：模擬資料常數（比照 design.md「docs/ 靜態展示頁」段落的欄位
     結構），至少一筆落後範例、一筆超前範例
     - _需求：6.2_
-  - [ ] 11.2 實作 `computeIdealSeries`／`computeActualSeries`／`sumProjectSeries`（純 JS，邏輯對齊
+  - [x] 11.2 實作 `computeIdealSeries`／`computeActualSeries`／`sumProjectSeries`（純 JS，邏輯對齊
     Ruby Actor 版本但各自獨立實作）
     - _需求：6.3_
-  - [ ] 11.3 實作雙折線 SVG 繪圖函式（比照 `docs/js/issues.js` 的 `renderTrendChart`，新增理想線
+  - [x] 11.3 實作雙折線 SVG 繪圖函式（比照 `docs/js/issues.js` 的 `renderTrendChart`，新增理想線
     `stroke-dasharray` 虛線樣式），專案彙總與單一議題共用同一函式
     - _需求：6.1, 6.3_
-  - [ ] 11.4 新增 `docs/burndown.html`：header／返回入口頁／深色淺色切換（比照 `docs/issues.html`）、
+  - [x] 11.4 新增 `docs/burndown.html`：header／返回入口頁／深色淺色切換（比照 `docs/issues.html`）、
     專案／人員 `<select>` 篩選（change 事件即時重繪，不需送出按鈕）、專案彙總圖區塊、議題燃盡圖清單
     - _需求：6.1, 6.3, 6.4_
-  - [ ] 11.5 CSS：於 `docs/css/style.css` 新增燃盡圖兩條線樣式類別（與 Rails 端同名，維持視覺一致）
-  - [ ] 11.6 `docs/index.html` 新增連結至 `burndown.html` 的入口卡片（「307 人時燃盡追蹤」）
+  - [x] 11.5 CSS：於 `docs/css/style.css` 新增燃盡圖兩條線樣式類別（與 Rails 端同名，維持視覺一致）
+  - [x] 11.6 `docs/index.html` 新增連結至 `burndown.html` 的入口卡片（「307 人時燃盡追蹤」）
     - _需求：6.5_
