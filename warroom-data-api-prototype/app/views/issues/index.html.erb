@@ -35,7 +35,7 @@
 
         <section class="issue-section">
           <h2>月度 KPI</h2>
-          <p class="section-note">月結數字，當月進行中尚未結算；「議題資料」分頁的依專案分類統計與議題明細皆為即時資料，不受此處月份選擇影響</p>
+          <p class="section-note">月度 KPI 為月結數字，當月進行中尚未結算；每日趨勢與依專案分類統計則依此處所選月份即時呈現；「議題資料」分頁的議題明細不受月份篩選影響（顯示全部議題）</p>
           <% if @selected_month_record %>
             <div class="summary-bar">
               <div class="stat-item">
@@ -84,6 +84,11 @@
             <%= render partial: "trend_chart", locals: { daily_kpi: @daily_kpi } %>
           </div>
         </section>
+
+        <section class="issue-section">
+          <h2>依專案分類</h2>
+          <%= render partial: "project_breakdown", locals: { rows: @project_breakdown } %>
+        </section>
       </div>
 
       <div class="tab-panel" id="tab-panel-detail">
@@ -103,11 +108,6 @@
 
           <%= submit_tag "套用篩選", class: "apply-filters-btn" %>
         <% end %>
-
-        <section class="issue-section">
-          <h2>依專案分類</h2>
-          <%= render partial: "project_breakdown", locals: { rows: @project_breakdown } %>
-        </section>
 
         <section class="issue-section">
           <h2>議題明細</h2>

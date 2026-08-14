@@ -130,9 +130,19 @@ Webhook／排程更新、資料庫或本地快取層、OAuth 使用者登入、�
    欄位分組，統計各專案的 `complaint`／`testing`／`other` 筆數與 `total`（三者加總），與 prototype 的
    `computeProjectBreakdown` 邏輯一致。
 2. `project_breakdown` 的統計範圍 SHALL 為 **IssueDashboard_Actor** 讀取到的全部議題（`issues` 輸出的
-   完整集合），不限定於當前所選月份——議題明細本身無可靠的月份篩選欄位（`start_date` 與
-   `month_kpi.year_month` 語意不完全對應），本階段不強行套用月份篩選，避免統計失真。
+   完整集合），不限定於當前所選月份——此為 Actor 層／`GET /api/issue_dashboard` 端點提供的全量統計，
+   供 API 消費者取得完整資料；**IssueDashboard_Page**（HTML 頁面）對此結果另行依 `start_date` 做
+   月份篩選後才渲染，見需求 3a.4 與需求 7a。
 3. THE **IssueDashboard_Actor** SHALL 不提供／不解析 `month_kpi` 分頁的 `Top3` 欄位（見需求 3.3）。
+4. THE **IssueDashboard_Page** SHALL 依議題的 `start_date`（議題建立日）判斷所屬月份，僅將
+   `start_date` 落在目前所選月份內的議題納入畫面上顯示的「依專案分類」統計；WHEN 使用者切換月份，
+   THE **IssueDashboard_Page** SHALL 以 Turbo Frame 重新計算並渲染此統計；WHEN 所選月份無任何符合
+   的議題，THE **IssueDashboard_Page** SHALL 顯示「所選月份無議題資料」，不留白。
+   （**設計變更紀錄**：本需求原規劃「`project_breakdown` 不限定於當前所選月份」，理由是議題明細本身
+   無可靠的月份篩選欄位；使用者回饋「依專案分類統計」畫面呈現應與月度 KPI 一樣依所選月份呈現，故
+   改為由 **IssueDashboard_Page** 依 `start_date` 另行篩選 Actor 輸出的全量 `project_breakdown` 議題
+   來源，Actor／API 層行為本身不變，變更僅發生在 HTML 頁面的渲染邏輯。對齊
+   [warroom-issue-dashboard-static-prototype/requirements.md](../warroom-issue-dashboard-static-prototype/requirements.md) 需求 2.4a 的設計變更紀錄。）
 
 ---
 
@@ -149,6 +159,14 @@ Webhook／排程更新、資料庫或本地快取層、OAuth 使用者登入、�
 3. WHEN `總計`（`total`）欄位為空字串，THE **IssueDashboard_Actor** SHALL 將其視為 `0`，不中斷解析。
 4. THE **IssueDashboard_Actor** SHALL 依日期升冪排序輸出，確保趨勢圖 X 軸順序正確（試算表本身已按
    日期排序，但仍應由程式保證，不依賴來源順序）。
+5. THE **IssueDashboard_Page** SHALL 僅呈現所選月份內的每日趨勢資料點（依 `date` 欄位判斷所屬月份）；
+   WHEN 使用者切換月份，THE **IssueDashboard_Page** SHALL 以 Turbo Frame 重新渲染趨勢圖；WHEN 所選
+   月份無任何每日趨勢資料，THE **IssueDashboard_Page** SHALL 顯示「所選月份無每日趨勢資料」。
+   （**設計變更紀錄**：與需求 3a.4 相同背景——原規劃每日趨勢圖不限定於所選月份，使用者回饋後改為由
+   **IssueDashboard_Page** 依月份篩選 Actor 輸出的全量 `daily_kpi`，Actor／API 層行為不變。）
+6. THE **IssueDashboard_Page** SHALL 為趨勢圖的每一個資料點顯示橫軸日期標籤（不省略、不限制數量），
+   並以 -45 度旋轉呈現（`text-anchor: end`），避免密集資料點造成標籤互相重疊，對齊
+   [warroom-issue-dashboard-static-prototype/requirements.md](../warroom-issue-dashboard-static-prototype/requirements.md) 需求 3.5 的設計變更紀錄（取代原本「資料點超過 6 個時等距挑選含首尾標籤」的做法）。
 
 ---
 
@@ -228,8 +246,11 @@ Webhook／排程更新、資料庫或本地快取層、OAuth 使用者登入、�
 
 #### 驗收標準
 
-1. THE **IssueDashboard_Page** SHALL 以兩個分頁籤呈現內容：「統計摘要」（月度 KPI ＋每日趨勢）與
-   「議題資料」（依專案分類統計＋議題明細）。
+1. THE **IssueDashboard_Page** SHALL 以兩個分頁籤呈現內容：「統計摘要」（月度 KPI ＋每日趨勢＋依
+   專案分類統計）與「議題資料」（僅議題明細）。
+   （**設計變更紀錄**：原規劃「依專案分類統計」歸類在「議題資料」分頁籤；因需求 3a.4 變更為依
+   月份篩選後，改為歸類到「統計摘要」分頁籤，與月份選擇表單放在一起，對齊
+   [warroom-issue-dashboard-static-prototype/requirements.md](../warroom-issue-dashboard-static-prototype/requirements.md) 需求 5.1 的設計變更紀錄。）
 2. THE **IssueDashboard_Page** SHALL 將月份篩選表單置於「統計摘要」分頁籤內；THE
    **IssueDashboard_Page** SHALL 將專案／狀態篩選表單置於「議題資料」分頁籤內，兩者為獨立表單，
    不共用同一個提交按鈕。
@@ -266,11 +287,13 @@ Webhook／排程更新、資料庫或本地快取層、OAuth 使用者登入、�
 
 1. THE **IssueDashboard_Page** SHALL 提供月份選擇（`month` query param），未帶參數時預設最新月份
    （`month_kpi` 資料中 `year_month` 最大值）。
-2. WHEN 使用者切換月份，THE **IssueDashboard_Page** SHALL 以 Turbo Frame 局部更新 KPI 卡片，不觸發
-   整頁重載；依專案分類統計（`project_breakdown`）不隨月份篩選（見需求 3a.2），月份切換不影響其內容。
+2. WHEN 使用者切換月份，THE **IssueDashboard_Page** SHALL 以 Turbo Frame 局部更新 KPI 卡片、每日
+   趨勢圖與依專案分類統計（見需求 3a.4、需求 4.5），三者一併隨月份切換重新渲染；議題明細清單
+   （「議題資料」分頁籤）不受月份篩選影響，維持顯示全部議題。
 3. THE **IssueDashboard_Page** SHALL 在月度 KPI 區塊顯示說明文字，明確告知：KPI 卡片為月結數字
-   （當月進行中尚未結算），而依專案分類統計與議題明細清單皆為即時資料、不受月份選擇影響，與
-   prototype 一致（見 [warroom-issue-dashboard-static-prototype/requirements.md](../warroom-issue-dashboard-static-prototype/requirements.md) 需求 2.5、2.6）。
+   （當月進行中尚未結算），而每日趨勢與依專案分類統計則依此處所選月份即時呈現，「議題資料」分頁的
+   議題明細不受月份篩選影響（顯示全部議題），與 prototype 一致（見
+   [warroom-issue-dashboard-static-prototype/requirements.md](../warroom-issue-dashboard-static-prototype/requirements.md) 需求 2.5、2.6）。
 4. THE **IssueDashboard_Page** SHALL 確保此說明文字僅出現在月度 KPI 區塊一處，不得重複出現在議題
    明細的專案／狀態篩選控制項附近，避免使用者誤解為「篩選功能未生效」。
 

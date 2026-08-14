@@ -222,11 +222,9 @@ class IssuesController < ApplicationController
     # 送出後仍停留在原本的分頁籤，而非固定跳回預設分頁籤（需求 7a.4）。
     @active_tab = TABS.include?(params[:tab]) ? params[:tab] : DEFAULT_TAB
 
-    @month_kpi         = MonthKpiBlueprint.render_as_hash(result.month_kpi)
-    @daily_kpi          = DailyKpiBlueprint.render_as_hash(result.daily_kpi)
-    @project_breakdown = ProjectBreakdownBlueprint.render_as_hash(result.project_breakdown)
+    @month_kpi = MonthKpiBlueprint.render_as_hash(result.month_kpi)
+    all_daily_kpi = DailyKpiBlueprint.render_as_hash(result.daily_kpi)
 
-    # 月份選單納入進行中的當月（即使 month_kpi 尚無該月列），預設選中仍是最新已結算月份。
     current_year_month = Date.current.strftime("%Y-%m")
     @available_months = (@month_kpi.map { |m| m[:year_month] } + [current_year_month]).uniq.sort
     @selected_month = params[:month].presence || @month_kpi.map { |m| m[:year_month] }.max
@@ -234,6 +232,13 @@ class IssuesController < ApplicationController
     @selected_month_pending = @selected_month_record.nil? && @selected_month == current_year_month
 
     all_issues = IssueBlueprint.render_as_hash(result.issues)
+
+    # 每日趨勢與依專案分類統計皆依所選月份篩選後才渲染（需求 3a.4、4.5）；
+    # Actor／API 層的 project_breakdown／daily_kpi 輸出本身仍為全量、不受此篩選影響。
+    @daily_kpi = all_daily_kpi.select { |d| same_month?(d[:date], @selected_month) }
+    month_issues = all_issues.select { |i| same_month?(i[:start_date], @selected_month) }
+    @project_breakdown = compute_project_breakdown(month_issues)
+
     @projects = all_issues.map { |i| i[:project] }.compact.uniq
     @statuses = all_issues.map { |i| i[:status] }.compact.uniq
     @selected_project = params[:project].presence
@@ -258,8 +263,33 @@ class IssuesController < ApplicationController
       .select { |i| @selected_project.blank? || i[:project] == @selected_project }
       .select { |i| @selected_status.blank? || i[:status] == @selected_status }
   end
+
+  def same_month?(date_str, year_month)
+    date_str.is_a?(String) && date_str[0, 7] == year_month
+  end
+
+  # 與 Sheets::FetchIssueDashboard#compute_project_breakdown 邏輯相同，但這裡對「已依月份篩選的
+  # 議題子集」運算（Actor 版本對全量議題運算，供 API 使用），兩者用途不同，故不共用（需求 3a.4）。
+  def compute_project_breakdown(issues)
+    grouped = issues.each_with_object({}) do |issue, acc|
+      key = issue[:project].to_s.strip.empty? ? "未分類" : issue[:project]
+      acc[key] ||= { project: key, complaint: 0, testing: 0, other: 0 }
+      case issue[:type]
+      when "Complaint" then acc[key][:complaint] += 1
+      when "TestingBug" then acc[key][:testing] += 1
+      else acc[key][:other] += 1
+      end
+    end
+    grouped.values.map { |row| row.merge(total: row[:complaint] + row[:testing] + row[:other]) }
+  end
 end
 ```
+
+（**設計變更紀錄**：`@project_breakdown` 原直接使用 `ProjectBreakdownBlueprint.render_as_hash(result.project_breakdown)`（Actor 輸出的全量統計，不受月份篩選）；使用者回饋「依專案分類統計也應依所選
+月份呈現」後，改為 Controller 對月份篩選過的 `issues` 子集重新計算（`compute_project_breakdown`），
+不再直接使用 `ProjectBreakdownBlueprint` 渲染 Actor 的 `project_breakdown` 輸出於 HTML 頁面；
+`GET /api/issue_dashboard` JSON 端點的 `project_breakdown` 欄位維持使用 Actor 版本（全量、不受月份
+篩選），行為不變，見需求 3a.4。）
 
 - 篩選邏輯（`project`／`status`／`month` query params）在 Controller 完成，Actor 僅負責讀取＋正規化
   全量資料，與 305 的 `warroom-dashboard-ux-enhancements` 需求 10（Controller 層篩選）慣例一致。
@@ -274,17 +304,25 @@ end
 ### View 結構（`app/views/issues/index.html.erb`）
 
 比照 `docs/issues.html`（見 [warroom-issue-dashboard-static-prototype/design.md](../warroom-issue-dashboard-static-prototype/design.md) 的分頁籤結構段落）以純 CSS radio+label 分頁籤呈現四個區塊，
-分為「統計摘要」（月度 KPI＋每日趨勢）與「議題資料」（依專案分類統計＋議題明細）兩個分頁籤，差異：
+分為「統計摘要」（月度 KPI＋每日趨勢＋依專案分類統計）與「議題資料」（僅議題明細）兩個分頁籤，差異：
 - 月份選單、專案／狀態篩選改為 `<select>` + `form_with` 觸發 GET 請求（Turbo Frame 局部更新），
   取代 prototype 的純前端 JS 事件監聽；兩個分頁籤各自的表單獨立送出，互不影響對方目前的篩選值。
 - 每日趨勢圖：手刻 SVG 邏輯移植自 `docs/js/issues.js` 的 `renderTrendChart`，改為伺服器端
   `IssuesHelper`（`trend_chart_points`／`trend_chart_polyline`／`trend_chart_y_ticks`／
   `trend_chart_x_labels`）計算座標，ERB 迴圈輸出 `<svg>`（不引入前端框架，符合 rails-standards 的
-  最簡方案原則）。含縱軸 0／中間值／最大值三條格線與數字標籤、橫軸日期標籤（資料點數量超過 6 個時
-  等距挑選含首尾的標籤索引，避免重疊）——此為 prototype 確認畫面後追加的需求，`docs/js/issues.js`
-  已同步更新，兩端座標計算邏輯完全一致。
-- 依專案分類統計：直接以 `<table>` 渲染 `@project_breakdown`（`ProjectBreakdownBlueprint` 序列化），
-  取代 prototype 已移除的 Top3 排行；不隨月份切換更新（見需求 3a.2）。
+  最簡方案原則）。含縱軸 0／中間值／最大值三條格線與數字標籤；橫軸為每一個資料點顯示日期標籤
+  （不省略、不限制數量），並以 `transform="rotate(-45 x y)"` + `text-anchor="end"` 旋轉呈現，避免
+  密集資料點時標籤重疊——與 `docs/js/issues.js` 的座標與旋轉邏輯完全一致（需求 4.6）。
+  （**設計變更紀錄**：`trend_chart_x_labels` 原本在資料點數量超過 `TREND_MAX_X_LABELS`（6 個）時
+  等距挑選含首尾的標籤索引；使用者回饋希望每個資料點都能看到日期，故改為回傳全部標籤並以旋轉方式
+  避免重疊，`TREND_MAX_X_LABELS` 常數與 `trend_chart_label_indices` 已移除，`TREND_HEIGHT`
+  220→250、`TREND_PADDING_BOTTOM` 28→55 以容納旋轉後的斜向文字。）
+  傳入 `@daily_kpi` 為 Controller 已依所選月份篩選過的子集（見需求 4.5）；WHEN 篩選後為空陣列，
+  顯示「所選月份無每日趨勢資料」。
+- 依專案分類統計：以 `<table>` 渲染 `@project_breakdown`，取代 prototype 已移除的 Top3 排行；
+  `@project_breakdown` 為 Controller 依所選月份篩選過的議題子集重新計算的結果（見上方 Controller
+  程式碼區塊的設計變更紀錄與需求 3a.4），隨月份切換更新；WHEN 篩選後為空陣列，顯示
+  「所選月份無議題資料」。
 - 議題明細表格欄位依序為：議題編號、專案、主旨、歸屬類型、狀態、負責人、開始日期、到期日期、工作
   天數（不顯示 type／tracker，見需求 5.7）。
 - 「歸屬類型」欄位：View helper（`IssuesHelper#attribution_label(type)` / `#attribution_class(type)`）

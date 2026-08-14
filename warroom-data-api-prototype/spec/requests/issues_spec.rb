@@ -1,6 +1,12 @@
 require "rails_helper"
 
 RSpec.describe "Issues", type: :request do
+  def project_breakdown_section(body)
+    # 專案下拉選單與議題明細不受月份篩選影響，會恆常包含所有專案名稱，
+    # 因此驗證「依專案分類」統計時必須只擷取該表格區塊，避免誤判其他區塊的文字
+    body[%r{<h2>依專案分類</h2>.*?</section>}m]
+  end
+
   let(:month_kpi_rows) do
     [
       %w[year_month 客訴 測試 總Bug 攔截率 完成數 未結案 平均天數 SLA達標率 Top3],
@@ -12,6 +18,7 @@ RSpec.describe "Issues", type: :request do
   let(:daily_kpi_rows) do
     [
       %w[日期 客訴 測試 其他 總計],
+      ["2026-07-15", "1", "0", "0", "1"],
       ["2026-08-01", "0", "1", "0", "1"],
       ["2026-08-13", "0", "0", "0", "0"]
     ]
@@ -58,13 +65,15 @@ RSpec.describe "Issues", type: :request do
     end
 
     it "does not repeat the note near the project/status filters (which do actively filter the list below)" do
-      # 確認「不受此處月份選擇影響」字樣只出現一次（在月度 KPI 區塊），不會出現在議題明細篩選附近造成混淆
-      expect(response.body.scan("不受此處月份選擇影響").size).to eq(1)
+      # 確認「不受月份篩選影響」字樣只出現一次（在月度 KPI 區塊），不會出現在議題明細篩選附近造成混淆
+      expect(response.body.scan("不受月份篩選影響").size).to eq(1)
     end
 
-    it "shows the project breakdown table" do
-      expect(response.body).to include("Virtuous HRM")
-      expect(response.body).to include("AG 亞炬")
+    it "shows the project breakdown table filtered to issues started in the selected month" do
+      # 預設月份為 2026-08，僅 issue 5165（start_date 2026/8/12）符合，issue 3058（2024/4/29）不應出現
+      section = project_breakdown_section(response.body)
+      expect(section).to include("Virtuous HRM")
+      expect(section).not_to include("AG 亞炬")
     end
 
     it "renders the trend chart SVG with one point per daily_kpi row" do
@@ -125,10 +134,27 @@ RSpec.describe "Issues", type: :request do
       expect(response.body).to include("20.0") # block_rate for 2026-07
     end
 
-    it "does not change the project breakdown regardless of month (需求 3a.2)" do
-      # project_breakdown 恆為全部 issues 的分組統計，不受 month 篩選影響
-      expect(response.body).to include("Virtuous HRM")
-      expect(response.body).to include("AG 亞炬")
+    it "filters the project breakdown to issues started in the selected month" do
+      # 2026-07 沒有任何 issue 的 start_date 落在此月份，應顯示空狀態
+      section = project_breakdown_section(response.body)
+      expect(section).to include("所選月份無議題資料")
+      expect(section).not_to include("Virtuous HRM")
+      expect(section).not_to include("AG 亞炬")
+    end
+
+    it "filters the trend chart to daily_kpi rows in the selected month" do
+      expect(response.body.scan("trend-point").size).to eq(1)
+    end
+  end
+
+  describe "GET /issues?month=2026-01" do
+    before { get "/issues", params: { month: "2026-01", status: "" } }
+
+    it "shows the project breakdown filtered to issues started in January (需求 3a.2 已改為依月份篩選)" do
+      # issue 4547 的 start_date 為 2026/1/2，屬於此月份
+      section = project_breakdown_section(response.body)
+      expect(section).to include("Virtuous HRM")
+      expect(section).not_to include("AG 亞炬")
     end
   end
 
@@ -182,8 +208,8 @@ RSpec.describe "Issues", type: :request do
         expect(response.body).to include("尚未結算")
       end
 
-      it "still renders the project breakdown (unaffected by month selection)" do
-        expect(response.body).to include("Virtuous HRM")
+      it "shows the empty state for the project breakdown (no issues started in 2026-09)" do
+        expect(response.body).to include("所選月份無議題資料")
       end
     end
   end
@@ -201,19 +227,20 @@ RSpec.describe "Issues", type: :request do
       expect(tab_checked?(response.body, "tab-detail")).to be false
     end
 
-    it "puts 月度 KPI and 每日趨勢 inside the stats tab panel, and 依專案分類／議題明細 inside the detail tab panel" do
+    it "puts 月度 KPI／每日趨勢／依專案分類 inside the stats tab panel, and only 議題明細 inside the detail tab panel" do
       get "/issues"
 
       stats_panel = response.body[/<div class="tab-panel" id="tab-panel-stats">.*?(?=<div class="tab-panel" id="tab-panel-detail">)/m]
       detail_panel = response.body[/<div class="tab-panel" id="tab-panel-detail">.*/m]
 
       expect(stats_panel).to include("<h2>月度 KPI</h2>").and include("<h2>每日趨勢</h2>")
-      expect(stats_panel).not_to include("<h2>依專案分類</h2>")
+      expect(stats_panel).to include("<h2>依專案分類</h2>")
       expect(stats_panel).not_to include("<h2>議題明細</h2>")
 
-      expect(detail_panel).to include("<h2>依專案分類</h2>").and include("<h2>議題明細</h2>")
+      expect(detail_panel).to include("<h2>議題明細</h2>")
       expect(detail_panel).not_to include("<h2>月度 KPI</h2>")
       expect(detail_panel).not_to include("<h2>每日趨勢</h2>")
+      expect(detail_panel).not_to include("<h2>依專案分類</h2>")
     end
 
     it "stays on the stats tab after submitting the month filter (hidden tab=stats field)" do

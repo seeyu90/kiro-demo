@@ -28,6 +28,8 @@
   }
 
   var DAILY_KPI = [
+    { date: "2026-07-10", complaint: 2, testing: 1, other: 0, total: 3 },
+    { date: "2026-07-22", complaint: 0, testing: 3, other: 0, total: 3 },
     { date: "2026-08-01", complaint: 0, testing: 1, other: 0, total: 1 },
     { date: "2026-08-04", complaint: 4, testing: 0, other: 0, total: 4 },
     { date: "2026-08-06", complaint: 0, testing: 2, other: 0, total: 2 },
@@ -97,9 +99,22 @@
     select.value = MONTH_KPI[MONTH_KPI.length - 1].year_month;
 
     select.addEventListener("change", function () {
-      var record = MONTH_KPI.filter(function (m) { return m.year_month === select.value; })[0];
-      renderKpiCards(record);
+      renderStatsTab(select.value);
     });
+  }
+
+  // 「統計摘要」分頁籤內三個區塊（月度 KPI／每日趨勢／依專案分類）皆依所選月份呈現，
+  // 統一由此函式驅動，確保切換月份時三者同步更新。
+  function renderStatsTab(yearMonth) {
+    var monthRecord = MONTH_KPI.filter(function (m) { return m.year_month === yearMonth; })[0];
+    renderKpiCards(monthRecord);
+    renderTrendChart(DAILY_KPI.filter(function (r) { return sameMonth(r.date, yearMonth); }));
+    renderProjectBreakdown(ISSUES.filter(function (i) { return sameMonth(i.start_date, yearMonth); }));
+  }
+
+  // 以議題／每日紀錄的日期欄位前 7 碼（YYYY-MM）判斷是否屬於所選月份。
+  function sameMonth(dateStr, yearMonth) {
+    return typeof dateStr === "string" && dateStr.slice(0, 7) === yearMonth;
   }
 
   function renderKpiCards(monthRecord) {
@@ -111,7 +126,6 @@
       pending.className = "empty-state";
       pending.textContent = "尚未結算（本月進行中，月底才會產生統計數字）";
       el.appendChild(pending);
-      renderProjectBreakdown();
       return;
     }
 
@@ -139,12 +153,10 @@
       stat.appendChild(label);
       el.appendChild(stat);
     });
-
-    renderProjectBreakdown();
   }
 
-  // 依專案分類統計客訴／測試／其他數量（跨全部議題，非僅限所選月份 —
-  // 議題明細目前無月份維度可篩選，真實資料串接時視需求決定是否依月份篩選）。
+  // 依專案分類統計客訴／測試／其他數量，範圍為 start_date 落在所選月份的議題
+  // （呼叫端已依 sameMonth() 過濾，這裡只負責分組計數）。
   var PROJECT_BREAKDOWN_COLUMNS = [
     { key: "project", label: "專案" },
     { key: "complaint", label: "客訴" },
@@ -169,7 +181,7 @@
     });
   }
 
-  function renderProjectBreakdown() {
+  function renderProjectBreakdown(monthIssues) {
     var el = document.getElementById("project-breakdown");
     el.innerHTML = "";
 
@@ -178,36 +190,27 @@
     heading.textContent = "依專案分類（客訴／測試／其他）";
     el.appendChild(heading);
 
-    el.appendChild(buildGenericTable(computeProjectBreakdown(ISSUES), PROJECT_BREAKDOWN_COLUMNS));
+    var rows = computeProjectBreakdown(monthIssues);
+    if (rows.length === 0) {
+      var empty = document.createElement("p");
+      empty.className = "empty-state";
+      empty.textContent = "所選月份無議題資料";
+      el.appendChild(empty);
+      return;
+    }
+
+    el.appendChild(buildGenericTable(rows, PROJECT_BREAKDOWN_COLUMNS));
   }
 
   // ── 每日趨勢圖（手刻 SVG 折線圖，含橫軸日期標籤／縱軸數值刻度） ──
 
   var TREND_WIDTH = 640;
-  var TREND_HEIGHT = 220;
+  var TREND_HEIGHT = 250;
   var TREND_PADDING_LEFT = 40;
   var TREND_PADDING_RIGHT = 12;
   var TREND_PADDING_TOP = 16;
-  var TREND_PADDING_BOTTOM = 28;
-  var TREND_MAX_X_LABELS = 6;
+  var TREND_PADDING_BOTTOM = 55;
   var TREND_Y_TICKS = 3; // 0、中間值、最大值
-
-  // 資料點數量超過可容納標籤數時，等距挑選索引（含首尾），避免橫軸標籤重疊。
-  function pickLabelIndices(count, maxLabels) {
-    if (count <= 1) return count === 1 ? [0] : [];
-    if (count <= maxLabels) {
-      var all = [];
-      for (var n = 0; n < count; n++) all.push(n);
-      return all;
-    }
-    var indices = [];
-    var step = (count - 1) / (maxLabels - 1);
-    for (var k = 0; k < maxLabels; k++) {
-      var idx = Math.round(k * step);
-      if (indices.indexOf(idx) === -1) indices.push(idx);
-    }
-    return indices;
-  }
 
   function shortDate(dateStr) {
     var parts = String(dateStr).split("-");
@@ -217,6 +220,14 @@
   function renderTrendChart(records) {
     var wrap = document.getElementById("trend-chart");
     wrap.innerHTML = "";
+
+    if (records.length === 0) {
+      var empty = document.createElement("p");
+      empty.className = "empty-state";
+      empty.textContent = "所選月份無每日趨勢資料";
+      wrap.appendChild(empty);
+      return;
+    }
 
     var max = Math.max.apply(null, records.map(function (r) { return r.total; }).concat([1]));
     var plotWidth = TREND_WIDTH - TREND_PADDING_LEFT - TREND_PADDING_RIGHT;
@@ -233,12 +244,13 @@
     svg.setAttribute("role", "img");
     svg.setAttribute("aria-label", "每日議題總數趨勢圖");
 
-    function addText(x, y, text, anchor, extraClass) {
+    function addText(x, y, text, anchor, extraClass, rotateDeg) {
       var el = document.createElementNS(svgNS, "text");
       el.setAttribute("x", x);
       el.setAttribute("y", y);
       el.setAttribute("text-anchor", anchor);
       el.setAttribute("class", "trend-axis-label" + (extraClass ? " " + extraClass : ""));
+      if (rotateDeg) el.setAttribute("transform", "rotate(" + rotateDeg + " " + x + " " + y + ")");
       el.textContent = text;
       svg.appendChild(el);
     }
@@ -257,9 +269,9 @@
       addText(TREND_PADDING_LEFT - 8, y + 3, String(value), "end", "trend-y-label");
     }
 
-    // 橫軸：等距挑選日期標籤（含首尾），避免資料點過多時重疊
-    pickLabelIndices(records.length, TREND_MAX_X_LABELS).forEach(function (i) {
-      addText(xAt(i), TREND_HEIGHT - TREND_PADDING_BOTTOM + 16, shortDate(records[i].date), "middle", "trend-x-label");
+    // 橫軸：每個資料點皆顯示日期標籤（不再限制數量），斜 45 度呈現避免文字彼此重疊
+    records.forEach(function (r, i) {
+      addText(xAt(i), TREND_HEIGHT - TREND_PADDING_BOTTOM + 18, shortDate(r.date), "end", "trend-x-label", -45);
     });
 
     var points = records.map(function (r, i) { return xAt(i) + "," + yAt(r.total); }).join(" ");
@@ -456,8 +468,7 @@
 
   document.addEventListener("DOMContentLoaded", function () {
     populateMonthSelect();
-    renderKpiCards(MONTH_KPI[MONTH_KPI.length - 1]);
-    renderTrendChart(DAILY_KPI);
+    renderStatsTab(MONTH_KPI[MONTH_KPI.length - 1].year_month);
     initIssueFilters();
     renderIssueTable();
 

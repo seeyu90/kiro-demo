@@ -20,8 +20,7 @@ class IssuesController < ApplicationController
     @active_tab = TABS.include?(params[:tab]) ? params[:tab] : DEFAULT_TAB
 
     @month_kpi = MonthKpiBlueprint.render_as_hash(result.month_kpi)
-    @daily_kpi = DailyKpiBlueprint.render_as_hash(result.daily_kpi)
-    @project_breakdown = ProjectBreakdownBlueprint.render_as_hash(result.project_breakdown)
+    all_daily_kpi = DailyKpiBlueprint.render_as_hash(result.daily_kpi)
 
     # 月份選單納入進行中的當月（即使 month_kpi 尚無該月列，因為月結數字要等月底才產生），
     # 但預設選中仍是最新「已結算」月份，確保頁面載入時直接看到有意義的月結數字。
@@ -32,6 +31,14 @@ class IssuesController < ApplicationController
     @selected_month_pending = @selected_month_record.nil? && @selected_month == current_year_month
 
     all_issues = IssueBlueprint.render_as_hash(result.issues)
+
+    # 每日趨勢與依專案分類統計皆依所選月份呈現（使用者反映兩者與月度 KPI 同屬「統計摘要」
+    # 分頁籤，理應一起隨月份切換，而非僅月度 KPI 卡片受影響）；依專案分類以議題的 start_date
+    # （建立日）判斷所屬月份，議題明細本身則不受月份篩選（見需求 8）。
+    @daily_kpi = all_daily_kpi.select { |d| same_month?(d[:date], @selected_month) }
+    month_issues = all_issues.select { |i| same_month?(i[:start_date], @selected_month) }
+    @project_breakdown = compute_project_breakdown(month_issues)
+
     @projects = all_issues.map { |i| i[:project] }.compact.uniq
     @statuses = all_issues.map { |i| i[:status] }.compact.uniq
     @selected_project = params[:project].presence
@@ -63,5 +70,28 @@ class IssuesController < ApplicationController
     issues
       .select { |i| @selected_project.blank? || i[:project] == @selected_project }
       .select { |i| @selected_status.blank? || i[:status] == @selected_status }
+  end
+
+  # 以日期欄位前 7 碼（YYYY-MM）判斷是否屬於指定月份，與 prototype 的 sameMonth() 邏輯一致。
+  def same_month?(date_str, year_month)
+    date_str.is_a?(String) && date_str[0, 7] == year_month
+  end
+
+  # 依 project 分組統計 complaint／testing／other 筆數與 total；邏輯與
+  # Sheets::FetchIssueDashboard#compute_project_breakdown 相同，但這裡對「已依月份篩選的
+  # 議題子集」運算（Actor 版本對全量議題運算，供 API 使用，兩者用途不同，故不共用）。
+  def compute_project_breakdown(issues)
+    grouped = issues.each_with_object({}) do |issue, acc|
+      key = issue[:project].to_s.strip.empty? ? "未分類" : issue[:project]
+      acc[key] ||= { project: key, complaint: 0, testing: 0, other: 0 }
+
+      case issue[:type]
+      when "Complaint" then acc[key][:complaint] += 1
+      when "TestingBug" then acc[key][:testing] += 1
+      else acc[key][:other] += 1
+      end
+    end
+
+    grouped.values.map { |row| row.merge(total: row[:complaint] + row[:testing] + row[:other]) }
   end
 end

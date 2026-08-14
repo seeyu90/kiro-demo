@@ -47,7 +47,7 @@
               <select id="month-select" name="month"></select>
             </div>
           </div>
-          <p class="section-note">月結數字，當月進行中尚未結算；「議題資料」分頁的依專案分類統計與議題明細皆為即時資料，不受此處月份選擇影響</p>
+          <p class="section-note">月度 KPI 為月結數字，當月進行中尚未結算；每日趨勢與依專案分類統計則依此處所選月份即時呈現；「議題資料」分頁的議題明細不受月份篩選影響（顯示全部議題）</p>
           <div id="kpi-cards" class="summary-bar" aria-live="polite"></div>
         </section>
 
@@ -55,14 +55,14 @@
           <h2>每日趨勢</h2>
           <div id="trend-chart" class="trend-chart-wrap"></div>
         </section>
-      </div>
 
-      <div class="tab-panel" id="tab-panel-detail">
         <section class="issue-section">
           <h2>依專案分類</h2>
           <div id="project-breakdown" class="breakdown-wrap" aria-live="polite"></div>
         </section>
+      </div>
 
+      <div class="tab-panel" id="tab-panel-detail">
         <section class="issue-section">
           <div class="section-heading-row">
             <h2>議題明細</h2>

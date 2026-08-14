@@ -39,13 +39,16 @@ JS：
   </div>
 
   <div class="tab-panel" id="tab-panel-stats">
-    <!-- 月度 KPI（含月份選單、section-note）＋ 每日趨勢 -->
+    <!-- 月度 KPI（含月份選單、section-note）＋ 每日趨勢（依月份篩選）＋ 依專案分類（依月份篩選） -->
   </div>
   <div class="tab-panel" id="tab-panel-detail">
-    <!-- 依專案分類 ＋ 議題明細（含專案／狀態篩選） -->
+    <!-- 議題明細（含專案／狀態篩選，不受月份篩選影響） -->
   </div>
 </div>
 ```
+
+（**設計變更紀錄**：「依專案分類」原本歸類在 `tab-panel-detail`；因需求 4a 變更為依月份篩選後，改為
+歸類到 `tab-panel-stats`，與月份選單放在一起，`tab-panel-detail` 現僅保留議題明細。）
 
 CSS 以 `#tab-stats:checked ~ #tab-panel-stats { display: block; }`（`.tab-panel` 預設
 `display: none`）切換顯示；`#tab-stats:checked ~ .tab-buttons label[for="tab-stats"]` 標示當前分頁籤
@@ -63,10 +66,17 @@ initProjectFilter()        │  初始化各區塊控制項（皆讀取模擬資
 initStatusFilter()         │
     │                      │
     ▼                      ▼
-renderKpiCards(month)             ← 需求 2
-renderTrendChart(DAILY_KPI)       ← 需求 3
-renderIssueTable(state)           ← 需求 4，篩選變更時重新渲染
+renderStatsTab(yearMonth)         ← 月份切換時的統一入口，依 yearMonth 篩選後分派至下列三者
+    ├─ renderKpiCards(monthRecord)                          ← 需求 2
+    ├─ renderTrendChart(DAILY_KPI filtered by yearMonth)    ← 需求 3
+    └─ renderProjectBreakdown(ISSUES filtered by start_date) ← 需求 2.4a
+renderIssueTable(state)           ← 需求 4，篩選變更時重新渲染（不受月份篩選影響）
 ```
+
+（**設計變更紀錄**：原設計 `renderKpiCards` 與 `renderTrendChart` 各自獨立呼叫、互不相依，且
+`renderProjectBreakdown` 對全量 `ISSUES` 運算一次即可；因需求 4a／3a.1 變更為依月份篩選後，改為
+統一由 `renderStatsTab(yearMonth)` 依所選月份篩選後的子集分派給三個渲染函式，月份切換時三者一併
+重新渲染。）
 
 ---
 
@@ -119,24 +129,32 @@ var REDMINE_ISSUE_URL_BASE = "https://redmine.amastek.com.tw/issues/";
 
 ### KPI 摘要卡片與依專案分類統計（需求 2）
 
-- `populateMonthSelect()`：讀取 `MONTH_KPI` 產生月份下拉選單，預設選中陣列最後一筆（最新月份）。
+- `populateMonthSelect()`：讀取 `MONTH_KPI` 產生月份下拉選單，預設選中陣列最後一筆（最新月份）；
+  `change` 事件呼叫 `renderStatsTab(select.value)`（見上方「分頁籤結構」章節的流程圖），而非只更新
+  KPI 卡片。
 - `renderKpiCards(monthRecord)`：依卡片渲染 8 個統計值，複用既有 `.stat-item` / `.stat-value` /
-  `.stat-label` CSS class 命名慣例（沿用 `project-progress` 頁面摘要列風格），渲染完成後呼叫
-  `renderProjectBreakdown()`。
-- `computeProjectBreakdown(issues)`：依 `ISSUES` 的 `project` 欄位分組，統計各專案的
-  `complaint`／`testing`／`other` 筆數與 `total`；`renderProjectBreakdown()` 將結果渲染為表格
-  （複用 `buildGenericTable`），取代原本以負責人為主軸的 Top3 排行——理由見需求 2.4：客訴問題影響
-  整個專案（全專案成員共同承擔），測試階段問題則歸屬個別開發者，兩者性質不同，故以「專案」而非
-  「負責人」作為統計分類主軸。
+  `.stat-label` CSS class 命名慣例（沿用 `project-progress` 頁面摘要列風格）。
+- `sameMonth(dateStr, yearMonth)`：共用輔助函式，`dateStr.slice(0, 7) === yearMonth`，供每日趨勢與
+  依專案分類共同使用，判斷資料是否屬於所選月份。
+- `computeProjectBreakdown(monthIssues)`：依已篩選為所選月份子集（`start_date` 落在該月份）的議題
+  之 `project` 欄位分組，統計各專案的 `complaint`／`testing`／`other` 筆數與 `total`；
+  `renderProjectBreakdown(monthIssues)` 將結果渲染為表格（複用 `buildGenericTable`），取代原本以
+  負責人為主軸的 Top3 排行——理由見需求 2.4：客訴問題影響整個專案（全專案成員共同承擔），測試階段
+  問題則歸屬個別開發者，兩者性質不同，故以「專案」而非「負責人」作為統計分類主軸；WHEN 篩選後為空
+  陣列，顯示「所選月份無議題資料」（需求 2.4a）。
 
 ### 每日趨勢圖（需求 3）
 
-- `renderTrendChart(records)`：手刻 SVG 折線圖。
-  - X 軸：日期（`DAILY_KPI` 陣列順序，等距分佈，不需要真實時間比例尺）。
+- `renderTrendChart(records)`：手刻 SVG 折線圖，接收已依所選月份篩選過的 `DAILY_KPI` 子集
+  （需求 3.1a）；WHEN `records` 為空陣列，顯示「所選月份無每日趨勢資料」，不繪製空圖。
+  - X 軸：日期（依篩選後的 `records` 陣列順序，等距分佈，不需要真實時間比例尺）；每一個資料點都
+    渲染一個 `<text>` 標籤（不省略、不限制數量），並以 `transform="rotate(-45 x y)"` 搭配
+    `text-anchor="end"` 呈現，避免資料點密集時標籤互相重疊（需求 3.5）。為容納旋轉後的斜向文字，
+    `TREND_HEIGHT`（220→250）與底部留白 `TREND_PADDING_BOTTOM`（28→55）皆需增加。
   - Y 軸：`total` 欄位數值，依資料最大值等比例縮放高度。
-  - 折線：`<polyline>` 連接各資料點；資料點另加 `<circle>`，`title` 子元素或 `data-*` 屬性搭配
-    `mouseenter`/`touchstart` 事件顯示 tooltip（純 DOM，不需額外函式庫）。
-  - 不需要處理超大量資料點（模擬資料僅 7 筆），無需虛擬捲動或降採樣。
+  - 折線：`<polyline>` 連接各資料點；資料點另加 `<circle>`，`<title>` 子元素顯示瀏覽器原生 tooltip
+    （客訴／測試／其他／總計數值），不需額外實作自訂 tooltip 元件或函式庫（需求 3.3）。
+  - 不需要處理超大量資料點（單月模擬資料僅數筆），無需虛擬捲動或降採樣。
 
 ### Issue 明細清單（需求 4）
 

@@ -265,6 +265,39 @@
       資料且與 prototype 呈現方式一致（比照 `warroom-data-api-real-source` Task 10 驗證方式）
     - _需求：7.1〜7.4 全部_
 
+- [x] 14. 每日趨勢與依專案分類改為依所選月份篩選；依專案分類移回統計摘要分頁籤；橫軸標籤改為全部
+      顯示並旋轉（將 `docs/js/issues.js` prototype 側的同名變更移植到 Rails，見需求 3a.4、4.5、4.6、
+      7a.1 的設計變更紀錄）
+  - [x] 14.1 `IssuesController#build_success` 改為對月份篩選過的議題子集重新計算 `@project_breakdown`
+        （新增 `compute_project_breakdown` private method），`@daily_kpi` 改為對 `all_daily_kpi`
+        依 `date` 欄位篩選所選月份
+    - Actor（`Sheets::FetchIssueDashboard`）與 `GET /api/issue_dashboard` JSON 端點行為不變，僅
+      HTML 頁面（`GET /issues`）的月份篩選邏輯變更
+    - `_project_breakdown.html.erb`／`_trend_chart.html.erb` 空狀態文字改為「所選月份無議題資料」／
+      「所選月份無每日趨勢資料」
+    - _需求：3a.4, 4.5_
+
+  - [x] 14.2 「依專案分類」`<section>` 由 `tab-panel-detail` 移至 `tab-panel-stats`（原 Task 9 置於
+        議題資料分頁籤，此次反轉該決策）；`.section-note` 文字同步更新為「月度 KPI 為月結數字，
+        當月進行中尚未結算；每日趨勢與依專案分類統計則依此處所選月份即時呈現；「議題資料」分頁的
+        議題明細不受月份篩選影響（顯示全部議題）」
+    - _需求：7a.1, 9.3_
+
+  - [x] 14.3 `IssuesHelper`：移除 `TREND_MAX_X_LABELS` 常數與 `trend_chart_label_indices`，
+        `trend_chart_x_labels` 改為回傳全部資料點（不再抽樣）；`TREND_HEIGHT` 220→250、
+        `TREND_PADDING_BOTTOM` 28→55；`_trend_chart.html.erb` 的橫軸 `<text>` 加上
+        `transform="rotate(-45 x y)"` + `text-anchor="end"`
+    - `spec/helpers/issues_helper_spec.rb` 同步更新：移除「超過上限時抽樣」的測試案例，改為驗證
+      「資料點數量不設上限、皆一一對應輸出標籤」
+    - _需求：4.6_
+
+  - [x] 14.4 檢查點 — RSpec 驗證
+    - `spec/requests/issues_spec.rb` 新增／改寫斷言：預設月份（2026-08）依專案分類僅顯示當月
+      `start_date` 符合的議題；切換月份後依專案分類與趨勢圖點數同步改變；無符合議題的月份顯示
+      空狀態；新增 `project_breakdown_section` test helper 避免誤判專案下拉選單／議題明細的
+      同名文字
+    - 30/30（`issues_spec.rb`）通過；全專案回歸 210/210 通過
+
 ---
 
 ## Notes

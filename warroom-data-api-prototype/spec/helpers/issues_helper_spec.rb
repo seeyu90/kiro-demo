@@ -108,7 +108,7 @@ RSpec.describe IssuesHelper, type: :helper do
   end
 
   describe "#trend_chart_x_labels" do
-    it "shows one label per record when count is within TREND_MAX_X_LABELS" do
+    it "shows one label per record" do
       records = [{ date: "2026-08-01" }, { date: "2026-08-02" }, { date: "2026-08-03" }]
 
       labels = helper.trend_chart_x_labels(records)
@@ -116,12 +116,12 @@ RSpec.describe IssuesHelper, type: :helper do
       expect(labels.map { |l| l[:text] }).to eq(["08/01", "08/02", "08/03"])
     end
 
-    it "caps the number of labels at TREND_MAX_X_LABELS when there are more records, including first and last" do
+    it "shows one label per record even when there are many records (no cap)" do
       records = (1..10).map { |d| { date: format("2026-08-%02d", d) } }
 
       labels = helper.trend_chart_x_labels(records)
 
-      expect(labels.size).to eq(IssuesHelper::TREND_MAX_X_LABELS)
+      expect(labels.size).to eq(10)
       expect(labels.first[:text]).to eq("08/01")
       expect(labels.last[:text]).to eq("08/10")
     end
