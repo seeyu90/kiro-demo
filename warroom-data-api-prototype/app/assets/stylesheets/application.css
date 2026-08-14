@@ -391,6 +391,72 @@ body {
   font-size: 0.875rem;
 }
 
+/* ── 306 議題頁面（IssuesController） ── */
+.issue-section {
+  margin-bottom: 2.5rem;
+}
+
+.issue-section h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--color-accent);
+  margin-bottom: 0.75rem;
+}
+
+.attribution-badge {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.attribution-shared     { background: var(--overdue-bg); color: var(--overdue-text); }
+.attribution-individual { background: var(--badge-progress-bg); color: var(--badge-progress-text); }
+.attribution-other       { background: var(--badge-pending-bg); color: var(--badge-pending-text); }
+
+.issue-id-link {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.issue-id-link:hover,
+.issue-id-link:focus {
+  text-decoration: underline;
+}
+
+.trend-chart-wrap {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  padding: 1rem;
+}
+
+.trend-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.trend-line {
+  fill: none;
+  stroke: var(--color-accent);
+  stroke-width: 2;
+}
+
+.trend-point {
+  fill: var(--color-surface);
+  stroke: var(--color-accent);
+  stroke-width: 2;
+  cursor: pointer;
+}
+
+.trend-point:hover,
+.trend-point:focus {
+  fill: var(--color-accent);
+}
+
 /* ── Responsive ── */
 @media (max-width: 768px) {
   .header-top {

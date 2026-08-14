@@ -1,0 +1,94 @@
+<header class="dashboard-header">
+  <div class="header-top">
+    <h1 class="dashboard-title">戰情室 <span>— 306 臭蟲議題</span></h1>
+    <button type="button" id="theme-toggle" class="theme-toggle" aria-label="切換至淺色模式">🌙 深色</button>
+  </div>
+
+  <%= form_with url: "/issues", method: :get, local: true, class: "project-selector" do %>
+    <div class="control-group">
+      <label for="month">月份：</label>
+      <%= select_tag :month, options_for_select(@month_kpi.map { |m| m[:year_month] }, @selected_month) %>
+    </div>
+
+    <div class="control-group">
+      <label for="project">專案：</label>
+      <%= select_tag :project,
+                     options_for_select([["全部專案", ""]] + @projects.map { |p| [p, p] }, @selected_project) %>
+    </div>
+
+    <div class="control-group">
+      <label for="status">狀態：</label>
+      <%= select_tag :status,
+                     options_for_select([["全部狀態", ""]] + @statuses.map { |s| [s, s] }, @selected_status) %>
+    </div>
+
+    <%= submit_tag "套用篩選", class: "apply-filters-btn" %>
+  <% end %>
+</header>
+
+<%= turbo_frame_tag "issue-content" do %>
+  <% if @error.present? %>
+    <div class="error-message">
+      <strong>錯誤：</strong><%= @error %>
+    </div>
+  <% else %>
+    <section class="issue-section">
+      <h2>月度 KPI</h2>
+      <% if @selected_month_record %>
+        <div class="summary-bar">
+          <div class="stat-item">
+            <span class="stat-value"><%= @selected_month_record[:complaint] %></span>
+            <span class="stat-label">客訴</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value"><%= @selected_month_record[:testing] %></span>
+            <span class="stat-label">測試</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value"><%= @selected_month_record[:total_bug] %></span>
+            <span class="stat-label">總Bug</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value"><%= @selected_month_record[:block_rate] %>%</span>
+            <span class="stat-label">攔截率</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value"><%= @selected_month_record[:completed] %></span>
+            <span class="stat-label">完成數</span>
+          </div>
+          <div class="stat-item stat-overdue">
+            <span class="stat-value"><%= @selected_month_record[:unresolved] %></span>
+            <span class="stat-label">未結案</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value"><%= @selected_month_record[:avg_days] %></span>
+            <span class="stat-label">平均天數</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value"><%= @selected_month_record[:sla_rate] %>%</span>
+            <span class="stat-label">SLA達標率</span>
+          </div>
+        </div>
+      <% else %>
+        <p class="empty-state">尚無月度 KPI 資料</p>
+      <% end %>
+    </section>
+
+    <section class="issue-section">
+      <h2>依專案分類</h2>
+      <%= render partial: "project_breakdown", locals: { rows: @project_breakdown } %>
+    </section>
+
+    <section class="issue-section">
+      <h2>每日趨勢</h2>
+      <div class="trend-chart-wrap">
+        <%= render partial: "trend_chart", locals: { daily_kpi: @daily_kpi } %>
+      </div>
+    </section>
+
+    <section class="issue-section">
+      <h2>議題明細</h2>
+      <%= render partial: "issue_list", locals: { issues: @issues } %>
+    </section>
+  <% end %>
+<% end %>

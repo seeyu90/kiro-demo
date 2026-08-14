@@ -1,0 +1,41 @@
+<% if issues.empty? %>
+  <p class="empty-state">目前無符合條件的議題</p>
+<% else %>
+  <table class="project-tasks">
+    <thead>
+      <tr>
+        <th>議題編號</th>
+        <th>專案</th>
+        <th>主旨</th>
+        <th>歸屬類型</th>
+        <th>狀態</th>
+        <th>負責人</th>
+        <th>開始日期</th>
+        <th>到期日期</th>
+        <th>工作天數</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% issues.each do |issue| %>
+        <tr>
+          <td>
+            <%= link_to issue[:issue_id], "https://redmine.amastek.com.tw/issues/#{issue[:issue_id]}",
+                        class: "issue-id-link", target: "_blank", rel: "noopener noreferrer" %>
+          </td>
+          <td><%= issue[:project] %></td>
+          <td><%= issue[:subject] %></td>
+          <td>
+            <span class="attribution-badge <%= attribution_class(issue[:type]) %>">
+              <%= attribution_label(issue[:type]) %>
+            </span>
+          </td>
+          <td><%= issue[:status] %></td>
+          <td><%= issue[:assigned_to].presence || "—" %></td>
+          <td><%= issue[:start_date].presence || "—" %></td>
+          <td><%= issue[:due_date].presence || "—" %></td>
+          <td><%= issue[:work_days].nil? ? "—" : issue[:work_days] %></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+<% end %>

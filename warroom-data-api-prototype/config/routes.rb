@@ -12,6 +12,7 @@ Rails.application.routes.draw do
   # Dashboard routes
   root "dashboard#index"
   get "/dashboard", to: "dashboard#index"
+  get "/issues", to: "issues#index"
 
   # API routes
   namespace :api do

@@ -228,8 +228,11 @@ end
 
 - 篩選邏輯（`project`／`status` query params）在 Controller 完成，Actor 僅負責讀取＋正規化全量資料，
   與 305 的 `warroom-dashboard-ux-enhancements` 需求 10（Controller 層篩選）慣例一致。
-- 月份切換／議題篩選皆透過 Turbo Frame 局部更新對應區塊（`turbo_frame_tag "kpi-cards"`、
-  `turbo_frame_tag "issue-list"`），沿用既有 `dashboard/index.html.erb` 的 Turbo Frame 模式。
+- 月份切換／議題篩選皆透過**單一** `turbo_frame_tag "issue-content"` 局部更新整個動態內容區塊
+  （KPI 卡片＋依專案分類統計＋趨勢圖＋議題明細一起更新），實作階段確認沿用既有
+  `dashboard/index.html.erb`「單一 frame + 表單按鈕送出」的模式即可滿足「不觸發整頁重載」的需求，
+  不需為 KPI 卡片與議題明細各自拆分獨立 frame（原草案設想的多 frame 方案徒增複雜度，且與既有頁面
+  的既定模式不一致）。
 
 ### View 結構（`app/views/issues/index.html.erb`）
 

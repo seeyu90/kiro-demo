@@ -126,42 +126,64 @@
     - 9 examples, 0 failures；全專案回歸 153 examples, 0 failures（實際透過 Rails router／
       middleware stack 發出請求驗證，非僅單元測試）
 
-- [ ] 9. Dashboard 頁面
-  - [ ] 9.1 新增路由 `GET /issues`、`IssuesController#index`
-    - 月份／專案／狀態篩選邏輯於 Controller 層完成
+- [x] 9. Dashboard 頁面
+  - [x] 9.1 新增路由 `GET /issues`、`IssuesController#index`
+    - 月份／專案／狀態篩選邏輯於 Controller 層完成；比照既有 `DashboardController` 的
+      `build_success`／`build_failure` 模式（HTTP 一律 200，失敗時 `@error` 於頁面內顯示，不同於
+      JSON API 走 HTTP 狀態碼分流）
     - _需求：7.1, 8.1, 8.2, 9.1_
 
-  - [ ] 9.2 新增 `app/helpers/issues_helper.rb`：`attribution_label(type)` / `attribution_class(type)`
-    - 邏輯與 prototype 的 `attributionLabel`／`attributionClass` 一致
+  - [x] 9.2 新增 `app/helpers/issues_helper.rb`：`attribution_label(type)` / `attribution_class(type)`
+        / `trend_chart_points` / `trend_chart_polyline`
+    - `attribution_label`／`attribution_class` 邏輯與 prototype 的 `attributionLabel`／
+      `attributionClass` 一致；`trend_chart_points`／`trend_chart_polyline` 為 9.6 的座標計算輔助
     - _需求：5.6_
 
-  - [ ] 9.3 新增 `app/views/issues/index.html.erb`（頁面骨架，3 個區塊）
-    - 對齊 `docs/issues.html` prototype 版面（月度 KPI＋依專案分類統計／每日趨勢／議題明細）
+  - [x] 9.3 新增 `app/views/issues/index.html.erb`（頁面骨架，3 個區塊）
+    - 對齊 `docs/issues.html` prototype 版面（月度 KPI＋依專案分類統計／每日趨勢／議題明細）；單一
+      `turbo_frame_tag "issue-content"` 包住全部動態內容，比照既有 `dashboard/index.html.erb` 的
+      單一 frame 模式（非 design.md 原草案設想的多個獨立 frame——既有慣例已證明單一 frame 搭配
+      「套用篩選」按鈕即可達成局部更新，不需為此新增複雜度）
     - _需求：7.2_
 
-  - [ ] 9.4 新增 `app/views/issues/_issue_list.html.erb`（Turbo Frame 局部）
-    - 專案／狀態篩選變更時局部更新，不觸發整頁重載；無符合條件時顯示提示文字；欄位依序為議題編號／
-      專案／主旨／歸屬類型／狀態／負責人／開始日期／到期日期／工作天數（不含 type／tracker）；
-      「歸屬類型」欄位以 `IssuesHelper#attribution_label`／`#attribution_class` 渲染徽章；「議題編號」
-      渲染為連結至 `https://redmine.amastek.com.tw/issues/{issue_id}`（新分頁開啟）；`Controller#index`
-      未帶 `status` 參數時預設篩選為「新建立」（`params.key?(:status) ? params[:status] : "新建立"`），
+  - [x] 9.4 新增 `app/views/issues/_issue_list.html.erb`
+    - 專案／狀態篩選變更時隨表單送出局部更新（單一 frame 內），不觸發整頁重載；無符合條件時顯示
+      提示文字；欄位依序為議題編號／專案／主旨／歸屬類型／狀態／負責人／開始日期／到期日期／
+      工作天數（不含 type／tracker）；「歸屬類型」欄位以 `IssuesHelper#attribution_label`／
+      `#attribution_class` 渲染徽章；「議題編號」渲染為連結至
+      `https://redmine.amastek.com.tw/issues/{issue_id}`（新分頁開啟）；`Controller#index` 未帶
+      `status` 參數時預設篩選為「新建立」（`params.key?(:status) ? params[:status] : "新建立"`），
       非全部狀態，與 prototype 一致
     - _需求：5.6, 5.7, 5.8, 8.2, 8.3, 8.4_
 
-  - [ ] 9.5 KPI 卡片區塊 Turbo Frame 局部更新
-    - 月份切換時局部更新 KPI 卡片；依專案分類統計（`project_breakdown`）不隨月份切換更新
+  - [x] 9.5 KPI 卡片區塊
+    - 月份切換時（表單送出）更新 KPI 卡片；依專案分類統計（`project_breakdown`）恆為全部議題的
+      分組統計，不受 `month` 篩選影響，天然滿足「不隨月份切換更新」
     - _需求：3a.2, 9.2_
 
-  - [ ] 9.6 每日趨勢圖：伺服器端 ERB 產生 SVG
-    - 邏輯移植自 `docs/js/issues.js` 的 `renderTrendChart`（X/Y 軸等比例縮放邏輯相同）
+  - [x] 9.6 每日趨勢圖：新增 `app/views/issues/_trend_chart.html.erb`，伺服器端 ERB 產生 SVG
+    - 邏輯移植自 `docs/js/issues.js` 的 `renderTrendChart`（X/Y 軸等比例縮放邏輯相同，由
+      `IssuesHelper#trend_chart_points` 計算座標）；空清單、單筆資料、全零總計三種邊界情況皆已
+      測試（避免除以零）
     - _需求：7.2_
 
-  - [ ] 9.7 依專案分類統計表：`<table>` 渲染 `@project_breakdown`
+  - [x] 9.7 依專案分類統計表：新增 `app/views/issues/_project_breakdown.html.erb`，`<table>` 渲染
+        `@project_breakdown`
     - 取代 prototype 已移除的 Top3 排行
     - _需求：3a.1, 7.2_
 
-  - [ ] 9.8 樣式：`.issue-id-link`（沿用 prototype 的 CSS class，無底線、hover/focus 才顯示底線）
+  - [x] 9.8 樣式：`.issue-id-link`／`.attribution-badge`（`-shared`／`-individual`／`-other`）／
+        `.trend-chart-wrap`／`.trend-svg`／`.trend-line`／`.trend-point`／`.issue-section`
+    - 沿用既有 `application.css` 主題變數（`--color-accent`／`--overdue-bg`／`--badge-*` 等），
+      深色／淺色主題皆正確呈現，無需另寫斷點（表格響應式已由既有 `.project-tasks` 規則涵蓋）
     - _需求：5.8_
+
+  - [x] 9.9 測試：`spec/helpers/issues_helper_spec.rb`（12 examples）、
+        `spec/requests/issues_spec.rb`（16 examples，對應原 Task 12）
+    - Request spec 涵蓋：預設篩選（月份最新、狀態「新建立」）、月份／專案／狀態切換、清空狀態篩選、
+      無符合結果時的提示文字、`project_breakdown` 不受月份篩選影響、Redmine 連結正確性、404 錯誤時
+      頁面內顯示錯誤訊息而非拋出例外
+    - 全專案回歸 181 examples, 0 failures
 
 - [ ] 10. Rails 入口頁（對齊 docs/index.html 模式）
   - [ ] 10.1 新增 `app/controllers/home_controller.rb`（`GET /`，純靜態，不讀取任何資料來源）
@@ -184,8 +206,8 @@
       月份切換、專案／狀態篩選、Turbo Frame 局部更新（不整頁重載）、空結果提示、議題編號連結正確
       導向 Redmine 且新分頁開啟、響應式版面（沿用既有 CSS 斷點）
 
-- [ ] 12. Request spec：`spec/requests/issues_spec.rb`
-    - 驗證 `GET /issues` 帶各種 query params 組合的回應內容
+- [x] 12. Request spec：`spec/requests/issues_spec.rb`
+    - 已於 Task 9.9 一併完成（實作與測試同步進行，避免無測試覆蓋的中間狀態）；16 examples, 0 failures
     - _需求：8.1〜8.4, 9.1〜9.2_
 
 - [ ] 13. 端對端驗證
