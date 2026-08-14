@@ -1,5 +1,8 @@
 <header class="dashboard-header">
-  <h1 class="dashboard-title">戰情室 <span>— 專案進度</span></h1>
+  <div class="header-top">
+    <h1 class="dashboard-title">戰情室 <span>— 專案進度</span></h1>
+    <button type="button" id="theme-toggle" class="theme-toggle" aria-label="切換至淺色模式">🌙 深色</button>
+  </div>
 
   <%= form_with url: "/dashboard", method: :get, local: true, class: "project-selector" do %>
     <div class="control-group">
