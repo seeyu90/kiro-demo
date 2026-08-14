@@ -6,7 +6,7 @@ warroom-sheets-fetch-performance 是 [warroom-data-api-real-source](../warroom-d
 的延續。背景：即時向 Google Sheets 5 個類型分頁分別發起 API 請求，每次 Dashboard／API 請求都重打
 一輪，速度慢；但實際資料（305 進度表）並非快速變動的內容，不需要每次請求都即時抓取最新值。
 
-本階段範圍：為 `SheetsApiClient` 加入短期快取以降低重複請求造成的延遲，並補齊快取生效後使用者
+本階段範圍：為 `ProjectProgressSheetsClient` 加入短期快取以降低重複請求造成的延遲，並補齊快取生效後使用者
 需要的體驗調整（篩選不寫入網址、載入狀態回饋、資料時效提示、手動重新整理）。
 
 **不納入範圍**：資料庫或 Redis 等外部快取後端（沿用 Rails.cache 既有設定，環境各自的 cache_store
@@ -19,12 +19,12 @@ warroom-sheets-fetch-performance 是 [warroom-data-api-real-source](../warroom-d
 
 ## 詞彙表
 
-- **SheetsClient**：`SheetsApiClient`，封裝 Google Sheets API 呼叫，見
+- **SheetsClient**：`ProjectProgressSheetsClient`，封裝 Google Sheets API 呼叫，見
   [warroom-data-api-real-source](../warroom-data-api-real-source/requirements.md)。
 - **Dashboard_Page**：`GET /dashboard`，`app/views/dashboard/index.html.erb`。
 - **篩選表單**：Dashboard 頁面上的專案／任務類型／範圍／只顯示未完成篩選控制項與送出按鈕。
 - **project-content frame**：Dashboard 頁面上包裹摘要列與任務清單的 Turbo Frame（`id="project-content"`）。
-- **快取存活時間（TTL）**：`SheetsApiClient::CACHE_EXPIRY`，目前為 5 分鐘。
+- **快取存活時間（TTL）**：`ProjectProgressSheetsClient::CACHE_EXPIRY`，目前為 5 分鐘。
 
 ---
 
@@ -48,7 +48,7 @@ warroom-sheets-fetch-performance 是 [warroom-data-api-real-source](../warroom-d
 5. THE 快取行為 SHALL 使用 Rails 各環境既有的 `Rails.cache` 設定（例如測試環境的 `:null_store`
    會使快取實質停用），不強制指定快取後端。
 
-**狀態**：已實作（見 `app/clients/sheets_api_client.rb` 的 `CACHE_KEY` / `CACHE_EXPIRY`）。
+**狀態**：已實作（見 `app/clients/project_progress_sheets_client.rb` 的 `CACHE_KEY` / `CACHE_EXPIRY`）。
 
 ---
 
@@ -125,7 +125,7 @@ Google Sheet 上改完東西後能立刻在 Dashboard 上看到，而不用等�
 **使用者故事：** 身為戰情室使用者，我希望 306 議題 Dashboard 也不用每次都等即時 API，以便跟
 305 進度 Dashboard 有一致的載入速度。
 
-**背景**：`IssueSheetsClient`（`app/clients/issue_sheets_client.rb`）與 `SheetsApiClient` 是各自
+**背景**：`IssueSheetsClient`（`app/clients/issue_sheets_client.rb`）與 `ProjectProgressSheetsClient` 是各自
 獨立的 Google Sheets 讀取層，`fetch_month_kpi_rows` / `fetch_daily_kpi_rows` / `fetch_issue_rows`
 三個方法目前皆未快取，`/issues` 與 `/api/issue_dashboard` 每次請求都各自即時重打對應分頁的 API。
 
@@ -133,7 +133,7 @@ Google Sheet 上改完東西後能立刻在 Dashboard 上看到，而不用等�
 
 1. THE **IssueSheetsClient** SHALL 將 `fetch_month_kpi_rows`、`fetch_daily_kpi_rows`、
    `fetch_issue_rows` 三個方法的成功結果分別快取，快取鍵需彼此獨立（不可共用同一把鍵導致互相
-   覆蓋），TTL 與需求 1 的 `SheetsApiClient` 一致，為 5 分鐘。
+   覆蓋），TTL 與需求 1 的 `ProjectProgressSheetsClient` 一致，為 5 分鐘。
 2. WHEN 對應快取存在且未過期，THE **IssueSheetsClient** SHALL 直接回傳快取內容，不對 Google
    Sheets API 發起請求。
 3. IF 任一方法讀取過程拋出例外，THEN THE **IssueSheetsClient** SHALL 不將本次結果寫入該方法對應

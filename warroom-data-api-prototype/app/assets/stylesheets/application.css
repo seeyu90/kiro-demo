@@ -285,8 +285,29 @@ body {
   opacity: 0.6;
 }
 
-/* Turbo 在 frame 送出請求期間會自動幫 <turbo-frame> 加上 busy 屬性 */
-turbo-frame#project-content[busy] {
+/* 「重新整理資料」為次要動作，用外框樣式與主要的「套用篩選」區隔 */
+.apply-filters-btn.refresh-btn {
+  background: transparent;
+  color: var(--color-text);
+  border: 1px solid var(--color-border-hover);
+}
+
+.apply-filters-btn.refresh-btn:hover,
+.apply-filters-btn.refresh-btn:focus {
+  background: var(--color-surface);
+  border-color: var(--color-accent);
+  outline: none;
+}
+
+.freshness-label {
+  font-size: 0.8rem;
+  color: var(--color-text-faint);
+  margin-bottom: 0.75rem;
+}
+
+/* Turbo 在 frame 送出請求期間會自動幫 <turbo-frame> 加上 busy 屬性；
+   通用選擇器讓 Dashboard（project-content）與 306 議題頁（issue-content）都套用同一效果 */
+turbo-frame[busy] {
   opacity: 0.5;
   pointer-events: none;
   transition: opacity 0.15s ease;

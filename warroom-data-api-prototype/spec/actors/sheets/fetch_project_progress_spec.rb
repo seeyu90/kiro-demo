@@ -128,8 +128,8 @@ RSpec.describe Sheets::FetchProjectProgress do
     subject(:result) { described_class.result }
 
     before do
-      # Stub SheetsApiClient.fetch_rows for all tests in this describe block
-      allow(SheetsApiClient).to receive(:fetch_rows).and_return(default_rows)
+      # Stub ProjectProgressSheetsClient.fetch_rows for all tests in this describe block
+      allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_return(default_rows)
     end
 
     let(:default_rows) do
@@ -161,7 +161,7 @@ RSpec.describe Sheets::FetchProjectProgress do
       end
     end
 
-    # Test 1b: SheetsApiClient 已依 warroom-data-api-real-source 的約定，於每列附加第 8 欄
+    # Test 1b: ProjectProgressSheetsClient 已依 warroom-data-api-real-source 的約定，於每列附加第 8 欄
     # 類型分頁名稱 → 驗證 Actor 正確將其解析為 task_type
     context "with rows tagged with a task_type (8th column)" do
       let(:tagged_rows) do
@@ -172,7 +172,7 @@ RSpec.describe Sheets::FetchProjectProgress do
         ]
       end
 
-      before { allow(SheetsApiClient).to receive(:fetch_rows).and_return(tagged_rows) }
+      before { allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_return(tagged_rows) }
 
       it "extracts the 8th column as task_type" do
         tasks = result.grouped_data["Project A"]
@@ -207,7 +207,7 @@ RSpec.describe Sheets::FetchProjectProgress do
         ]
       end
 
-      before { allow(SheetsApiClient).to receive(:fetch_rows).and_return(rows_with_empty) }
+      before { allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_return(rows_with_empty) }
 
       it "skips empty rows and does not include them in output" do
         expect(result).to be_success
@@ -227,7 +227,7 @@ RSpec.describe Sheets::FetchProjectProgress do
         ]
       end
 
-      before { allow(SheetsApiClient).to receive(:fetch_rows).and_return(short_rows) }
+      before { allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_return(short_rows) }
 
       it "fills missing columns with nil and includes all 8 keys" do
         expect(result).to be_success
@@ -263,7 +263,7 @@ RSpec.describe Sheets::FetchProjectProgress do
         ]
       end
 
-      before { allow(SheetsApiClient).to receive(:fetch_rows).and_return(mixed_date_rows) }
+      before { allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_return(mixed_date_rows) }
 
       it "normalizes all date formats to YYYY-MM-DD" do
         expect(result).to be_success
@@ -289,7 +289,7 @@ RSpec.describe Sheets::FetchProjectProgress do
         ]
       end
 
-      before { allow(SheetsApiClient).to receive(:fetch_rows).and_return(empty_date_rows) }
+      before { allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_return(empty_date_rows) }
 
       it "returns nil for empty date fields" do
         expect(result).to be_success
@@ -310,7 +310,7 @@ RSpec.describe Sheets::FetchProjectProgress do
         ]
       end
 
-      before { allow(SheetsApiClient).to receive(:fetch_rows).and_return(negative_delay_rows) }
+      before { allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_return(negative_delay_rows) }
 
       it "converts negative delay_days string to Integer" do
         expect(result).to be_success
@@ -329,7 +329,7 @@ RSpec.describe Sheets::FetchProjectProgress do
         ]
       end
 
-      before { allow(SheetsApiClient).to receive(:fetch_rows).and_return(tbd_delay_rows) }
+      before { allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_return(tbd_delay_rows) }
 
       it "keeps non-numeric delay_days as original string" do
         expect(result).to be_success
@@ -349,7 +349,7 @@ RSpec.describe Sheets::FetchProjectProgress do
         ]
       end
 
-      before { allow(SheetsApiClient).to receive(:fetch_rows).and_return(mixed_validity_rows) }
+      before { allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_return(mixed_validity_rows) }
 
       it "skips the invalid row and returns success with the remaining valid rows" do
         expect(result).to be_success
@@ -362,7 +362,7 @@ RSpec.describe Sheets::FetchProjectProgress do
       before do
         error = Google::Apis::ClientError.new("Not Found")
         allow(error).to receive(:status_code).and_return(404)
-        allow(SheetsApiClient).to receive(:fetch_rows).and_raise(error)
+        allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_raise(error)
       end
 
       it "returns failure_code: :sheet_not_found" do
@@ -377,7 +377,7 @@ RSpec.describe Sheets::FetchProjectProgress do
       before do
         error = Google::Apis::ClientError.new("Forbidden")
         allow(error).to receive(:status_code).and_return(403)
-        allow(SheetsApiClient).to receive(:fetch_rows).and_raise(error)
+        allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_raise(error)
       end
 
       it "returns failure_code: :access_denied" do
@@ -390,7 +390,7 @@ RSpec.describe Sheets::FetchProjectProgress do
     # Test 9c: stub 拋出 StandardError（模擬憑證錯誤）→ 驗證 failure_code: :internal_error
     context "with StandardError (credential error)" do
       before do
-        allow(SheetsApiClient).to receive(:fetch_rows).and_raise(StandardError.new("Credentials not found"))
+        allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_raise(StandardError.new("Credentials not found"))
       end
 
       it "returns failure_code: :internal_error" do
@@ -403,7 +403,7 @@ RSpec.describe Sheets::FetchProjectProgress do
     # Test 9d: stub 拋出 Google::Apis::RateLimitError → 驗證 failure_code: :internal_error
     context "with Google::Apis::RateLimitError" do
       before do
-        allow(SheetsApiClient).to receive(:fetch_rows).and_raise(Google::Apis::RateLimitError.new("Rate limit exceeded"))
+        allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_raise(Google::Apis::RateLimitError.new("Rate limit exceeded"))
       end
 
       it "returns failure_code: :internal_error" do
@@ -415,7 +415,7 @@ RSpec.describe Sheets::FetchProjectProgress do
     # Test 10: 呼叫 Actor 時傳入 simulate_error query parameter → 驗證被忽略
     context "with simulate_error parameter (should be ignored)" do
       # Note: The current Actor implementation does NOT accept simulate_error parameter
-      # The Actor always calls SheetsApiClient.fetch_rows and ignores any simulate_error input
+      # The Actor always calls ProjectProgressSheetsClient.fetch_rows and ignores any simulate_error input
       # This test verifies that simulate_error parameter (if passed) is simply ignored
 
       let(:valid_rows) do
@@ -425,15 +425,40 @@ RSpec.describe Sheets::FetchProjectProgress do
         ]
       end
 
-      before { allow(SheetsApiClient).to receive(:fetch_rows).and_return(valid_rows) }
+      before { allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_return(valid_rows) }
 
       it "ignores simulate_error and returns success when data is valid" do
         # Even if simulate_error is passed, it should be ignored per task 7.1
-        # The Actor always uses real SheetsApiClient.fetch_rows
+        # The Actor always uses real ProjectProgressSheetsClient.fetch_rows
         result = described_class.result(simulate_error: :invalid_data_format)
 
         expect(result).to be_success
         expect(result.grouped_data).to be_present
+      end
+    end
+
+    # 任務 4：fetched_at 輸出直接反映 ProjectProgressSheetsClient 快取層記錄的抓取時間
+    context "fetched_at output" do
+      it "reflects ProjectProgressSheetsClient.fetched_at after a successful call" do
+        fixed_time = Time.zone.parse("2026-03-01 09:00:00")
+        allow(ProjectProgressSheetsClient).to receive(:fetched_at).and_return(fixed_time)
+
+        expect(result.fetched_at).to eq(fixed_time)
+      end
+    end
+
+    # 任務 5：force input 透傳給 ProjectProgressSheetsClient.fetch_rows，供「重新整理資料」使用
+    context "force input" do
+      it "defaults to false when not given" do
+        expect(ProjectProgressSheetsClient).to receive(:fetch_rows).with(force: false).and_return(default_rows)
+
+        result
+      end
+
+      it "passes force: true through to ProjectProgressSheetsClient.fetch_rows when requested" do
+        expect(ProjectProgressSheetsClient).to receive(:fetch_rows).with(force: true).and_return(default_rows)
+
+        described_class.result(force: true)
       end
     end
   end

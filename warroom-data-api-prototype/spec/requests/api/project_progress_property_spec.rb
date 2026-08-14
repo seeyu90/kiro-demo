@@ -1,7 +1,7 @@
 require "rails_helper"
 
 # Property 9（需求 4.1、4.2、4.3、4.4、4.5）：錯誤回應格式一致性
-# 對 SheetsApiClient.fetch_rows 拋出的各種例外情境，API 回應 JSON body 必須包含 error.code 與 error.message 兩個鍵
+# 對 ProjectProgressSheetsClient.fetch_rows 拋出的各種例外情境，API 回應 JSON body 必須包含 error.code 與 error.message 兩個鍵
 RSpec.describe "Api::ProjectProgress error format", type: :request do
   [
     { description: "Google::Apis::ClientError (404)", error: Google::Apis::ClientError.new("Not Found", status_code: 404) },
@@ -10,7 +10,7 @@ RSpec.describe "Api::ProjectProgress error format", type: :request do
   ].each do |example_case|
     context "with #{example_case[:description]}" do
       before do
-        allow(SheetsApiClient).to receive(:fetch_rows).and_raise(example_case[:error])
+        allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_raise(example_case[:error])
         get "/api/project_progress"
       end
 

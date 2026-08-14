@@ -12,7 +12,7 @@
 
 ## Tasks
 
-- [x] 1. `SheetsApiClient` 加入快取
+- [x] 1. `ProjectProgressSheetsClient` 加入快取
   - [x] 1.1 `fetch_rows` 包一層 `Rails.cache.fetch`
     - 新增 `CACHE_KEY`（含 `SPREADSHEET_ID`）、`CACHE_EXPIRY`（5 分鐘）常數
     - 原本的 API 呼叫邏輯搬到私有方法 `fetch_rows_from_api`，由 `Rails.cache.fetch` 的區塊呼叫
@@ -47,42 +47,60 @@
       `turbo:submit-start` / `turbo:submit-end` 事件與 `[busy]` 屬性機制推導，建議下次有瀏覽器
       可用時補做一次手動點擊確認
 
-- [ ] 4. 資料時效提示（選用）
-  - [ ] 4.1 `SheetsApiClient` 暴露快取寫入時間
-    - `Rails.cache.fetch` 改為額外記錄一個 `#{CACHE_KEY}/fetched_at` 時間戳記（或改存
-      `{ rows:, fetched_at: }` 結構），供 Controller 取用
+- [x] 4. 資料時效提示（選用）
+  - [x] 4.1 `ProjectProgressSheetsClient` 暴露快取寫入時間
+    - 新增 `FETCHED_AT_CACHE_KEY`，在 `Rails.cache.fetch` 區塊內（即快取實際被寫入的當下）
+      額外 `Rails.cache.write` 一份 `Time.current`，與主快取共用 TTL、一起過期
+    - 新增 `self.fetched_at`，回傳 `Rails.cache.read(FETCHED_AT_CACHE_KEY)`（尚無快取時為 nil）
     - _需求：4.3_
 
-  - [ ] 4.2 `DashboardController` 與 View 顯示時效文字
-    - `Sheets::FetchProjectProgress` 或 `DashboardController` 取得 `fetched_at`，換算成
-      「X 分鐘前」／「剛剛更新」文字，傳入 View
-    - `index.html.erb` 於摘要列附近顯示該文字
+  - [x] 4.2 `DashboardController` 與 View 顯示時效文字
+    - Actor 新增 `output :fetched_at`，`call` 內設為 `ProjectProgressSheetsClient.fetched_at`
+    - `DashboardController#freshness_label`：elapsed < 10 秒顯示「資料剛剛更新」，否則顯示
+      「資料更新於 X 分鐘前」
+    - `index.html.erb` 於摘要列上方顯示 `@freshness_label`（`.freshness-label`）
     - _需求：4.1, 4.2_
 
-  - [ ] 4.3 對應測試更新
-    - `spec/clients/sheets_api_client_spec.rb`：驗證快取命中／未命中時 `fetched_at` 行為
-    - `spec/requests/dashboard_spec.rb`：驗證頁面包含時效文字
+  - [x] 4.3 對應測試更新
+    - `spec/clients/project_progress_sheets_client_spec.rb`：`.fetched_at` 未快取時為 nil；換成真實
+      `MemoryStore` 搭配 `travel_to` 驗證確實記錄抓取時間
+    - `spec/requests/dashboard_spec.rb`：`fetched_at` 有值時顯示 `freshness-label`、無值
+      （測試環境 `:null_store`）時不顯示
     - _需求：4（測試涵蓋）_
 
-- [ ] 5. 手動重新整理資料（選用，依賴任務 4 的 `fetched_at` 機制較完整，但可獨立實作）
-  - [ ] 5.1 `SheetsApiClient` 支援略過快取
-    - `fetch_rows` 新增可選參數（例如 `force: false`），為 `true` 時略過
-      `Rails.cache.fetch` 直接呼叫 `fetch_rows_from_api` 並覆寫快取
+- [x] 5. 手動重新整理資料（選用，依賴任務 4 的 `fetched_at` 機制較完整，但可獨立實作）
+  - [x] 5.1 `ProjectProgressSheetsClient` 支援略過快取
+    - `fetch_rows` 新增 `force: false` 參數，透傳給 `Rails.cache.fetch(..., force: force)`
+      （Rails 內建語意：force 只影響「是否讀取既有快取」，block 拋例外時不寫入，不會清掉舊值）
     - _需求：5.2_
 
-  - [ ] 5.2 View／Controller 新增「重新整理資料」按鈕
-    - Dashboard 頁面新增按鈕，送出時帶一個參數（例如 `refresh=1`）觸發 `force: true`
-    - 沿用需求 3 的載入狀態呈現；失敗時沿用既有錯誤訊息呈現，不清除既有快取內容
+  - [x] 5.2 View／Controller 新增「重新整理資料」按鈕
+    - Actor 新增 `input :force, default: false`，`call` 呼叫
+      `ProjectProgressSheetsClient.fetch_rows(force: force)`
+    - `DashboardController#index`：`Sheets::FetchProjectProgress.result(force: params[:refresh] == "1")`
+    - `index.html.erb`：既有篩選表單內新增第二個 `submit_tag "重新整理資料", name: "refresh", value: "1"`
+      （沿用同一表單，瀏覽器原生行為只會送出被點擊的那個 submit 按鈕的 name/value，不用開新表單）
+    - `application.html.erb` 的載入狀態腳本改為 `turbo:submit-start` 讀取 `event.detail.formSubmission.submitter`，
+      只把「實際被點擊」的按鈕文字換成「套用中…」，同表單內其他按鈕僅停用
     - _需求：5.1, 5.3, 5.4_
 
-  - [ ] 5.3 對應測試更新
-    - `spec/clients/sheets_api_client_spec.rb`：`force: true` 略過快取的案例
-    - `spec/requests/dashboard_spec.rb`：`refresh=1` 觸發即時讀取的案例
+  - [x] 5.3 對應測試更新
+    - `spec/clients/project_progress_sheets_client_spec.rb`：驗證 `force: true` 會透傳給 `Rails.cache.fetch`
+    - `spec/actors/sheets/fetch_project_progress_spec.rb`：驗證 `force` input 預設 `false`、
+      會透傳給 `ProjectProgressSheetsClient.fetch_rows`；驗證 `fetched_at` output 反映
+      `ProjectProgressSheetsClient.fetched_at`
+    - `spec/requests/dashboard_spec.rb`：`refresh=1` 觸發 `force: true`、一般請求為
+      `force: false`、頁面含「重新整理資料」按鈕
     - _需求：5（測試涵蓋）_
 
-- [ ] 6. 最終檢查點 — 全面驗證
-  - `bundle exec rspec` 全數通過
-  - 瀏覽器手動驗證：篩選送出網址不變、載入狀態正確顯示、（若做了 4/5）時效提示與手動刷新皆正確
+- [x] 6. 最終檢查點 — 全面驗證
+  - `bundle exec rspec` 235/235 全數通過
+  - 無法解密本機憑證（沙盒環境無 `master.key`），改用 `ActionDispatch::Integration::Session`
+    + stub `ProjectProgressSheetsClient` 直接渲染成功路徑，確認：`freshness-label` 依 `fetched_at` 有無
+    正確顯示／隱藏、「重新整理資料」按鈕存在且 `value="1"`
+  - 已知限制：全程未透過瀏覽器實機點擊驗證（Chrome 工具本次連線失敗），視覺效果（按鈕停用、
+    frame 變半透明、文字切換）依據既有已驗證過的 Turbo 事件機制與 CSS 選擇器推導，建議之後有
+    瀏覽器可用、且有真實憑證時補做一次端對端手動驗證
 
 - [x] 7. `IssueSheetsClient` 加入快取
   - [x] 7.1 三個 `fetch_*_rows` 方法各自包一層 `Rails.cache.fetch`
@@ -121,9 +139,7 @@
 
 ## Notes
 
-- 任務 1、2、3、7、8 已在本分支（`claude/warroom-dashboards-fetch-ux`）實作完成；任務 4、5
-  （選用）尚未執行
-- 任務 4、5 標記為選用，可視時間與優先順序決定是否納入本輪
+- 全部任務（1–8）已在本分支（`claude/warroom-dashboards-fetch-ux`）實作完成
 - 任務 7、8 是把任務 1、2、3 的做法比照套用到 306 議題 Dashboard（`/issues`），詳見
   requirements.md 需求 6、7
 - 依 karpathy-guidelines：每項工作開始前先確認可驗證標準，完成後才勾選

@@ -84,25 +84,34 @@
       (function () {
         "use strict";
         // 篩選表單只更新對應的 Turbo Frame（見 dashboard/index.html.erb、issues/index.html.erb，
-        // 後者一個頁面有兩個獨立表單），送出期間讓各自的「套用篩選」按鈕停用並改變文字，避免
-        // 使用者以為沒反應而重複點擊。
+        // 後者一個頁面有兩個獨立表單；Dashboard 的表單則有兩個送出按鈕：套用篩選／重新整理資料），
+        // 送出期間停用該表單內所有送出按鈕、把「實際被點擊的那個」文字改成載入中提示，完成後
+        // 全部恢復，避免使用者以為沒反應而重複點擊。
         var BUSY_LABEL = "套用中…";
 
         document.addEventListener("DOMContentLoaded", function () {
           document.querySelectorAll(".project-selector").forEach(function (form) {
-            var submitBtn = form.querySelector(".apply-filters-btn");
-            if (!submitBtn) return;
+            var buttons = form.querySelectorAll(".apply-filters-btn");
+            if (!buttons.length) return;
 
-            var defaultLabel = submitBtn.textContent;
+            var defaultLabels = new Map();
+            buttons.forEach(function (btn) { defaultLabels.set(btn, btn.textContent); });
 
-            form.addEventListener("turbo:submit-start", function () {
-              submitBtn.disabled = true;
-              submitBtn.textContent = BUSY_LABEL;
+            form.addEventListener("turbo:submit-start", function (event) {
+              var submission = event.detail && event.detail.formSubmission;
+              var submitter = submission && submission.submitter;
+
+              buttons.forEach(function (btn) {
+                btn.disabled = true;
+                if (btn === submitter) btn.textContent = BUSY_LABEL;
+              });
             });
 
             form.addEventListener("turbo:submit-end", function () {
-              submitBtn.disabled = false;
-              submitBtn.textContent = defaultLabel;
+              buttons.forEach(function (btn) {
+                btn.disabled = false;
+                btn.textContent = defaultLabels.get(btn);
+              });
             });
           });
         });

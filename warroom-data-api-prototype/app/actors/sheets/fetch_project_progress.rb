@@ -2,9 +2,11 @@
 
 module Sheets
   class FetchProjectProgress < ApplicationActor
+    input :force, default: false
     output :grouped_data
     output :failure_code
     output :message
+    output :fetched_at
 
     COLUMN_KEYS = %i[
       project_name task_name status owner
@@ -14,11 +16,12 @@ module Sheets
     REQUIRED_KEYS = %i[project_name task_name status owner].freeze
 
     def call
-      rows = SheetsApiClient.fetch_rows
+      rows = ProjectProgressSheetsClient.fetch_rows(force: force)
       records = parse_rows(rows)
       normalized = records.map { |record| normalize_record(record) }
       valid_records = reject_invalid_records(normalized)
       self.grouped_data = group_by_project(valid_records)
+      self.fetched_at = ProjectProgressSheetsClient.fetched_at
     rescue Google::Apis::ClientError => e
       if e.status_code == 404 || e.message.to_s.include?("Unable to parse range")
         fail!(failure_code: :sheet_not_found, message: "找不到指定分頁或試算表：#{e.message}")

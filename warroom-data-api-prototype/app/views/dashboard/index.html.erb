@@ -42,6 +42,10 @@
     </label>
 
     <%= submit_tag "套用篩選", class: "apply-filters-btn" %>
+    <%# name="refresh" 讓瀏覽器只在這個按鈕被點擊時才送出 refresh=1（一般表單只送出被點擊的
+        submit 按鈕的 name/value），藉此重用同一個表單、同一套 Turbo Frame／載入狀態行為，
+        不需要另外一個獨立表單。 %>
+    <%= submit_tag "重新整理資料", name: "refresh", value: "1", class: "apply-filters-btn refresh-btn" %>
   <% end %>
 </header>
 
@@ -51,6 +55,10 @@
       <strong>錯誤：</strong><%= @error %>
     </div>
   <% else %>
+    <% if @freshness_label.present? %>
+      <p class="freshness-label"><%= @freshness_label %></p>
+    <% end %>
+
     <div class="summary-bar">
       <div class="stat-item">
         <span class="stat-value"><%= @summary[:total] %></span>

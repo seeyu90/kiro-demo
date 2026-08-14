@@ -2,7 +2,9 @@
 
 require "rails_helper"
 
-RSpec.describe SheetsApiClient do
+RSpec.describe ProjectProgressSheetsClient do
+  include ActiveSupport::Testing::TimeHelpers
+
   let(:header_row) { ["專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延誤"] }
   let(:fake_creds_json) { '{"type":"service_account","project_id":"fake"}' }
 
@@ -176,6 +178,38 @@ RSpec.describe SheetsApiClient do
       it "re-raises the ClientError without catching it" do
         expect { described_class.fetch_rows }.to raise_error(Google::Apis::ClientError)
       end
+    end
+  end
+
+  describe ".fetched_at" do
+    it "returns nil when nothing has ever been cached" do
+      expect(described_class.fetched_at).to be_nil
+    end
+
+    it "records the time of the underlying API fetch" do
+      # 測試環境的 cache_store 是 :null_store（快取實質停用），無法驗證真的「命中快取」，
+      # 這裡換成真實的 MemoryStore，只為了確認 fetched_at 真的會被寫入並可讀回。
+      stub_credentials
+      stub_service_for(all_sheets_rows(header_only: true))
+      allow(Rails).to receive(:cache).and_return(ActiveSupport::Cache::MemoryStore.new)
+
+      travel_to Time.zone.parse("2026-03-01 09:00:00") do
+        described_class.fetch_rows
+        expect(described_class.fetched_at).to eq(Time.zone.parse("2026-03-01 09:00:00"))
+      end
+    end
+  end
+
+  describe ".fetch_rows with force: true" do
+    it "passes force: true through to Rails.cache.fetch, bypassing any existing cache entry" do
+      stub_credentials
+      stub_service_for(all_sheets_rows(header_only: true))
+
+      expect(Rails.cache).to receive(:fetch)
+        .with(described_class::CACHE_KEY, hash_including(force: true))
+        .and_call_original
+
+      described_class.fetch_rows(force: true)
     end
   end
 end

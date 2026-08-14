@@ -23,7 +23,7 @@ inclusion: always
 - **Actor**（`app/actors/`，依領域分目錄如 `app/actors/sheets/`）：遵循 `service_actor` gem 慣例，
   以 `call` 方法作為唯一執行入口，繼承 `ApplicationActor`；封裝單一商業邏輯（讀取、正規化、驗證、
   分組），透過 `output :xxx` 宣告輸出欄位。
-- **Client**（`app/clients/`）：封裝單一外部服務的 API 呼叫（例如 `SheetsApiClient` 封裝
+- **Client**（`app/clients/`）：封裝單一外部服務的 API 呼叫（例如 `ProjectProgressSheetsClient` 封裝
   Google Sheets API），只負責取得原始資料，不做業務層轉換或驗證。
 - **Blueprint**（`app/blueprints/`，Blueprinter gem）：定義輸出欄位的單一來源，Controller 與 View
   共用同一份 Blueprint，欄位清單不得在其他地方重複列舉。
