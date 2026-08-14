@@ -41,32 +41,38 @@
   - 依 [design.md](design.md) Testing Strategy 第 1–7 項於瀏覽器手動驗證通過（僅需驗證 `docs/index.html`）
   - **狀態**：使用者已於瀏覽器實際開啟 `docs/index.html` 驗證通過。
 
-- [ ] 4. CSS 變數基礎（`warroom-data-api-prototype`）
-  - [ ] 4.1 於 `app/assets/stylesheets/application.css` 頂部新增相同的深色／淺色變數組
+- [x] 4. CSS 變數基礎（`warroom-data-api-prototype`）
+  - [x] 4.1 於 `app/assets/stylesheets/application.css` 頂部新增相同的深色／淺色變數組
     - 數值須與 `docs/css/style.css` 完全一致（需求 5.1）
     - _需求：3.2, 5.1_
-  - [ ] 4.2 將既有規則的寫死色碼改為 `var(--xxx)`
+  - [x] 4.2 將既有規則的寫死色碼改為 `var(--xxx)`
     - 對照 `docs/` 的替換表，套用到 `application.css` 對應選擇器（`.dashboard-title`／
       `.stat-item`／`table.project-tasks`／badge／`.overdue-tag`／delay 色等）
     - _需求：2.1, 3.2_
 
-- [ ] 5. Theme_Toggle 與切換邏輯（`warroom-data-api-prototype`）
-  - [ ] 5.1 於 `application.html.erb` 的 `<head>` 加入與 `docs/` 相同邏輯的防閃爍內聯 script
+- [x] 5. Theme_Toggle 與切換邏輯（`warroom-data-api-prototype`）
+  - [x] 5.1 於 `application.html.erb` 的 `<head>` 加入與 `docs/` 相同邏輯的防閃爍內聯 script
     - _需求：4.2, 4.3_
-  - [ ] 5.2 於 `dashboard/index.html.erb` 的 `.dashboard-header` 新增 `#theme-toggle` 按鈕
+  - [x] 5.2 於 `dashboard/index.html.erb` 的 `.dashboard-header` 新增 `#theme-toggle` 按鈕
     - 放置於標題列右側，外觀與 `docs/` 版本一致（需求 5.2）
     - _需求：1.1_
-  - [ ] 5.3 新增 `app/javascript/theme_toggle.js`（經 importmap 引入）
+  - [x] 5.3 新增切換邏輯 script（經 layout `<body>` 底部內聯 `<script>` 引入，非獨立 importmap 檔案）
     - 內容對應 `docs/js/app.js` 的三個函式與事件綁定，`localStorage` key 沿用 `"warroom-theme"`
+    - 實作時改為直接寫在 `application.html.erb` 的內聯 `<script>`（與防 FOUC script 同層次），
+      而非另建 `app/javascript/theme_toggle.js` 經 importmap 引入 — 避免 importmap pin 與模組
+      載入時機的額外複雜度，且此頁多數互動已是內聯／伺服器端渲染，符合 karpathy-guidelines 最簡方案
     - _需求：1.2, 1.3, 1.4, 4.1, 4.3_
-  - [ ] 5.4 新增 `.theme-toggle` 樣式（沿用 `application.css` 內既有變數）
+  - [x] 5.4 新增 `.theme-toggle` 樣式（沿用 `application.css` 內既有變數）
     - _需求：1.1_
 
-- [ ] 6. 檢查點 — `warroom-data-api-prototype` 驗證
+- [x] 6. 檢查點 — `warroom-data-api-prototype` 驗證
   - 依 [design.md](design.md) Testing Strategy 第 1–7 項於瀏覽器手動驗證通過（僅需驗證 Rails `dashboard#index`）
+  - **狀態**：使用者已於瀏覽器實際開啟 `http://localhost:8008/dashboard` 驗證通過。
 
-- [ ] 7. 最終檢查點 — 兩站一致性驗證
+- [x] 7. 最終檢查點 — 兩站一致性驗證
   - 依 [design.md](design.md) Testing Strategy 第 8 項，並排比對兩處實作的配色與 Theme_Toggle 外觀／位置，確認一致（需求 5.1, 5.2）
+  - **狀態**：CSS 變數數值已用 `diff` 逐一核對兩站 `:root` 與 `[data-theme="light"]` 區塊完全一致；
+    Theme_Toggle 位置／外觀（標題列右側、相同 HTML 結構與 class）亦一致。使用者瀏覽器驗證通過。
 
 ---
 
