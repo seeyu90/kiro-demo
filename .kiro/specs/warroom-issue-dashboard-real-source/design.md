@@ -7,8 +7,9 @@
 分層。新增檔案不修改既有 305 的任何檔案（`SheetsApiClient`、`Sheets::FetchProjectProgress`、
 `ProjectTaskBlueprint`、`DashboardController` 皆維持不動），兩條資料流平行存在、互不影響。
 
-畫面呈現方式直接對齊已由使用者確認過的 `docs/issues.html` prototype：KPI 卡片＋月份選擇、每日趨勢
-SVG 折線圖、議題明細清單（可篩選）、工程師負載表、專案清單表。渲染邏輯從 prototype 的純前端 JS
+畫面呈現方式直接對齊已由使用者確認過的 `docs/issues.html` prototype：KPI 卡片＋月份選擇、依專案分類
+統計、每日趨勢 SVG 折線圖、議題明細清單（可篩選，含歸屬類型徽章與議題編號 Redmine 連結）。工程師
+負載表／專案清單表經評估後不納入本 spec 範圍（見 requirements.md）。渲染邏輯從 prototype 的純前端 JS
 (`docs/js/issues.js`) 移植為 Rails ERB + Turbo Frame（篩選由伺服器端處理，而非前端 JS 過濾），
 視覺／CSS 由 Rails 端的 `application.css`（已有主題變數系統，見 06f9e41 深色／淺色主題切換）承接。
 
@@ -30,16 +31,17 @@ warroom-data-api-prototype/
 │   │   ├── month_kpi_blueprint.rb        ← 新增
 │   │   ├── daily_kpi_blueprint.rb        ← 新增
 │   │   ├── issue_blueprint.rb            ← 新增
-│   │   ├── engineer_load_blueprint.rb    ← 新增
-│   │   └── project_list_blueprint.rb     ← 新增
+│   │   └── project_breakdown_blueprint.rb ← 新增
 │   ├── controllers/
 │   │   ├── dashboard_controller.rb       ← 既有，不動
 │   │   ├── issues_controller.rb          ← 新增（GET /issues，HTML）
 │   │   └── api/
 │   │       ├── project_progress_controller.rb  ← 既有，不動
 │   │       └── issue_dashboard_controller.rb    ← 新增（GET /api/issue_dashboard，JSON）
+│   ├── helpers/
+│   │   └── issues_helper.rb              ← 新增（attribution_label／attribution_class）
 │   └── views/issues/
-│       ├── index.html.erb                ← 新增（頁面骨架 + 5 個區塊）
+│       ├── index.html.erb                ← 新增（頁面骨架 + 3 個區塊）
 │       └── _issue_list.html.erb          ← 新增（Turbo Frame 局部：議題明細清單，供篩選局部更新）
 └── config/routes.rb                      ← 新增路由
 ```
@@ -54,12 +56,10 @@ warroom-data-api-prototype/
 class IssueSheetsClient
   SPREADSHEET_ID = "1RdU2p9b7fwNgO5e59jN-00a5KLOQ91xrFhj2NenyKTc"
 
-  # 分頁名稱依需求 1 確認結果調整；raw_2023~raw_2026／工程師負載表／專案清單表為推測值。
+  # 分頁名稱依需求 1 確認結果調整；raw_2023~raw_2026 為推測值。
   MONTH_KPI_SHEET    = "month_kpi"
   DAILY_KPI_SHEET    = "daily_kpi"
   ISSUE_SHEETS       = %w[raw_2023 raw_2024 raw_2025 raw_2026].freeze
-  ENGINEER_LOAD_SHEET = "工程師負載"   # TODO: 需求 1 確認實際分頁名稱
-  PROJECT_LIST_SHEET  = "專案清單"     # TODO: 需求 1 確認實際分頁名稱
 
   SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"].freeze
 
@@ -68,8 +68,6 @@ class IssueSheetsClient
   def self.fetch_issue_rows
     new.fetch_and_merge_rows(ISSUE_SHEETS, "A:K")
   end
-  def self.fetch_engineer_load_rows = new.fetch_rows(ENGINEER_LOAD_SHEET, "A:H")
-  def self.fetch_project_list_rows = new.fetch_rows(PROJECT_LIST_SHEET, "A:G")
 
   def fetch_rows(sheet_name, range_suffix)
     response = build_service.get_spreadsheet_values(
@@ -108,8 +106,6 @@ module Sheets
     output :daily_kpi
     output :issues
     output :project_breakdown
-    output :engineer_load
-    output :project_list
     output :failure_code
     output :message
 
@@ -118,8 +114,6 @@ module Sheets
       self.daily_kpi           = parse_daily_kpi(IssueSheetsClient.fetch_daily_kpi_rows)
       self.issues               = parse_issues(IssueSheetsClient.fetch_issue_rows)
       self.project_breakdown  = compute_project_breakdown(issues)
-      self.engineer_load       = parse_engineer_load(IssueSheetsClient.fetch_engineer_load_rows)
-      self.project_list         = parse_project_list(IssueSheetsClient.fetch_project_list_rows)
     rescue Google::Apis::ClientError => e
       # 錯誤對應邏輯與既有 Sheets::FetchProjectProgress 相同（見 rails-standards.md）
       handle_client_error(e)
@@ -143,12 +137,6 @@ module Sheets
     # compute_project_breakdown(issues)：與 prototype 的 computeProjectBreakdown 邏輯一致，依
     #   project 分組統計 complaint/testing/other 筆數與 total（需求 3a）；純記憶體運算，不再次
     #   呼叫 IssueSheetsClient。
-    #
-    # parse_engineer_load：欄位對應 name/project/allocation_pct/effective_month/expire_month/
-    #   (跳過空白欄) /total_pct；全欄空白列跳過。
-    #
-    # parse_project_list：欄位對應 name/abbr/status/allocation_pct/effective_month/
-    #   expire_month/owner_rd。
   end
 end
 ```
@@ -169,9 +157,12 @@ class IssueBlueprint < Blueprinter::Base
   fields :subject, :type, :tracker, :status, :assigned_to,
          :start_date, :due_date, :work_days, :project
 
-  # 「歸屬類型」不是 Actor 輸出欄位，而是 View 依 type 動態計算的顯示邏輯（需求 5.6），
-  # 故不在此 Blueprint 中定義；View helper（例如 IssuesHelper#attribution_label(type)）
-  # 直接複用 prototype 的 attributionLabel(type) 對應規則。
+  # Blueprint 仍輸出 type/tracker 原始欄位（Actor 輸出介面不因顯示層需求而刪減，見需求 5.2）；
+  # View 只是「不顯示」這兩欄，欄位本身仍可供未來其他用途使用。
+  # 「歸屬類型」與「議題編號連結」皆非 Actor 輸出欄位，而是 View 依 type/issue_id 動態計算的顯示邏輯
+  # （需求 5.6、5.7、5.8），故不在此 Blueprint 中定義；View helper（IssuesHelper#attribution_label(type)
+  # / #attribution_class(type)）直接複用 prototype 的 attributionLabel(type) 對應規則，「議題編號」
+  # 連結由 View 直接組字串（`"https://redmine.amastek.com.tw/issues/#{issue.issue_id}"`）。
 end
 
 class ProjectBreakdownBlueprint < Blueprinter::Base
@@ -180,7 +171,7 @@ class ProjectBreakdownBlueprint < Blueprinter::Base
 end
 ```
 
-（`DailyKpiBlueprint`／`EngineerLoadBlueprint`／`ProjectListBlueprint` 比照辦理，欄位對應需求 4/6。）
+（`DailyKpiBlueprint` 比照辦理，欄位對應需求 4。）
 
 ### Controllers ／ Routes
 
@@ -198,17 +189,18 @@ class IssuesController < ApplicationController
     result = Sheets::FetchIssueDashboard.result
     return render_error(result) unless result.success?
 
-    @month_kpi     = result.month_kpi
-    @daily_kpi     = result.daily_kpi
-    @engineer_load = result.engineer_load
-    @project_list  = result.project_list
+    @month_kpi          = result.month_kpi
+    @project_breakdown  = result.project_breakdown
     @selected_month = params[:month].presence || @month_kpi.map { |m| m[:year_month] }.max
 
-    @filtered_issues = filter_issues(result.issues, params[:project], params[:status])
+    @selected_status = params.key?(:status) ? params[:status] : "新建立"
+    @filtered_issues = filter_issues(result.issues, params[:project], @selected_status)
   end
 
   private
 
+  # status 預設「新建立」（需求 8.2）；params.key?(:status) 用於區分「使用者主動清空狀態篩選」
+  # （query string 帶 status=，值為空字串）與「未帶 status 參數」（首次載入），兩者處理不同。
   def filter_issues(issues, project, status)
     issues
       .select { |i| project.blank? || i[:project] == project }
@@ -224,7 +216,7 @@ end
 
 ### View 結構（`app/views/issues/index.html.erb`）
 
-比照 `docs/issues.html` 的五個區塊（月度 KPI／每日趨勢／議題明細／工程師負載／專案清單），差異：
+比照 `docs/issues.html` 的三個區塊（月度 KPI＋依專案分類統計／每日趨勢／議題明細），差異：
 - 月份選單、專案／狀態篩選改為 `<select>` + `form_with` 觸發 GET 請求（Turbo Frame 局部更新），
   取代 prototype 的純前端 JS 事件監聽。
 - 每日趨勢圖：手刻 SVG 邏輯可直接搬移自 `docs/js/issues.js` 的 `renderTrendChart`，但改為 ERB 迴圈於
@@ -233,9 +225,14 @@ end
   產生較單純、不需額外 JS 檔案）。
 - 依專案分類統計：直接以 `<table>` 渲染 `@project_breakdown`（`ProjectBreakdownBlueprint` 序列化），
   取代 prototype 已移除的 Top3 排行；不隨月份切換更新（見需求 3a.2）。
-- 議題明細清單「歸屬類型」欄位：View helper（`IssuesHelper#attribution_label(type)` /
-  `#attribution_class(type)`）依 `type` 回傳徽章文字與 CSS class，邏輯與 prototype 的
-  `attributionLabel`／`attributionClass` 一致，渲染為 `<span class="attribution-badge ...">`。
+- 議題明細表格欄位依序為：議題編號、專案、主旨、歸屬類型、狀態、負責人、開始日期、到期日期、工作
+  天數（不顯示 type／tracker，見需求 5.7）。
+- 「歸屬類型」欄位：View helper（`IssuesHelper#attribution_label(type)` / `#attribution_class(type)`）
+  依 `type` 回傳徽章文字與 CSS class，邏輯與 prototype 的 `attributionLabel`／`attributionClass` 一致，
+  渲染為 `<span class="attribution-badge ...">`。
+- 「議題編號」欄位：渲染為 `<a href="https://redmine.amastek.com.tw/issues/#{issue.issue_id}"
+  target="_blank" rel="noopener noreferrer" class="issue-id-link">`（需求 5.8），沿用 prototype 的
+  `.issue-id-link` CSS class。
 
 ---
 
@@ -247,20 +244,19 @@ end
 | `daily_kpi` | `date, complaint, testing, other, total` |
 | `issues` | `issue_id, subject, type, tracker, status, assigned_to, start_date, due_date, work_days, project` |
 | `project_breakdown` | `project, complaint, testing, other, total`（由 `issues` 衍生計算，非直接讀取自試算表） |
-| `engineer_load` | `name, project, allocation_pct, effective_month, expire_month, total_pct` |
-| `project_list` | `name, abbr, status, allocation_pct, effective_month, expire_month, owner_rd` |
 
-與 prototype 的模擬資料常數（`MONTH_KPI`／`DAILY_KPI`／`ISSUES`／`ENGINEER_LOAD`／`PROJECT_LIST`，
+與 prototype 的模擬資料常數（`MONTH_KPI`／`DAILY_KPI`／`ISSUES`，
 見 [warroom-issue-dashboard-static-prototype/design.md](../warroom-issue-dashboard-static-prototype/design.md)）
-欄位一一對應（`MONTH_KPI` 已移除 `top3`），確保畫面呈現邏輯可直接沿用。
+欄位一一對應（`MONTH_KPI` 已移除 `top3`），確保畫面呈現邏輯可直接沿用。工程師負載表／專案清單表
+不在本 spec 範圍內，無對應資料集。
 
 ---
 
 ## Error Handling
 
 沿用 [rails-standards.md](../../steering/rails-standards.md) 統一錯誤格式與 `failure_code` 對應表。
-五個讀取類別（`project_breakdown` 為衍生計算，不另外呼叫 API，故不計入）中任一讀取失敗即整體失敗
-（需求 7.2），`IssuesController` 於失敗時渲染錯誤訊息（比照既有 `DashboardController` 的頁面層級
+三個讀取類別（`project_breakdown` 為衍生計算，不另外呼叫 API，故不計入）中任一讀取失敗即整體失敗
+（需求 6.2），`IssuesController` 於失敗時渲染錯誤訊息（比照既有 `DashboardController` 的頁面層級
 錯誤顯示）。
 
 ---
@@ -270,9 +266,9 @@ end
 - **單元測試**（RSpec，比照既有 `spec/clients/`、`spec/actors/` 慣例）：
   - `IssueSheetsClient`：stub `Google::Apis::SheetsV4::SheetsService`，驗證分頁名稱／range 正確、
     UTF-8 重標記、合併邏輯（`raw_2023`〜`raw_2026`）僅保留第一個分頁標題列。
-  - `Sheets::FetchIssueDashboard`：驗證五類資料解析正確（含 `project_breakdown` 分組統計、日期正規化、空列跳過、
+  - `Sheets::FetchIssueDashboard`：驗證三類資料解析正確（含 `project_breakdown` 分組統計、日期正規化、空列跳過、
     整數轉換失敗容錯）、錯誤對應（404/403/其他）。
-- **Request specs**：`GET /api/issue_dashboard` 回傳結構符合需求 8.3；`GET /issues` 帶
+- **Request specs**：`GET /api/issue_dashboard` 回傳結構符合需求 7.3；`GET /issues` 帶
   `project`／`status`／`month` query params 時回傳正確篩選結果。
 - **端對端驗證**（比照 `warroom-data-api-real-source` Task 10 的驗證方式）：設定真實 Service Account
   憑證後，訪問 `/issues` 確認畫面呈現與 `docs/issues.html` prototype 一致，且資料為真實試算表內容

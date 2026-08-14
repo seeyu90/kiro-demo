@@ -6,8 +6,10 @@
 （305 內容）搬移為 `docs/project-progress.html` + `docs/js/project-progress.js`，`docs/index.html`
 改為極簡入口頁。純前端修改，不引入建置工具或框架。每項任務均可獨立開發、於瀏覽器手動驗證並 Commit。
 
-**狀態**：已完成實作並以 Playwright E2E 驗證通過（含 Task 10 的依專案分類統計／歸屬類型徽章，
-共 40/40 項自動化檢查通過：初版 32 項 + Task 10 新增 8 項）。
+**狀態**：已完成實作並以 Playwright E2E 驗證通過，共 49/49 項檢查通過：基礎頁面／篩選／主題切換等
+32 項（Task 11 移除工程師負載／專案清單相關斷言後改為驗證區塊已移除；Task 12 後「全部顯示」類斷言
+改為先清空狀態篩選再驗證）＋ Task 10 依專案分類統計／歸屬類型徽章 8 項 ＋ Task 11 議題編號 Redmine
+連結 4 項 ＋ Task 12 預設狀態篩選「新建立」5 項。
 
 ---
 
@@ -35,14 +37,13 @@
       確認行為與搬移前的 `index.html` 完全一致
 
 - [x] 2. 306 模擬資料
-  - [x] 2.1 新增 `docs/js/issues.js`，加入 `MONTH_KPI`／`DAILY_KPI`／`ISSUES`／`ENGINEER_LOAD`／
-        `PROJECT_LIST` 模擬資料常數
+  - [x] 2.1 新增 `docs/js/issues.js`，加入 `MONTH_KPI`／`DAILY_KPI`／`ISSUES` 模擬資料常數
     - 依 [design.md](design.md) 的「模擬資料」章節建立，欄位對齊真實 306 試算表分頁結構
-    - _需求：2.1, 3.1, 4.1, 5.1, 5.2, 6.1_
+    - _需求：2.1, 3.1, 4.1, 5.1_
 
 - [x] 3. KPI 摘要卡片
-  - [x] 3.1 建立 `docs/issues.html` 頁面骨架（header、月份選單、KPI 卡片區、趨勢圖區、Issue 清單區、
-        負載表區、專案清單區的空容器）
+  - [x] 3.1 建立 `docs/issues.html` 頁面骨架（header、月份選單、KPI 卡片區、趨勢圖區、Issue 清單區
+        的空容器）
     - _需求：2.1_
 
   - [x] 3.2 實作 `populateMonthSelect()` 與 `renderKpiCards(monthRecord)`
@@ -63,10 +64,10 @@
     - 依 `state.issueFilters` 過濾並渲染表格；空結果顯示提示文字
     - _需求：4.1, 4.4, 4.5_
 
-- [x] 6. 工程師負載／專案清單表
+- [x] 6. 工程師負載／專案清單表（**已於 Task 11 移除，見下方**）
   - [x] 6.1 實作 `renderEngineerLoadTable()` 與 `renderProjectListTable()`
     - 頁面載入時各自靜態渲染一次，無篩選
-    - _需求：5.1, 5.2, 5.3_
+    - _需求：5.1, 5.2, 5.3（舊編號，本需求已於後續 requirements.md 修訂中移除）_
 
 - [x] 7. 檢查點 — 306 頁面功能驗證
     - 依 [design.md](design.md) 的「Testing Strategy」章節第 3 點逐項於瀏覽器手動驗證
@@ -75,9 +76,9 @@
   - [x] 8.1 新增入口頁卡片樣式（`docs/index.html` 用）
     - _需求：1.1_
 
-  - [x] 8.2 新增 KPI 卡片、趨勢圖、Issue 表格、負載表樣式，含 768px／560px 響應式斷點
+  - [x] 8.2 新增 KPI 卡片、趨勢圖、Issue 表格樣式，含 768px／560px 響應式斷點
     - 沿用 `style.css` 既有配色與 class 命名慣例，表格於 560px 以下切換為堆疊卡片版型
-    - _需求：6.2, 6.3_
+    - _需求：5.2, 5.3（舊編號 6.2/6.3，requirements.md 需求 6 已改編號為需求 5）_
 
 - [x] 9. 最終檢查點 — 全面驗證
     - 完整走過 [design.md](design.md) Testing Strategy 全部項目，所有需求驗收標準逐一符合，
@@ -106,6 +107,52 @@
       皆正確標示歸屬類型徽章（含 class 正確對應）；月份切換仍正常更新 KPI 卡片；無 console error
     - 8/8 通過
 
+- [x] 11. 移除工程師負載／專案清單表 + 議題明細欄位調整
+  - [x] 11.1 移除 `docs/issues.html` 的工程師負載／專案清單區塊（`#engineer-load-table`／
+        `#project-list-table` 及對應 `<section>`）
+    - _需求：（不納入範圍段落，見 requirements.md）_
+
+  - [x] 11.2 移除 `docs/js/issues.js` 的 `ENGINEER_LOAD`／`PROJECT_LIST` 常數與
+        `renderEngineerLoadTable()`／`renderProjectListTable()`
+    - _需求：（同上）_
+
+  - [x] 11.3 調整 `ISSUE_COLUMNS` 欄位順序與內容
+    - 改為：議題編號／專案／主旨／歸屬類型／狀態／負責人／開始日期／到期日期／工作天數；移除
+      `type`（類型）／`tracker`（追蹤標籤）欄位（分類意義已由歸屬類型徽章呈現）
+    - _需求：4.1_
+
+  - [x] 11.4 「議題編號」欄位改為可點擊連結
+    - 新增 `REDMINE_ISSUE_URL_BASE = "https://redmine.amastek.com.tw/issues/"`；`ISSUE_COLUMNS` 的
+      `issue_id` 欄位新增 `render` 函式，輸出 `<a class="issue-id-link" target="_blank"
+      rel="noopener noreferrer">`
+    - _需求：4.1b_
+
+  - [x] 11.5 樣式：`.issue-id-link`（無底線，hover/focus 才顯示底線，與 `.back-link` 一致慣例）
+    - _需求：4.1b_
+
+  - [x] 11.6 檢查點 — Playwright E2E 驗證
+    - 議題明細表格欄位順序與標籤正確（9 欄，不含類型／追蹤標籤）；議題編號連結 href 正確指向
+      Redmine、`target="_blank"`、`rel` 含 `noopener`、預設無底線；工程師負載／專案清單區塊確認已
+      移除（`#engineer-load-table`／`#project-list-table` 皆為 `null`）；全量回歸重測（32 項基礎
+      檢查 + 8 項 Task 10 檢查）皆通過，無 console error
+    - 4/4（新增）+ 32/32（回歸）+ 8/8（Task 10 回歸）通過
+
+- [x] 12. 議題明細預設篩選改為「新建立」
+  - [x] 12.1 `state.issueFilters` 預設值改為 `{ project: null, status: "新建立" }`
+    - 原預設為 `{ project: null, status: null }`（全部狀態）；改為聚焦最需要處理的新進議題
+    - _需求：4.3_
+
+  - [x] 12.2 `initIssueFilters()` 產生下拉選項後同步設定 `<select>` 初始 `value`
+    - `projectSelect.value = state.issueFilters.project || ""`；
+      `statusSelect.value = state.issueFilters.status || ""`，確保畫面與 `state` 一致
+    - _需求：4.3_
+
+  - [x] 12.3 檢查點 — Playwright E2E 驗證
+    - 頁面載入時專案篩選為「全部專案」、狀態篩選為「新建立」；預設僅顯示 1 筆符合議題；清除狀態
+      篩選後恢復顯示全部 6 筆；全量回歸重測（32 項基礎檢查，其中「全部顯示」類斷言改為先清空狀態
+      篩選再驗證）皆通過，無 console error
+    - 5/5（新增）+ 32/32（回歸）+ 4/4（Task 11 回歸）通過
+
 ---
 
 ## Notes
@@ -131,7 +178,15 @@
     { "id": 9, "tasks": ["9"] },
     { "id": 10, "tasks": ["10.1", "10.2"] },
     { "id": 11, "tasks": ["10.3"] },
-    { "id": 12, "tasks": ["10.4"] }
+    { "id": 12, "tasks": ["10.4"] },
+    { "id": 13, "tasks": ["11.1", "11.2"] },
+    { "id": 14, "tasks": ["11.3"] },
+    { "id": 15, "tasks": ["11.4"] },
+    { "id": 16, "tasks": ["11.5"] },
+    { "id": 17, "tasks": ["11.6"] },
+    { "id": 18, "tasks": ["12.1"] },
+    { "id": 19, "tasks": ["12.2"] },
+    { "id": 20, "tasks": ["12.3"] }
   ]
 }
 ```

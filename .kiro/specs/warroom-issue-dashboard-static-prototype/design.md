@@ -17,7 +17,7 @@ docs/
 ├── project-progress.html   ← 新：既有 index.html 內容原樣搬移（305）
 ├── issues.html              ← 新：306 臭蟲議題 prototype 頁面
 ├── css/
-│   └── style.css            ← 擴充：入口頁卡片、KPI 卡片、趨勢圖、負載表樣式
+│   └── style.css            ← 擴充：入口頁卡片、KPI 卡片、趨勢圖、議題連結樣式
 └── js/
     ├── project-progress.js  ← 新：由 app.js 更名搬移（305，內容不變）
     └── issues.js             ← 新：306 模擬資料 + 渲染邏輯
@@ -37,8 +37,6 @@ initStatusFilter()         │
 renderKpiCards(month)             ← 需求 2
 renderTrendChart(DAILY_KPI)       ← 需求 3
 renderIssueTable(state)           ← 需求 4，篩選變更時重新渲染
-renderEngineerLoadTable()         ← 需求 5，靜態渲染一次
-renderProjectListTable()          ← 需求 5，靜態渲染一次
 ```
 
 ---
@@ -82,17 +80,10 @@ var ISSUES = [
   { issue_id: 3058, subject: "[PMS] 結案小工序DeadlockVictim", type: "Other", tracker: "臭蟲", status: "已暫停", assigned_to: "王贊勛", start_date: "2024-04-29", due_date: null, work_days: null, project: "AG 亞炬" }
 ];
 
-var ENGINEER_LOAD = [
-  // { name, project, allocation_pct, effective_month, expire_month, total_pct }
-  { name: "黃紹鈞", project: "RAG", allocation_pct: 40, effective_month: "2026/05", expire_month: "2026/12", total_pct: 115 },
-  { name: "陳謹皓", project: "客服支援", allocation_pct: 15, effective_month: "2026/01", expire_month: null, total_pct: 15 }
-];
-
-var PROJECT_LIST = [
-  // { name, abbr, status, allocation_pct, effective_month, expire_month, owner_rd }
-  { name: "KKY - 地瓜生產管理系統", abbr: "瓜瓜園 KKPMS", status: "維護", allocation_pct: 20, effective_month: "2026/01", expire_month: "2026/12", owner_rd: "周詩御,呂俐禛,楊采維(5%)" }
-];
+var REDMINE_ISSUE_URL_BASE = "https://redmine.amastek.com.tw/issues/";
 ```
+
+試算表的工程師負載表／專案清單表兩個分頁經評估後不呈現，故無對應模擬資料常數。
 
 `assigned_to` 可能為空字串／`null`（真實資料常見未指派情境），渲染時比照既有 `formatValue()` 慣例
 顯示 `—`。`due_date`／`work_days` 亦常為空，同樣處理。
@@ -120,21 +111,25 @@ var PROJECT_LIST = [
 
 ### Issue 明細清單（需求 4）
 
-- `state.issueFilters = { project: null, status: null }`（`null` = 不篩選／全部）。
+- `state.issueFilters = { project: null, status: "新建立" }`（`project: null` = 不篩選／全部；
+  `status` 預設「新建立」，聚焦最需要處理的新進議題，非全部狀態，見需求 4.3）。
+  `initIssueFilters()` 產生下拉選項後，將 `<select>` 的 `value` 同步設為 `state.issueFilters` 的
+  對應值，確保畫面初始狀態與 `state` 一致。
 - `initProjectFilter()` / `initStatusFilter()`：讀取 `ISSUES` 內唯一值產生下拉選項，`change` 事件更新
   `state.issueFilters` 並呼叫 `renderIssueTable()`。
 - `renderIssueTable(state)`：依 `state.issueFilters` 過濾 `ISSUES`，複用既有 `buildTable`-like 邏輯
-  （建立 `<table>`／`<thead>`／`<tbody>`），欄位標籤中文化（如「議題編號」「主旨」「類型」…）。
-- 「歸屬類型」欄位以徽章（badge）呈現，依 `type` 對應 `ATTRIBUTION_LABELS`／`ATTRIBUTION_CLASSES`
-  （見「模擬資料」章節）。`buildGenericTable` 的欄位定義支援可選的 `render(value, record)` 函式，
-  該欄位有定義時優先呼叫並將回傳的 DOM 節點插入儲存格，取代預設的純文字渲染，讓「歸屬類型」欄位
-  可渲染出彩色徽章而非純文字（需求 4.1a）。
+  （建立 `<table>`／`<thead>`／`<tbody>`）。
+- `ISSUE_COLUMNS` 欄位依序為：`issue_id`（議題編號）、`project`（專案）、`subject`（主旨）、
+  `attribution`（歸屬類型）、`status`（狀態）、`assigned_to`（負責人）、`start_date`（開始日期）、
+  `due_date`（到期日期）、`work_days`（工作天數）；不顯示 `type`／`tracker` 原始欄位（分類意義已由
+  「歸屬類型」徽章呈現，避免重複資訊，見需求 4.1）。
+- `buildGenericTable` 的欄位定義支援可選的 `render(value, record)` 函式，該欄位有定義時優先呼叫並將
+  回傳的 DOM 節點插入儲存格，取代預設的純文字渲染：
+  - 「歸屬類型」欄位依 `type` 對應 `ATTRIBUTION_LABELS`／`ATTRIBUTION_CLASSES`（見「模擬資料」章節）
+    渲染彩色徽章（需求 4.1a）。
+  - 「議題編號」欄位渲染為 `<a href="{REDMINE_ISSUE_URL_BASE}{issue_id}" target="_blank"
+    rel="noopener noreferrer" class="issue-id-link">`，導向 Redmine 議題頁面（需求 4.1b）。
 - 篩選後為空集合時顯示「目前無符合條件的議題」（比照既有 `.empty-state` class）。
-
-### 工程師負載／專案清單（需求 5）
-
-- 兩張表格頁面載入時各自靜態渲染一次（`renderEngineerLoadTable()` / `renderProjectListTable()`），
-  不提供篩選，維持最簡實作（僅為呈現既有資料形狀）。
 
 ---
 
@@ -144,9 +139,7 @@ var PROJECT_LIST = [
 |---|---|
 | `MONTH_KPI` | `year_month, complaint, testing, total_bug, block_rate, completed, unresolved, avg_days, sla_rate` |
 | `DAILY_KPI` | `date, complaint, testing, other, total` |
-| `ISSUES` | `issue_id, subject, type, tracker, status, assigned_to, start_date, due_date, work_days, project`（`attribution` 為渲染時依 `type` 動態計算，非資料欄位） |
-| `ENGINEER_LOAD` | `name, project, allocation_pct, effective_month, expire_month, total_pct` |
-| `PROJECT_LIST` | `name, abbr, status, allocation_pct, effective_month, expire_month, owner_rd` |
+| `ISSUES` | `issue_id, subject, type, tracker, status, assigned_to, start_date, due_date, work_days, project`（`attribution` 為渲染時依 `type` 動態計算，非資料欄位；`type`／`tracker` 保留於資料模型供 `attribution` 計算使用，但不作為獨立顯示欄位） |
 
 （欄位命名使用英文 key + 中文顯示標籤，比照 `project-progress.js` 既有慣例，非直接沿用試算表中文欄名，
 避免中文變數名稱造成程式碼可讀性問題；未來真實資料串接時，Rails 端 Blueprint 欄位命名可再行決定，
@@ -171,9 +164,11 @@ var PROJECT_LIST = [
    - 確認 KPI 卡片預設顯示最新月份數值；切換月份下拉選單，確認卡片數值隨之更新（需求 2.2、2.3）。
    - 確認「依專案分類」統計表正確顯示各專案的客訴／測試／其他數量與總計（需求 2.4）。
    - 確認每日趨勢圖正確繪製，滑鼠移到資料點可看到當日數值（需求 3.1、3.3）。
-   - 確認 Issue 明細表格顯示全部欄位，含「歸屬類型」徽章（Complaint→專案共同責任、TestingBug→
-     個人責任、其餘→其他）；切換專案／狀態篩選後清單正確過濾；篩選至無結果時顯示提示文字
-     （需求 4.1、4.1a、4.2〜4.5）。
-   - 確認工程師負載表、專案清單表正確顯示（需求 5.1、5.2）。
-   - 縮小視窗至手機寬度，確認所有區塊（KPI 卡片、趨勢圖、表格）不破版，表格切換為堆疊卡片版型（需求 6.3，沿用既有 560px 斷點慣例）。
+   - 確認 Issue 明細表格欄位依序為議題編號／專案／主旨／歸屬類型／狀態／負責人／開始日期／到期日期／
+     工作天數（不含 type／tracker），「歸屬類型」徽章正確（Complaint→專案共同責任、TestingBug→
+     個人責任、其餘→其他）；「議題編號」為可點擊連結，導向
+     `https://redmine.amastek.com.tw/issues/{issue_id}`，以新分頁開啟；確認頁面載入時預設專案為
+     「全部專案」、狀態預設為「新建立」（非全部狀態）；切換專案／狀態篩選後清單正確過濾；篩選至無
+     結果時顯示提示文字（需求 4.1、4.1a、4.1b、4.2、4.3、4.4、4.5）。
+   - 縮小視窗至手機寬度，確認所有區塊（KPI 卡片、趨勢圖、表格）不破版，表格切換為堆疊卡片版型（需求 5.3，沿用既有 560px 斷點慣例）。
 4. 確認整頁繁體中文，無 console 錯誤。

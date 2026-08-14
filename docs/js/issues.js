@@ -3,7 +3,8 @@
 
   // ── 模擬資料 ──────────────────────────────────────────────
   // 欄位對齊真實 306 試算表（306_臭蟲議題紀錄）分頁結構：
-  // month_kpi / daily_kpi / raw_2023~raw_2026（合併為 ISSUES）/ 工程師負載表 / 專案清單表。
+  // month_kpi / daily_kpi / raw_2023~raw_2026（合併為 ISSUES）。
+  // 試算表另有工程師負載表／專案清單表分頁，本頁面不呈現這兩者。
   // 本頁面為靜態 prototype，全部資料為模擬資料，不呼叫任何 API。
 
   var MONTH_KPI = [
@@ -45,19 +46,11 @@
     { issue_id: 4301, subject: "[客訴] QC登入後會出現無權限使用此功能的跳窗", type: "Complaint", tracker: "臭蟲", status: "已結束", assigned_to: "王贊勛", start_date: "2025-09-03", due_date: "2026-01-30", work_days: 108, project: "JieZhou 傑宙" }
   ];
 
-  var ENGINEER_LOAD = [
-    { name: "黃紹鈞", project: "RAG", allocation_pct: 40, effective_month: "2026/05", expire_month: "2026/12", total_pct: 115 },
-    { name: "陳謹皓", project: "客服支援", allocation_pct: 15, effective_month: "2026/01", expire_month: null, total_pct: 15 }
-  ];
-
-  var PROJECT_LIST = [
-    { name: "KKY - 地瓜生產管理系統", abbr: "瓜瓜園 KKPMS", status: "維護", allocation_pct: 20, effective_month: "2026/01", expire_month: "2026/12", owner_rd: "周詩御,呂俐禛,楊采維(5%)" }
-  ];
-
   // ── 篩選狀態 ──────────────────────────────────────────────
 
+  // 預設篩選：全部專案 + 狀態「新建立」，聚焦最需要處理的新進議題。
   var state = {
-    issueFilters: { project: null, status: null }
+    issueFilters: { project: null, status: "新建立" }
   };
 
   // ── 共用輔助 ──────────────────────────────────────────────
@@ -242,6 +235,9 @@
       statusSelect.appendChild(option);
     });
 
+    projectSelect.value = state.issueFilters.project || "";
+    statusSelect.value = state.issueFilters.status || "";
+
     projectSelect.addEventListener("change", function () {
       state.issueFilters.project = projectSelect.value || null;
       renderIssueTable();
@@ -253,18 +249,26 @@
     });
   }
 
+  var REDMINE_ISSUE_URL_BASE = "https://redmine.amastek.com.tw/issues/";
+
   var ISSUE_COLUMNS = [
-    { key: "issue_id", label: "議題編號" },
-    { key: "subject", label: "主旨" },
+    { key: "issue_id", label: "議題編號", render: function (value) {
+      var link = document.createElement("a");
+      link.className = "issue-id-link";
+      link.href = REDMINE_ISSUE_URL_BASE + value;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = formatValue(value);
+      return link;
+    } },
     { key: "project", label: "專案" },
+    { key: "subject", label: "主旨" },
     { key: "attribution", label: "歸屬類型", render: function (value, record) {
       var badge = document.createElement("span");
       badge.className = "attribution-badge " + attributionClass(record.type);
       badge.textContent = attributionLabel(record.type);
       return badge;
     } },
-    { key: "type", label: "類型" },
-    { key: "tracker", label: "追蹤標籤" },
     { key: "status", label: "狀態" },
     { key: "assigned_to", label: "負責人" },
     { key: "start_date", label: "開始日期" },
@@ -332,37 +336,6 @@
     container.appendChild(buildGenericTable(filtered, ISSUE_COLUMNS));
   }
 
-  // ── 工程師負載／專案清單表 ────────────────────────────────
-
-  var ENGINEER_LOAD_COLUMNS = [
-    { key: "name", label: "工程師姓名" },
-    { key: "project", label: "負責專案" },
-    { key: "allocation_pct", label: "配置比例(%)" },
-    { key: "effective_month", label: "生效月份" },
-    { key: "expire_month", label: "失效月份" },
-    { key: "total_pct", label: "當月配置總佔比合計" }
-  ];
-
-  var PROJECT_LIST_COLUMNS = [
-    { key: "name", label: "專案" },
-    { key: "abbr", label: "專案縮寫" },
-    { key: "status", label: "狀態" },
-    { key: "allocation_pct", label: "比例" },
-    { key: "effective_month", label: "生效月份" },
-    { key: "expire_month", label: "失效月份" },
-    { key: "owner_rd", label: "負責RD" }
-  ];
-
-  function renderEngineerLoadTable() {
-    var container = document.getElementById("engineer-load-table");
-    container.appendChild(buildGenericTable(ENGINEER_LOAD, ENGINEER_LOAD_COLUMNS));
-  }
-
-  function renderProjectListTable() {
-    var container = document.getElementById("project-list-table");
-    container.appendChild(buildGenericTable(PROJECT_LIST, PROJECT_LIST_COLUMNS));
-  }
-
   // ── 主題切換 ──────────────────────────────────────────────
 
   var THEME_KEY = "warroom-theme";
@@ -406,8 +379,6 @@
     renderTrendChart(DAILY_KPI);
     initIssueFilters();
     renderIssueTable();
-    renderEngineerLoadTable();
-    renderProjectListTable();
 
     applyThemeToggleLabel(getCurrentTheme());
     var themeToggle = document.getElementById("theme-toggle");

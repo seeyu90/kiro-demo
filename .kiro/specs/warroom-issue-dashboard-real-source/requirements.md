@@ -7,7 +7,7 @@
 ID `1RdU2p9b7fwNgO5e59jN-00a5KLOQ91xrFhj2NenyKTc`）串接進 `warroom-data-api-prototype` Rails 專案，
 沿用該專案既有的 Controller → Actor → Client → Blueprint 分層架構（見
 [.kiro/steering/rails-standards.md](../../steering/rails-standards.md)），並將畫面呈現方式對齊
-`docs/issues.html` 已驗證過的版面（KPI 摘要卡片、每日趨勢圖、議題明細清單、工程師負載／專案清單表）。
+`docs/issues.html` 已驗證過的版面（KPI 摘要卡片、依專案分類統計、每日趨勢圖、議題明細清單）。
 
 真實 306 試算表分頁結構（已透過 Google Drive 讀取試算表內容確認）：
 
@@ -16,16 +16,15 @@ ID `1RdU2p9b7fwNgO5e59jN-00a5KLOQ91xrFhj2NenyKTc`）串接進 `warroom-data-api-
 | `month_kpi` | 已確認（分頁名稱取自試算表 metadata） | `year_month, 客訴, 測試, 總Bug, 攔截率, 完成數, 未結案, 平均天數, SLA達標率, Top3` |
 | `daily_kpi` | 已確認 | `日期, 客訴, 測試, 其他, 總計, 未結束數量, 未結束IDs, slack_message` |
 | `raw_2023`〜`raw_2026` | 高度推測（依各列 `sheet_name` 欄位值命名，與該欄位值完全一致，但未逐一開啟試算表分頁列表確認） | `issue_id, subject, type, tracker, status, assigned_to, start_date, due_date, work_days, sheet_name, project` |
-| 工程師負載表 | 分頁名稱未知 | `工程師姓名, 負責專案, 配置比例(%), 生效月份, 失效月份, (空欄), 工程師姓名(總負載), 當月配置總佔比合計` |
-| 專案清單表 | 分頁名稱未知 | `專案, 專案縮寫, 狀態, 比例, 生效月份, 失效月份, 負責RD` |
 
-試算表中另外還觀察到兩個內容重疊但結構不同的分頁（一個是缺少 `work_days`／`sheet_name`／`project`
-欄位、日期格式為 `YYYY/M/D` 的類似議題列表；另一個是僅含 `issue_id, project, subject, status,
-start_date, due_date` 六欄的精簡摘要列表），用途與分頁名稱皆不明確，**本階段不納入範圍**，待後續確認
-用途後再議。
+試算表中另外還觀察到工程師負載表、專案清單表，以及兩個內容重疊但結構不同的分頁（一個是缺少
+`work_days`／`sheet_name`／`project` 欄位、日期格式為 `YYYY/M/D` 的類似議題列表；另一個是僅含
+`issue_id, project, subject, status, start_date, due_date` 六欄的精簡摘要列表），**本階段皆不納入
+範圍**：工程師負載表／專案清單表經評估後排除（見 static prototype 需求文件的決策記錄），另外兩個
+用途不明分頁待後續確認用途後再議。
 
-**不納入範圍**：上述用途不明的兩個分頁、即時同步／Webhook／排程更新、資料庫或本地快取層、OAuth
-使用者登入、資料寫入（僅唯讀）。
+**不納入範圍**：工程師負載表、專案清單表、上述用途不明的兩個分頁、即時同步／Webhook／排程更新、
+資料庫或本地快取層、OAuth 使用者登入、資料寫入（僅唯讀）。
 
 **技術棧說明**：本 spec 延續 `warroom-data-api-prototype`／`warroom-data-api-real-source` 的技術選型，
 採 Ruby on Rails 獨立伺服器實作，使用 `google-apis-sheets_v4` + `googleauth`，以 service_actor 封裝讀取
@@ -39,14 +38,16 @@ start_date, due_date` 六欄的精簡摘要列表），用途與分頁名稱皆�
 - **IssueSheetsClient**：封裝對 306 試算表（ID `1RdU2p9b7fwNgO5e59jN-00a5KLOQ91xrFhj2NenyKTc`）各分頁
   `spreadsheets.values.get` 呼叫的內部物件，與既有 `SheetsApiClient`（305 用）分屬不同 Client，各自對應
   不同試算表 ID，不共用同一個類別（避免耦合兩個資料來源的分頁結構）。
-- **IssueDashboard_Actor**：`Sheets::FetchIssueDashboard` Actor，負責讀取並正規化 306 全部五類資料
-  （月度 KPI、每日趨勢、議題明細、工程師負載、專案清單），對齊 `docs/issues.html` prototype 已驗證的
-  資料形狀。
+- **IssueDashboard_Actor**：`Sheets::FetchIssueDashboard` Actor，負責讀取並正規化 306 三類讀取資料
+  （月度 KPI、每日趨勢、議題明細）與一類衍生資料（依專案分類統計），對齊 `docs/issues.html` prototype
+  已驗證的資料形狀。
 - **IssueDashboard_Endpoint**：回傳 306 全部資料的 HTTP JSON 端點（`GET /api/issue_dashboard`）。
 - **IssueDashboard_Page**：呈現 306 資料的 Rails 前端頁面（`GET /issues`）。
 - **月度 KPI**：對應 `month_kpi` 分頁的單月統計列。
 - **每日趨勢**：對應 `daily_kpi` 分頁的逐日統計列。
 - **議題明細**：對應 `raw_2023`〜`raw_2026` 分頁合併後的逐筆議題紀錄。
+- **Redmine_Issue_URL**：議題編號對應的 Redmine 議題頁面連結，格式為
+  `https://redmine.amastek.com.tw/issues/{issue_id}`。
 - **統一錯誤格式**：`{ "error": { "code": "<錯誤代碼>", "message": "<描述>" } }`，定義見
   [rails-standards.md](../../steering/rails-standards.md)。
 
@@ -62,8 +63,8 @@ start_date, due_date` 六欄的精簡摘要列表），用途與分頁名稱皆�
 #### 驗收標準
 
 1. 實作開始前，THE 開發者 SHALL 透過 Google Sheets API（或人工開啟試算表）取得
-   `1RdU2p9b7fwNgO5e59jN-00a5KLOQ91xrFhj2NenyKTc` 的完整分頁名稱清單，確認 `raw_2023`〜`raw_2026`、
-   工程師負載表、專案清單表的實際分頁名稱是否與本文件推測一致。
+   `1RdU2p9b7fwNgO5e59jN-00a5KLOQ91xrFhj2NenyKTc` 的完整分頁名稱清單，確認 `raw_2023`〜`raw_2026`
+   的實際分頁名稱是否與本文件推測一致。
 2. IF 實際分頁名稱與推測不同，THEN THE 開發者 SHALL 以實際名稱更新本 spec 與後續 `IssueSheetsClient`
    常數定義，不得沿用錯誤名稱。
 
@@ -154,28 +155,16 @@ start_date, due_date` 六欄的精簡摘要列表），用途與分頁名稱皆�
    「歸屬類型」：`Complaint`（客訴）標示為「專案共同責任」，`TestingBug`（測試）標示為「個人責任」，
    其餘標示為「其他」；此標示 SHALL 為顯示層依 `type` 動態計算，不作為 Actor 輸出的獨立資料欄位
    （與 prototype 的 `attributionLabel(type)` 邏輯一致）。
+7. THE **IssueDashboard_Page** SHALL 將議題明細表格的欄位依序顯示為：議題編號、專案、主旨、歸屬類型、
+   狀態、負責人、開始日期、到期日期、工作天數，不顯示 `type`／`tracker` 原始欄位（分類意義已由
+   「歸屬類型」呈現，避免重複資訊），與 prototype 的 `ISSUE_COLUMNS` 順序一致。
+8. THE **IssueDashboard_Page** SHALL 將「議題編號」欄位渲染為可點擊連結，導向對應的
+   **Redmine_Issue_URL**（`https://redmine.amastek.com.tw/issues/{issue_id}`），並以新分頁開啟
+   （`target="_blank"`，含 `rel="noopener noreferrer"`）。
 
 ---
 
-### 需求 6：讀取工程師負載與專案清單
-
-**使用者故事：** 身為戰情室使用者，我希望看到與 prototype 相同的工程師負載表與專案清單表，但資料是
-真實試算表內容。
-
-#### 驗收標準
-
-1. WHEN **IssueDashboard_Actor** 被呼叫，THE **IssueSheetsClient** SHALL 對工程師負載表、專案清單表
-   （分頁名稱依需求 1 確認結果）各發起請求。
-2. THE **IssueDashboard_Actor** SHALL 將工程師負載表每列解析為 Hash：`name, project, allocation_pct,
-   effective_month, expire_month, total_pct`，跳過空白分隔欄。
-3. THE **IssueDashboard_Actor** SHALL 將專案清單表每列解析為 Hash：`name, abbr, status, allocation_pct,
-   effective_month, expire_month, owner_rd`。
-4. IF 任一列全部欄位皆為空字串，THEN THE **IssueDashboard_Actor** SHALL 跳過該列（試算表常見合計列或
-   空白列）。
-
----
-
-### 需求 7：錯誤處理
+### 需求 6：錯誤處理
 
 **使用者故事：** 身為 API 使用者，我希望 306 資料來源的錯誤情境與既有 API 一致，以便共用同一套錯誤
 處理邏輯。
@@ -184,13 +173,13 @@ start_date, due_date` 六欄的精簡摘要列表），用途與分頁名稱皆�
 
 1. THE **IssueDashboard_Actor** SHALL 遵循 [rails-standards.md](../../steering/rails-standards.md) 的
    統一錯誤格式與 `failure_code` 對應表（`sheet_not_found` / `access_denied` / `internal_error`）。
-2. IF 五個資料類別（月度 KPI、每日趨勢、議題明細、工程師負載、專案清單；`project_breakdown` 為衍生
-   資料不另計）中任一類別讀取失敗，THEN THE **IssueDashboard_Actor** SHALL 讓整個請求失敗（回傳單一
-   錯誤），不做部分成功回傳（與 305 prototype 的「單一 Actor 呼叫為整體成功或整體失敗」原則一致）。
+2. IF 三個讀取資料類別（月度 KPI、每日趨勢、議題明細；`project_breakdown` 為衍生資料不另計）中任一
+   類別讀取失敗，THEN THE **IssueDashboard_Actor** SHALL 讓整個請求失敗（回傳單一錯誤），不做部分
+   成功回傳（與 305 prototype 的「單一 Actor 呼叫為整體成功或整體失敗」原則一致）。
 
 ---
 
-### 需求 8：對外介面與 Prototype 一致
+### 需求 7：對外介面與 Prototype 一致
 
 **使用者故事：** 身為前端開發者，我希望 Rails 頁面渲染出的畫面與已驗證過的 `docs/issues.html` prototype
 在結構與呈現方式上一致，以便使用者體驗不因資料來源替換而改變。
@@ -198,18 +187,16 @@ start_date, due_date` 六欄的精簡摘要列表），用途與分頁名稱皆�
 #### 驗收標準
 
 1. THE **IssueDashboard_Page** SHALL 以 `GET /issues` 路由提供 HTML 頁面。
-2. THE **IssueDashboard_Page** SHALL 顯示與 prototype 相同的五個區塊：月度 KPI 摘要卡片（含月份選擇、
-   依專案分類統計）、每日趨勢圖、議題明細清單（可依專案／狀態篩選，含歸屬類型標示）、工程師負載表、
-   專案清單表。
+2. THE **IssueDashboard_Page** SHALL 顯示與 prototype 相同的三個區塊：月度 KPI 摘要卡片（含月份選擇、
+   依專案分類統計）、每日趨勢圖、議題明細清單（可依專案／狀態篩選，含歸屬類型標示與 Redmine 連結）。
 3. THE **IssueDashboard_Endpoint** SHALL 以 `GET /api/issue_dashboard` 回傳 JSON，結構為
-   `{ month_kpi: [...], daily_kpi: [...], issues: [...], project_breakdown: [...], engineer_load: [...],
-   project_list: [...] }`。
+   `{ month_kpi: [...], daily_kpi: [...], issues: [...], project_breakdown: [...] }`。
 4. THE **IssueDashboard_Endpoint** 及 **IssueDashboard_Page** SHALL 透過 Blueprint 序列化各資料類別
    （欄位定義單一來源），不在 Controller 或 View 中重複列舉欄位。
 
 ---
 
-### 需求 9：議題明細篩選（延續 prototype UX）
+### 需求 8：議題明細篩選（延續 prototype UX）
 
 **使用者故事：** 身為戰情室使用者，我希望能像 prototype 一樣依專案與狀態篩選議題明細，以便快速找到
 特定範圍的議題。
@@ -217,14 +204,15 @@ start_date, due_date` 六欄的精簡摘要列表），用途與分頁名稱皆�
 #### 驗收標準
 
 1. THE **IssueDashboard_Page** SHALL 提供依「專案」篩選（`project` query param），預設「全部專案」。
-2. THE **IssueDashboard_Page** SHALL 提供依「狀態」篩選（`status` query param），預設「全部狀態」。
+2. THE **IssueDashboard_Page** SHALL 提供依「狀態」篩選（`status` query param），未帶參數時預設選中
+   「新建立」，聚焦最需要處理的新進議題，不預設顯示全部狀態，與 prototype 一致。
 3. WHEN 使用者變更專案或狀態篩選，THE **IssueDashboard_Page** SHALL 以 Turbo Frame 局部更新議題明細
    清單，不觸發整頁重載，與既有 `warroom-data-api-prototype` Dashboard 頁面的互動模式一致。
 4. WHEN 篩選後無符合條件的議題，THE **IssueDashboard_Page** SHALL 顯示「目前無符合條件的議題」。
 
 ---
 
-### 需求 10：月度 KPI 月份切換（延續 prototype UX）
+### 需求 9：月度 KPI 月份切換（延續 prototype UX）
 
 **使用者故事：** 身為戰情室使用者，我希望能像 prototype 一樣切換月份查看不同月度 KPI，以便回顧歷史
 月份表現。

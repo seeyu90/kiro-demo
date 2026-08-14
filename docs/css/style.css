@@ -383,6 +383,16 @@ table.project-tasks tbody tr:hover td {
   color: var(--delay-positive);
 }
 
+.issue-id-link {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.issue-id-link:hover,
+.issue-id-link:focus {
+  text-decoration: underline;
+}
+
 /* ── 入口頁 ── */
 .entry-grid {
   display: grid;

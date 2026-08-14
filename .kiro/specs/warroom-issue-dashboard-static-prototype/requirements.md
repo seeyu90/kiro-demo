@@ -13,11 +13,12 @@
 - `daily_kpi`：`日期, 客訴, 測試, 其他, 總計, 未結束數量, 未結束IDs, slack_message`
 - `raw_2023`〜`raw_2026`（逐筆 issue 明細，欄位一致）：
   `issue_id, subject, type, tracker, status, assigned_to, start_date, due_date, work_days, sheet_name, project`
-- 工程師負載表：`工程師姓名, 負責專案, 配置比例(%), 生效月份, 失效月份, 工程師姓名(總負載), 當月配置總佔比合計`
-- 專案清單表：`專案, 專案縮寫, 狀態, 比例, 生效月份, 失效月份, 負責RD`
+
+試算表另有工程師負載表與專案清單表兩個分頁，經評估後**本頁面不呈現**（見「不納入範圍」）。
 
 **不納入範圍**：Rails 後端、真實 Google Sheets API 串接、資料庫、任何跨頁面/跨次載入的持久化、
-權限管理、多語系。
+權限管理、多語系、工程師負載表與專案清單表呈現（評估後排除，Issue 明細已可呈現議題與專案的對應關係，
+負載／清單表另需釐清資料維護方式，暫不列入）。
 
 **技術棧說明**：本 spec 隸屬 `docs/` 靜態站主體，須遵守 `.kiro/steering/project-standards.md` 的
 技術限制（純 HTML/CSS/JS、無框架、無建置工具、模擬資料、繁體中文、響應式設計），無例外。
@@ -30,8 +31,10 @@
 - **ProjectProgress_Page**：`docs/project-progress.html`，由既有 `docs/index.html` 內容原樣搬移而來，
   呈現 305 專案進度（沿用既有邏輯，不在本 spec 變更行為）。
 - **Issue_Dashboard_Page**：`docs/issues.html`，本 spec 新增的 306 臭蟲議題靜態 prototype 頁面。
-- **模擬資料**：`docs/js/issues.js` 內的常數（`MONTH_KPI`、`DAILY_KPI`、`ISSUES`、`ENGINEER_LOAD`、
-  `PROJECT_LIST`），依真實 306 試算表欄位結構仿造，非讀取自真實 API。
+- **模擬資料**：`docs/js/issues.js` 內的常數（`MONTH_KPI`、`DAILY_KPI`、`ISSUES`），依真實 306 試算表
+  欄位結構仿造，非讀取自真實 API。
+- **Redmine_Issue_URL**：議題編號對應的 Redmine 議題頁面連結，格式為
+  `https://redmine.amastek.com.tw/issues/{issue_id}`。
 - **月度 KPI**：對應真實試算表 `month_kpi` 分頁的單月統計列。
 - **每日趨勢**：對應真實試算表 `daily_kpi` 分頁的逐日統計列。
 - **Issue 明細**：對應真實試算表 `raw_2023`〜`raw_2026` 分頁合併後的逐筆議題紀錄。
@@ -90,34 +93,25 @@
 
 #### 驗收標準
 
-1. THE **Issue_Dashboard_Page** SHALL 顯示 Issue 明細表格，欄位涵蓋：issue_id、subject、project、
-   歸屬類型、type、tracker、status、assigned_to、start_date、due_date、work_days。
+1. THE **Issue_Dashboard_Page** SHALL 顯示 Issue 明細表格，欄位依序為：議題編號、專案、主旨、
+   歸屬類型、狀態、負責人、開始日期、到期日期、工作天數（不顯示 `type`／`tracker` 原始欄位，其
+   分類意義已由「歸屬類型」徽章呈現，避免重複資訊）。
 1a. THE **Issue_Dashboard_Page** SHALL 依 `type` 欄位為每筆議題標示「歸屬類型」徽章：
    `Complaint`（客訴）標示為「專案共同責任」，`TestingBug`（測試）標示為「個人責任」，其餘
    （`Other`）標示為「其他」。
+1b. THE **Issue_Dashboard_Page** SHALL 將「議題編號」欄位渲染為可點擊連結，導向對應的
+   **Redmine_Issue_URL**（`https://redmine.amastek.com.tw/issues/{issue_id}`），並以新分頁開啟
+   （`target="_blank"`，含 `rel="noopener noreferrer"` 避免安全性問題）。
 2. THE **Issue_Dashboard_Page** SHALL 提供依「專案」篩選的下拉選單，預設「全部專案」。
-3. THE **Issue_Dashboard_Page** SHALL 提供依「狀態」篩選的下拉選單或多選控制項，預設顯示全部狀態。
+3. THE **Issue_Dashboard_Page** SHALL 提供依「狀態」篩選的下拉選單或多選控制項，未帶篩選條件時預設
+   選中「新建立」，聚焦最需要處理的新進議題，不預設顯示全部狀態。
 4. WHEN 使用者變更專案或狀態篩選，THE **Issue_Dashboard_Page** SHALL 只顯示符合條件的議題列。
 5. WHEN 篩選後無符合條件的議題，THE **Issue_Dashboard_Page** SHALL 顯示「目前無符合條件的議題」，
    不留白。
 
 ---
 
-### 需求 5：工程師負載與專案清單
-
-**使用者故事：** 身為戰情室使用者，我希望看到工程師目前的配置負載與專案清單，以便了解人力分配狀況。
-
-#### 驗收標準
-
-1. THE **Issue_Dashboard_Page** SHALL 顯示工程師負載表格，欄位涵蓋：工程師姓名、負責專案、
-   配置比例、生效月份、失效月份、當月配置總佔比合計。
-2. THE **Issue_Dashboard_Page** SHALL 顯示專案清單表格，欄位涵蓋：專案、專案縮寫、狀態、比例、
-   生效月份、失效月份、負責RD。
-3. 此兩張表格 SHALL 各自獨立區塊呈現，不與 Issue 明細清單共用篩選條件。
-
----
-
-### 需求 6：模擬資料、語言與響應式設計
+### 需求 5：模擬資料、語言與響應式設計
 
 **使用者故事：** 身為使用者，我希望頁面在各種裝置上都能正常顯示，且介面語言一致。
 
