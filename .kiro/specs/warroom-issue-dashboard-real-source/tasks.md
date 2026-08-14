@@ -60,16 +60,29 @@
       非數字值容錯、日期排序；`#call` 驗證 stub `IssueSheetsClient` 後兩個 output 正確填入
     - 13 examples, 0 failures；全專案回歸 112 examples, 0 failures
 
-- [ ] 4. `Sheets::FetchIssueDashboard` — 議題明細解析與依專案分類統計
-  - [ ] 4.1 實作 `parse_issues`
+- [x] 4. `Sheets::FetchIssueDashboard` — 議題明細解析與依專案分類統計
+  - [x] 4.1 實作 `parse_issues`
     - 欄位對應（issue_id/subject/type/tracker/status/assigned_to/start_date/due_date/work_days/
-      project）、日期正規化（沿用既有 `normalize_date`）、`work_days` 整數轉換容錯、必要欄位空白列跳過
+      project，跳過 `sheet_name`）、日期正規化（新增獨立實作的 `normalize_date`，邏輯與 305
+      `Sheets::FetchProjectProgress#normalize_date` 相同，未抽共用 module，見 design.md 的抽象化
+      取捨說明）、`work_days` 整數轉換容錯（沿用 `safe_integer`）、必要欄位（issue_id/subject/status）
+      任一空白則跳過該列，其餘正常列不受影響
     - _需求：5.2, 5.3, 5.4, 5.5_
 
-  - [ ] 4.2 實作 `compute_project_breakdown(issues)`
+  - [x] 4.2 實作 `compute_project_breakdown(issues)`
     - 依 `project` 分組統計 `complaint`／`testing`／`other` 筆數與 `total`，純記憶體運算（不重複呼叫
-      `IssueSheetsClient`），邏輯與 prototype 的 `computeProjectBreakdown` 一致
+      `IssueSheetsClient`），邏輯與 prototype 的 `computeProjectBreakdown` 一致；`project` 為空白時
+      歸類為「未分類」
+    - `call` 已串接 `self.issues = parse_issues(...)` 與 `self.project_breakdown =
+      compute_project_breakdown(issues)`；錯誤處理仍待 Task 5
     - _需求：3a.1, 3a.2_
+
+  - [x] 4.3 單元測試：擴充 `spec/actors/sheets/fetch_issue_dashboard_spec.rb`
+    - `#parse_issues`：欄位對應（含 sheet_name 排除）、日期正規化、空值保留 nil、work_days 轉換
+      與容錯、三種必要欄位各自空白時跳過（其餘正常列不受影響）、空列跳過
+    - `#compute_project_breakdown`：分組計數與 total 加總、空白 project 歸類「未分類」、空清單
+    - `#call`：驗證 stub 後 `issues`／`project_breakdown` 正確填入
+    - 29 examples, 0 failures；全專案回歸 128 examples, 0 failures
 
 - [ ] 5. `Sheets::FetchIssueDashboard` — 錯誤處理
   - [ ] 5.1 實作統一錯誤對應（404/403/內部錯誤），任一資料類別失敗即整體失敗
@@ -170,7 +183,7 @@
     { "id": 1, "tasks": ["2.1"] },
     { "id": 2, "tasks": ["2.2", "3.1", "3.2", "3.3", "4.1"] },
     { "id": 3, "tasks": ["4.2", "5.1"] },
-    { "id": 4, "tasks": ["5.2"] },
+    { "id": 4, "tasks": ["4.3", "5.2"] },
     { "id": 5, "tasks": ["6"] },
     { "id": 6, "tasks": ["7.1"] },
     { "id": 7, "tasks": ["8.1"] },

@@ -10,10 +10,11 @@ module Sheets
     output :message
 
     def call
-      self.month_kpi = parse_month_kpi(IssueSheetsClient.fetch_month_kpi_rows)
-      self.daily_kpi = parse_daily_kpi(IssueSheetsClient.fetch_daily_kpi_rows)
+      self.month_kpi         = parse_month_kpi(IssueSheetsClient.fetch_month_kpi_rows)
+      self.daily_kpi          = parse_daily_kpi(IssueSheetsClient.fetch_daily_kpi_rows)
+      self.issues              = parse_issues(IssueSheetsClient.fetch_issue_rows)
+      self.project_breakdown = compute_project_breakdown(issues)
 
-      # issues／project_breakdown：Task 4 實作
       # 錯誤處理（rescue Google::Apis::ClientError 等）：Task 5 實作
     end
 
@@ -66,6 +67,63 @@ module Sheets
       end
 
       records.sort_by { |r| r[:date] }
+    end
+
+    # 欄位對應：issue_id, subject, type, tracker, status, assigned_to, start_date, due_date,
+    # work_days, sheet_name（略過，僅為來源標記，不需輸出）, project。
+    # issue_id／subject／status 任一為空白則跳過該列（需求 5.5），其餘正常列不受影響。
+    def parse_issues(rows)
+      return [] if rows.nil? || rows.size <= 1
+
+      rows[1..].filter_map do |row|
+        next if blank_row?(row)
+
+        issue_id, subject, type, tracker, status, assigned_to,
+          start_date, due_date, work_days, _sheet_name, project = row.values_at(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+        next if [issue_id, subject, status].any? { |value| value.to_s.strip.empty? }
+
+        {
+          issue_id: issue_id,
+          subject: subject,
+          type: type,
+          tracker: tracker,
+          status: status,
+          assigned_to: assigned_to,
+          start_date: normalize_date(start_date),
+          due_date: normalize_date(due_date),
+          work_days: safe_integer(work_days),
+          project: project
+        }
+      end
+    end
+
+    # 依 project 分組統計 complaint／testing／other 筆數與 total（需求 3a），與 prototype 的
+    # computeProjectBreakdown 邏輯一致；純記憶體運算，不再次呼叫 IssueSheetsClient。
+    def compute_project_breakdown(issues)
+      grouped = issues.each_with_object({}) do |issue, acc|
+        key = issue[:project].to_s.strip.empty? ? "未分類" : issue[:project]
+        acc[key] ||= { project: key, complaint: 0, testing: 0, other: 0 }
+
+        case issue[:type]
+        when "Complaint" then acc[key][:complaint] += 1
+        when "TestingBug" then acc[key][:testing] += 1
+        else acc[key][:other] += 1
+        end
+      end
+
+      grouped.values.map { |row| row.merge(total: row[:complaint] + row[:testing] + row[:other]) }
+    end
+
+    # 與 305 Sheets::FetchProjectProgress#normalize_date 邏輯相同；維持獨立實作而非抽共用
+    # module（同一 karpathy-guidelines 取捨，見 design.md「Components and Interfaces」段落）。
+    def normalize_date(date_str)
+      return nil if date_str.nil? || date_str.to_s.empty?
+
+      match = date_str.to_s.match(%r{\A(\d{4})[-/](\d{1,2})[-/](\d{1,2})\z})
+      return date_str unless match
+
+      year, month, day = match.captures
+      "#{year}-#{month.rjust(2, '0')}-#{day.rjust(2, '0')}"
     end
 
     def blank_row?(row)
