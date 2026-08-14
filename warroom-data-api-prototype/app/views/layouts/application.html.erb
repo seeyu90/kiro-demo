@@ -79,5 +79,32 @@
         });
       })();
     </script>
+
+    <script>
+      (function () {
+        "use strict";
+        // 篩選表單只更新 project-content frame（見 dashboard/index.html.erb），
+        // 送出期間讓「套用篩選」按鈕停用並改變文字，避免使用者以為沒反應而重複點擊。
+        var BUSY_LABEL = "套用中…";
+
+        document.addEventListener("DOMContentLoaded", function () {
+          var form = document.querySelector(".project-selector");
+          var submitBtn = form && form.querySelector(".apply-filters-btn");
+          if (!form || !submitBtn) return;
+
+          var defaultLabel = submitBtn.textContent;
+
+          form.addEventListener("turbo:submit-start", function () {
+            submitBtn.disabled = true;
+            submitBtn.textContent = BUSY_LABEL;
+          });
+
+          form.addEventListener("turbo:submit-end", function () {
+            submitBtn.disabled = false;
+            submitBtn.textContent = defaultLabel;
+          });
+        });
+      })();
+    </script>
   </body>
 </html>

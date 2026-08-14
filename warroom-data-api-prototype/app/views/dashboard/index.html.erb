@@ -5,7 +5,10 @@
   </div>
   <p class="back-link-row"><%= link_to "← 返回入口頁", "/", class: "back-link" %></p>
 
-  <%= form_with url: "/dashboard", method: :get, local: true, class: "project-selector" do %>
+  <%# data-turbo-frame 讓送出只換掉下方 project-content frame 的內容，
+      瀏覽器網址列不會被填入篩選參數，也不會觸發整頁導覽。 %>
+  <%= form_with url: "/dashboard", method: :get, class: "project-selector",
+                data: { turbo_frame: "project-content" } do %>
     <div class="control-group">
       <label for="project">選擇專案：</label>
       <%= select_tag :project,

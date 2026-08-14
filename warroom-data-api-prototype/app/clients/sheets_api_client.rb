@@ -5,6 +5,8 @@ class SheetsApiClient
   SHEET_NAMES    = ["功能", "PR", "調整", "遺漏", "臭蟲"].freeze
   RANGE_SUFFIX   = "!A:G"
   SCOPES         = ["https://www.googleapis.com/auth/spreadsheets.readonly"].freeze
+  CACHE_KEY      = "sheets_api_client/fetch_rows/#{SPREADSHEET_ID}"
+  CACHE_EXPIRY   = 5.minutes
 
   # 305 進度資料分散在 5 個「類型」分頁（功能／PR／調整／遺漏／臭蟲），每個分頁欄位結構
   # 完全相同（A~G：專案名稱、任務名稱、狀態、負責人、預計完成日期、實際完成日期、延誤，
@@ -19,7 +21,16 @@ class SheetsApiClient
     new.fetch_rows
   end
 
+  # 試算表資料變動不快，即時每次請求都重打 5 個分頁的 API 會拖慢頁面。
+  # 成功結果快取 CACHE_EXPIRY 分鐘；若區塊內拋出例外（額度、權限等錯誤），
+  # Rails.cache.fetch 不會快取例外，下次請求會照常重試，不會卡住舊的錯誤結果。
   def fetch_rows
+    Rails.cache.fetch(CACHE_KEY, expires_in: CACHE_EXPIRY) { fetch_rows_from_api }
+  end
+
+  private
+
+  def fetch_rows_from_api
     service = build_service
     combined = []
 
@@ -31,8 +42,6 @@ class SheetsApiClient
 
     combined
   end
-
-  private
 
   DATA_COLUMN_COUNT = 7 # A~G
 

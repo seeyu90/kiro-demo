@@ -280,6 +280,18 @@ body {
   outline: none;
 }
 
+.apply-filters-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Turbo 在 frame 送出請求期間會自動幫 <turbo-frame> 加上 busy 屬性 */
+turbo-frame#project-content[busy] {
+  opacity: 0.5;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
 /* ── Project Block ── */
 .project-block {
   background: var(--color-surface);
