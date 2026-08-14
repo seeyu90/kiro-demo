@@ -84,13 +84,48 @@
   - `bundle exec rspec` 全數通過
   - 瀏覽器手動驗證：篩選送出網址不變、載入狀態正確顯示、（若做了 4/5）時效提示與手動刷新皆正確
 
+- [x] 7. `IssueSheetsClient` 加入快取
+  - [x] 7.1 三個 `fetch_*_rows` 方法各自包一層 `Rails.cache.fetch`
+    - `fetch_month_kpi_rows`、`fetch_daily_kpi_rows`、`fetch_issue_rows` 各自獨立快取鍵
+      （避免互相覆蓋），TTL 沿用 5 分鐘
+    - 例外於區塊內拋出時不寫入快取，維持原本的例外傳遞行為
+    - _需求：6.1, 6.2, 6.3_
+
+  - [x] 7.2 對應測試確認
+    - `spec/clients/issue_sheets_client_spec.rb` 既有測試（測試環境 `:null_store`，快取實質
+      停用）維持全數通過，未為快取本身另外新增案例（比照任務 1 的驗證方式）
+    - _需求：6（測試涵蓋）_
+
+- [x] 8. Issues 頁面篩選改為 Turbo Frame 局部更新 + 載入狀態
+  - [x] 8.1 兩個篩選表單改為只更新 `issue-content` frame
+    - `app/views/issues/index.html.erb` 兩處 `form_with` 皆移除 `local: true`，加上
+      `data: { turbo_frame: "issue-content" }`
+    - 既有 hidden fields（跨分頁籤保留篩選狀態）不變動
+    - _需求：7.1, 7.3_
+
+  - [x] 8.2 載入狀態回饋涵蓋兩個表單
+    - `application.html.erb` 的送出監聽邏輯改為 `querySelectorAll(".project-selector")`
+      逐一綁定，而非只綁定第一個符合的表單（原本只會抓到 Dashboard 頁面那一個）
+    - _需求：7.2_
+
+  - [x] 8.3 檢查點 — 驗證
+    - `bundle exec rspec` 224/224 全數通過
+    - `curl` 對執行中的 dev server 驗證：無憑證環境下 `/issues` 因 `@error` 分支不渲染表單
+      （既有結構，非本次改動造成），故改用 `bin/rails runner` + `ActionDispatch::Integration::Session`
+      搭配 stub `IssueSheetsClient` 直接渲染成功路徑，確認兩個 `<form class="project-selector">`
+      皆帶 `data-turbo-frame="issue-content"`
+    - 未透過瀏覽器實機點擊驗證載入狀態視覺效果（Chrome 工具本次連線失敗），行為依據與任務 3
+      相同的 Turbo 事件機制推導
+
 ---
 
 ## Notes
 
-- 任務 1、2 已在本分支（`google-sheets-fetch-performance`）實作完成，本檔案主要記錄任務 3–6
-  待執行項目
+- 任務 1、2、3、7、8 已在本分支（`claude/warroom-dashboards-fetch-ux`）實作完成；任務 4、5
+  （選用）尚未執行
 - 任務 4、5 標記為選用，可視時間與優先順序決定是否納入本輪
+- 任務 7、8 是把任務 1、2、3 的做法比照套用到 306 議題 Dashboard（`/issues`），詳見
+  requirements.md 需求 6、7
 - 依 karpathy-guidelines：每項工作開始前先確認可驗證標準，完成後才勾選
 
 ## Task Dependency Graph
@@ -99,10 +134,10 @@
 {
   "waves": [
     { "id": 0, "tasks": ["1", "2"] },
-    { "id": 1, "tasks": ["3.1", "3.2"] },
-    { "id": 2, "tasks": ["3.3"] },
-    { "id": 3, "tasks": ["4.1"] },
-    { "id": 4, "tasks": ["4.2"] },
+    { "id": 1, "tasks": ["3.1", "3.2", "7.1"] },
+    { "id": 2, "tasks": ["3.3", "7.2", "8.1"] },
+    { "id": 3, "tasks": ["4.1", "8.2"] },
+    { "id": 4, "tasks": ["4.2", "8.3"] },
     { "id": 5, "tasks": ["4.3", "5.1"] },
     { "id": 6, "tasks": ["5.2"] },
     { "id": 7, "tasks": ["5.3"] },

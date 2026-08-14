@@ -15,21 +15,34 @@ class IssueSheetsClient
   ISSUE_RANGE     = "A:K"
 
   SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"].freeze
+  CACHE_EXPIRY = 5.minutes
 
+  # 三個讀取類別各自獨立快取鍵，避免共用一把鍵導致互相覆蓋（見 SheetsApiClient 相同作法）。
   def self.fetch_month_kpi_rows
-    new.fetch_rows(MONTH_KPI_SHEET, MONTH_KPI_RANGE)
+    Rails.cache.fetch(cache_key(MONTH_KPI_SHEET), expires_in: CACHE_EXPIRY) do
+      new.fetch_rows(MONTH_KPI_SHEET, MONTH_KPI_RANGE)
+    end
   end
 
   def self.fetch_daily_kpi_rows
-    new.fetch_rows(DAILY_KPI_SHEET, DAILY_KPI_RANGE)
+    Rails.cache.fetch(cache_key(DAILY_KPI_SHEET), expires_in: CACHE_EXPIRY) do
+      new.fetch_rows(DAILY_KPI_SHEET, DAILY_KPI_RANGE)
+    end
   end
 
   # raw_2023~raw_2027 皆使用相同欄位結構（issue_id, subject, type, tracker, status,
   # assigned_to, start_date, due_date, work_days, sheet_name, project），與 305 的
   # SheetsApiClient 不同，這裡不需要額外附加分頁標記：試算表本身已含 sheet_name／project 欄位。
   def self.fetch_issue_rows
-    new.fetch_and_merge_rows(ISSUE_SHEETS, ISSUE_RANGE)
+    Rails.cache.fetch(cache_key("issues"), expires_in: CACHE_EXPIRY) do
+      new.fetch_and_merge_rows(ISSUE_SHEETS, ISSUE_RANGE)
+    end
   end
+
+  def self.cache_key(suffix)
+    "issue_sheets_client/#{suffix}/#{SPREADSHEET_ID}"
+  end
+  private_class_method :cache_key
 
   def fetch_rows(sheet_name, range_suffix)
     response = build_service.get_spreadsheet_values(

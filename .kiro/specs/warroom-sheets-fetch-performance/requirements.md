@@ -117,3 +117,45 @@ Google Sheet 上改完東西後能立刻在 Dashboard 上看到，而不用等�
 4. WHEN 「重新整理資料」的請求失敗，THE **Dashboard_Page** SHALL 顯示既有的錯誤訊息呈現方式
    （沿用 `Sheets::FetchProjectProgress` 既有的 `failure_code` / `message` 錯誤處理），不因手動
    刷新失敗而讓快取內的舊資料被清除或遺失。
+
+---
+
+### 需求 6：306 議題 Dashboard（`/issues`）比照加入快取
+
+**使用者故事：** 身為戰情室使用者，我希望 306 議題 Dashboard 也不用每次都等即時 API，以便跟
+305 進度 Dashboard 有一致的載入速度。
+
+**背景**：`IssueSheetsClient`（`app/clients/issue_sheets_client.rb`）與 `SheetsApiClient` 是各自
+獨立的 Google Sheets 讀取層，`fetch_month_kpi_rows` / `fetch_daily_kpi_rows` / `fetch_issue_rows`
+三個方法目前皆未快取，`/issues` 與 `/api/issue_dashboard` 每次請求都各自即時重打對應分頁的 API。
+
+#### 驗收標準
+
+1. THE **IssueSheetsClient** SHALL 將 `fetch_month_kpi_rows`、`fetch_daily_kpi_rows`、
+   `fetch_issue_rows` 三個方法的成功結果分別快取，快取鍵需彼此獨立（不可共用同一把鍵導致互相
+   覆蓋），TTL 與需求 1 的 `SheetsApiClient` 一致，為 5 分鐘。
+2. WHEN 對應快取存在且未過期，THE **IssueSheetsClient** SHALL 直接回傳快取內容，不對 Google
+   Sheets API 發起請求。
+3. IF 任一方法讀取過程拋出例外，THEN THE **IssueSheetsClient** SHALL 不將本次結果寫入該方法對應
+   的快取，例外照常向外拋出（行為與需求 1.4 一致）。
+
+---
+
+### 需求 7：Issues 頁面篩選不寫入網址與載入狀態回饋
+
+**使用者故事：** 身為戰情室使用者，我希望 306 議題 Dashboard 的兩個分頁籤（統計摘要／議題資料）
+篩選送出時，也跟 305 進度 Dashboard 一樣不會把參數塞進網址、送出時看得到載入中提示。
+
+**背景**：`app/views/issues/index.html.erb` 有兩個獨立的 `form_with method: :get, local: true`
+表單（統計摘要分頁籤、議題資料分頁籤），皆會觸發整頁導覽並把 `month` / `project` / `status` /
+`tab` / `breakdown_sort` / `breakdown_dir` 等參數寫入網址；兩個表單都用了與 Dashboard 頁面相同的
+`.project-selector` / `.apply-filters-btn` class。
+
+#### 驗收標準
+
+1. WHEN 使用者送出任一篩選表單，THE **Dashboard_Page**（`/issues`）SHALL 僅更新既有的
+   `issue-content` Turbo Frame 內容，不觸發整頁導覽，網址列 SHALL 維持不變（比照需求 2）。
+2. WHEN 篩選表單送出、等待 `issue-content` frame 回應期間，THE 對應的「套用篩選」按鈕 SHALL
+   停用並顯示載入中文字，完成後恢復（比照需求 3）；兩個分頁籤的表單須各自獨立套用，不可只有其
+   中一個生效。
+3. THE 既有的 hidden fields（用於讓兩個表單互相保留對方分頁籤的篩選狀態）行為 SHALL 維持不變。
