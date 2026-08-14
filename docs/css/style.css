@@ -383,6 +383,128 @@ table.project-tasks tbody tr:hover td {
   color: var(--delay-positive);
 }
 
+/* ── 入口頁 ── */
+.entry-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.25rem;
+  margin-top: 1rem;
+}
+
+.entry-card {
+  display: block;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 1.5rem;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s ease;
+}
+
+.entry-card:hover,
+.entry-card:focus {
+  border-color: var(--color-accent);
+}
+
+.entry-card h2 {
+  margin: 0 0 0.5rem;
+  color: var(--color-text-strong);
+  font-size: 1.15rem;
+}
+
+.entry-card p {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.back-link {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.back-link:hover,
+.back-link:focus {
+  text-decoration: underline;
+}
+
+/* ── 306 議題頁面區塊 ── */
+.issue-section {
+  margin-bottom: 2.5rem;
+}
+
+.issue-section h2 {
+  font-size: 1.25rem;
+  margin-bottom: 0.75rem;
+  color: var(--color-text-strong);
+}
+
+.section-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.section-heading-row h2 {
+  margin: 0;
+}
+
+.top3-list {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.top3-heading {
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.top3-badge {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 0.2rem 0.7rem;
+  font-size: 0.85rem;
+}
+
+.trend-chart-wrap {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.trend-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.trend-line {
+  fill: none;
+  stroke: var(--color-accent);
+  stroke-width: 2;
+}
+
+.trend-point {
+  fill: var(--color-surface);
+  stroke: var(--color-accent);
+  stroke-width: 2;
+  cursor: pointer;
+}
+
+.trend-point:hover,
+.trend-point:focus {
+  fill: var(--color-accent);
+}
+
 /* ── Tablet ── */
 @media (max-width: 768px) {
   .dashboard-header,
@@ -418,6 +540,11 @@ table.project-tasks tbody tr:hover td {
 
   .stat-item {
     flex: 1 1 45%;
+  }
+
+  .section-heading-row {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 
