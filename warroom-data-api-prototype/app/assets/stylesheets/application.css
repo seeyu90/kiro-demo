@@ -347,6 +347,23 @@ body {
   background: var(--table-row-hover-bg);
 }
 
+.sort-button {
+  color: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  text-decoration: none;
+}
+
+.sort-button:hover,
+.sort-button:focus {
+  color: var(--color-accent);
+}
+
+.sort-button:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
 /* ── Status Badge ── */
 .status-badge {
   display: inline-block;

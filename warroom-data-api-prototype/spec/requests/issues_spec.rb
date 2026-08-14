@@ -32,7 +32,11 @@ RSpec.describe "Issues", type: :request do
       ["5165", "白名單申請時間錯誤", "TestingBug", "臭蟲", "新建立", "蔡秉逸",
        "2026/8/12", "", "", "raw_2026", "Virtuous HRM"],
       ["3058", "結案小工序DeadlockVictim", "Other", "臭蟲", "已暫停", "王贊勛",
-       "2024/4/29", "", "", "raw_2024", "AG 亞炬"]
+       "2024/4/29", "", "", "raw_2024", "AG 亞炬"],
+      ["5170", "測試環境資料回填驗證", "TestingBug", "測試", "新建立", "蔡秉逸",
+       "2026/8/13", "", "", "raw_2026", "Virtuous HRM"],
+      ["5180", "客訴：儀表板顯示異常", "Complaint", "臭蟲", "已解決", "王贊勛",
+       "2026/8/5", "2026/8/6", "1", "raw_2026", "JZN 舊振南智慧工廠"]
     ]
   end
 
@@ -70,10 +74,18 @@ RSpec.describe "Issues", type: :request do
     end
 
     it "shows the project breakdown table filtered to issues started in the selected month" do
-      # 預設月份為 2026-08，僅 issue 5165（start_date 2026/8/12）符合，issue 3058（2024/4/29）不應出現
+      # 預設月份為 2026-08，issue 5165／5180 的 start_date 落在此月份，issue 3058（2024/4/29）不應出現
       section = project_breakdown_section(response.body)
       expect(section).to include("Virtuous HRM")
+      expect(section).to include("JZN 舊振南智慧工廠")
       expect(section).not_to include("AG 亞炬")
+    end
+
+    it "renders sortable column headers for 客訴／測試／其他／總計 without a sort applied by default" do
+      section = project_breakdown_section(response.body)
+      %w[客訴 測試 其他 總計].each { |label| expect(section).to include(">#{label}<") }
+      expect(section).not_to include("▲")
+      expect(section).not_to include("▼")
     end
 
     it "renders the trend chart SVG with one point per daily_kpi row" do
@@ -104,6 +116,10 @@ RSpec.describe "Issues", type: :request do
       expect(response.body).to include("未匯入行事曆")
       expect(response.body).to include("白名單申請時間錯誤")
       expect(response.body).to include("結案小工序DeadlockVictim")
+    end
+
+    it "excludes issues whose tracker is 測試 (test-only issue, not a real quality defect) even with no status filter" do
+      expect(response.body).not_to include("測試環境資料回填驗證")
     end
 
     it "shows all three attribution categories" do
@@ -155,6 +171,50 @@ RSpec.describe "Issues", type: :request do
       section = project_breakdown_section(response.body)
       expect(section).to include("Virtuous HRM")
       expect(section).not_to include("AG 亞炬")
+    end
+  end
+
+  describe "GET /issues?breakdown_sort=... (依專案分類排序)" do
+    def breakdown_project_order(body)
+      project_breakdown_section(body).scan(%r{<td>([^<]+)</td>}).flatten.each_slice(5).map(&:first)
+    end
+
+    it "defaults to descending when a sort key is first applied" do
+      get "/issues", params: { breakdown_sort: "complaint" }
+
+      # 2026-08：JZN 舊振南智慧工廠 complaint=1（issue 5180），Virtuous HRM complaint=0（issue 5165 為 TestingBug）
+      expect(breakdown_project_order(response.body)).to eq(["JZN 舊振南智慧工廠", "Virtuous HRM"])
+    end
+
+    it "toggles to ascending when the same key is applied with breakdown_dir=asc" do
+      get "/issues", params: { breakdown_sort: "complaint", breakdown_dir: "asc" }
+
+      expect(breakdown_project_order(response.body)).to eq(["Virtuous HRM", "JZN 舊振南智慧工廠"])
+    end
+
+    it "shows a ▼ indicator on the active descending column and none on the others" do
+      get "/issues", params: { breakdown_sort: "testing" }
+
+      section = project_breakdown_section(response.body)
+      expect(section).to include("測試 ▼")
+      expect(section).not_to include("客訴 ▼")
+      expect(section).not_to include("客訴 ▲")
+    end
+
+    it "ignores an invalid breakdown_sort value and falls back to unsorted order" do
+      get "/issues", params: { breakdown_sort: "not-a-real-column" }
+
+      section = project_breakdown_section(response.body)
+      expect(section).not_to include("▲")
+      expect(section).not_to include("▼")
+    end
+
+    it "keeps the selected month while sorting (sort links preserve the month param)" do
+      get "/issues", params: { month: "2026-01", breakdown_sort: "complaint" }
+
+      section = project_breakdown_section(response.body)
+      expect(section).to include("month=2026-01")
+      expect(section).to include("breakdown_sort=complaint")
     end
   end
 

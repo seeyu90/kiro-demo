@@ -142,6 +142,21 @@ var REDMINE_ISSUE_URL_BASE = "https://redmine.amastek.com.tw/issues/";
   負責人為主軸的 Top3 排行——理由見需求 2.4：客訴問題影響整個專案（全專案成員共同承擔），測試階段
   問題則歸屬個別開發者，兩者性質不同，故以「專案」而非「負責人」作為統計分類主軸；WHEN 篩選後為空
   陣列，顯示「所選月份無議題資料」（需求 2.4a）。
+- 排序（需求 2.4b）：`state.breakdownSort = { key: null, dir: -1 }` 記錄目前排序欄位／方向；
+  `renderProjectBreakdown` 於計算完 `rows` 後呼叫 `sortBreakdownRows(rows)`（`key` 為 `null` 時原樣
+  回傳，維持依專案分組的原始順序）。`buildGenericTable` 擴充為接受選填的 `sortState`／`onSortClick`
+  參數：欄位定義加上 `sortable: true` 時，標題渲染為 `<button class="sort-button">`，點擊呼叫
+  `toggleBreakdownSort(key)`（同欄位重複點擊反轉方向；切換不同欄位預設 `dir: -1` 即由大到小）並以
+  `currentBreakdownMonthIssues`（模組變數，記錄最近一次 `renderProjectBreakdown` 的月份子集）重新
+  渲染，不需重新計算 `computeProjectBreakdown`。議題明細清單呼叫 `buildGenericTable` 時不傳入這兩個
+  參數，欄位標題維持純文字，不受影響。目前排序中的欄位標題附加 `▲`（升冪）／`▼`（降冪）指示。
+
+### tracker=測試 議題排除（需求 4.6）
+
+- `RAW_ISSUE_ROWS`：模擬 raw_2023~raw_2026 分頁的原始資料（含 `tracker` 為「測試」的樣本列，驗證
+  排除邏輯）；`ISSUES = RAW_ISSUE_ROWS.filter(issue => issue.tracker !== "測試")`，載入後立即整批
+  過濾，不進入本頁面任何區塊（KPI 摘要、每日趨勢、依專案分類統計、議題明細清單皆讀取過濾後的
+  `ISSUES`，不需個別實作排除邏輯）。
 
 ### 每日趨勢圖（需求 3）
 

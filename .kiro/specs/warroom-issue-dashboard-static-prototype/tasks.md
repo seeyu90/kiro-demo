@@ -254,6 +254,31 @@
     - 7/7（月份篩選，`e2e_monthscope.js`）+ 7/7（橫軸旋轉，`e2e_rotation.js`）通過；全量回歸重測
       33+4+5+4+5+6 項（Task 11〜15 回歸腳本）皆通過
 
+- [x] 17. 排除 tracker=測試 議題；依專案分類統計表新增排序功能（見需求 2.4b、4.6）
+  - [x] 17.1 `RAW_ISSUE_ROWS` + 載入時整批過濾 `tracker === "測試"` 的議題
+    - 起因：使用者反映「如果 tracker 是測試的不列入品質裡面，那個是測試議題」；確認排除範圍為
+      整個頁面（議題明細清單＋依專案分類統計，非僅統計類區塊）
+    - 新增一筆 `tracker: "測試"` 的樣本資料（issue_id 5170）驗證排除邏輯；`ISSUES` 改為
+      `RAW_ISSUE_ROWS.filter(issue => issue.tracker !== "測試")`，其餘渲染函式讀取 `ISSUES`
+      不需個別修改
+    - _需求：4.6_
+
+  - [x] 17.2 依專案分類統計表新增排序（客訴／測試／其他／總計）
+    - 起因：使用者詢問「依專案分類 能有排序嗎？例如可以依照客訴數量 測試數量 總數量」
+    - `state.breakdownSort = { key: null, dir: -1 }`；`buildGenericTable` 擴充 `sortState`／
+      `onSortClick` 選填參數，欄位標記 `sortable: true` 時標題渲染為可點擊按鈕；同欄位再次點擊
+      反轉方向，切換不同欄位預設由大到小；目前排序欄位標題顯示 ▲／▼ 指示；專案欄位不可排序
+    - 新增 `.sort-button` CSS（無框透明背景、hover/`:focus-visible` 呈現 accent 色與外框，符合
+      可及性）
+    - _需求：2.4b_
+
+  - [x] 17.3 檢查點 — Playwright E2E 驗證
+    - tracker=測試 議題不出現在議題明細清單（含清空狀態篩選後）、不計入依專案分類統計；點擊排序
+      按鈕正確排序（含降冪／升冪切換、切換不同欄位重設方向、▲／▼ 指示正確）；切換月份後排序狀態
+      維持、頁面不崩潰；無 console error
+    - 2/2（tracker 排除，`e2e_tracker_filter.js`）+ 8/8（排序，`e2e_sort.js`）通過；全量回歸重測
+      33+4+5+4+5+6+7 項（Task 11〜16 回歸腳本）皆通過
+
 ---
 
 ## Notes

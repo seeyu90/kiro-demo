@@ -226,6 +226,18 @@ RSpec.describe Sheets::FetchIssueDashboard do
       expect(actor.send(:parse_issues, nil)).to eq([])
       expect(actor.send(:parse_issues, [header])).to eq([])
     end
+
+    it "skips a row whose tracker is 測試 (test-only issue, not a real quality defect), keeping other valid rows" do
+      rows = [
+        header,
+        ["1", "s", "TestingBug", "測試", "新建立", "x", "", "", "", "raw_2026", "P"],
+        ["2", "s2", "TestingBug", "臭蟲", "新建立", "y", "", "", "", "raw_2026", "P"]
+      ]
+
+      result = actor.send(:parse_issues, rows)
+
+      expect(result.map { |r| r[:issue_id] }).to eq(["2"])
+    end
   end
 
   describe "#compute_project_breakdown" do

@@ -84,6 +84,8 @@ module Sheets
     # 欄位對應：issue_id, subject, type, tracker, status, assigned_to, start_date, due_date,
     # work_days, sheet_name（略過，僅為來源標記，不需輸出）, project。
     # issue_id／subject／status 任一為空白則跳過該列（需求 5.5），其餘正常列不受影響。
+    # tracker 為「測試」的議題屬於測試性質議題（非真實缺陷），不列入品質相關統計與呈現，
+    # 於解析階段整批跳過，不進入 issues／project_breakdown 輸出，API 與 HTML 頁面皆不會看到。
     def parse_issues(rows)
       return [] if rows.nil? || rows.size <= 1
 
@@ -93,6 +95,7 @@ module Sheets
         issue_id, subject, type, tracker, status, assigned_to,
           start_date, due_date, work_days, _sheet_name, project = row.values_at(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
         next if [issue_id, subject, status].any? { |value| value.to_s.strip.empty? }
+        next if tracker.to_s.strip == "測試"
 
         {
           issue_id: issue_id,

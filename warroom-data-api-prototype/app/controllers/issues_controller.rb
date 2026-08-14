@@ -2,6 +2,9 @@ class IssuesController < ApplicationController
   DEFAULT_STATUS = "新建立".freeze
   TABS = %w[stats detail].freeze
   DEFAULT_TAB = "stats".freeze
+  BREAKDOWN_SORT_KEYS = %w[complaint testing other total].freeze
+  BREAKDOWN_SORT_DIRS = %w[asc desc].freeze
+  DEFAULT_BREAKDOWN_SORT_DIR = "desc".freeze
 
   def index
     result = Sheets::FetchIssueDashboard.result
@@ -37,7 +40,12 @@ class IssuesController < ApplicationController
     # （建立日）判斷所屬月份，議題明細本身則不受月份篩選（見需求 8）。
     @daily_kpi = all_daily_kpi.select { |d| same_month?(d[:date], @selected_month) }
     month_issues = all_issues.select { |i| same_month?(i[:start_date], @selected_month) }
-    @project_breakdown = compute_project_breakdown(month_issues)
+
+    # 排序欄位／方向皆為選填 query params；未帶或帶入非法值時維持原始（依專案分組）順序。
+    @breakdown_sort = params[:breakdown_sort] if BREAKDOWN_SORT_KEYS.include?(params[:breakdown_sort])
+    @breakdown_dir =
+      BREAKDOWN_SORT_DIRS.include?(params[:breakdown_dir]) ? params[:breakdown_dir] : DEFAULT_BREAKDOWN_SORT_DIR
+    @project_breakdown = sort_project_breakdown(compute_project_breakdown(month_issues))
 
     @projects = all_issues.map { |i| i[:project] }.compact.uniq
     @statuses = all_issues.map { |i| i[:status] }.compact.uniq
@@ -54,6 +62,8 @@ class IssuesController < ApplicationController
     @month_kpi = []
     @daily_kpi = []
     @project_breakdown = []
+    @breakdown_sort = nil
+    @breakdown_dir = DEFAULT_BREAKDOWN_SORT_DIR
     @available_months = []
     @selected_month = nil
     @selected_month_record = nil
@@ -93,5 +103,13 @@ class IssuesController < ApplicationController
     end
 
     grouped.values.map { |row| row.merge(total: row[:complaint] + row[:testing] + row[:other]) }
+  end
+
+  # @breakdown_sort 為 nil 時維持原始（依專案分組）順序，不排序。
+  def sort_project_breakdown(rows)
+    return rows if @breakdown_sort.nil?
+
+    sorted = rows.sort_by { |row| row[@breakdown_sort.to_sym] }
+    @breakdown_dir == "desc" ? sorted.reverse : sorted
   end
 end

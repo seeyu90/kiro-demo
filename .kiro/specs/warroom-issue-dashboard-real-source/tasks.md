@@ -298,6 +298,33 @@
       同名文字
     - 30/30（`issues_spec.rb`）通過；全專案回歸 210/210 通過
 
+- [x] 15. 排除 tracker=測試 議題；依專案分類統計表新增排序功能（見需求 3a.5、5a）
+  - [x] 15.1 `Sheets::FetchIssueDashboard#parse_issues` 新增 `next if tracker.to_s.strip == "測試"`
+    - 起因：使用者反映「如果 tracker 是測試的不列入品質裡面，那個是測試議題」；確認排除範圍為
+      整個頁面（議題明細清單＋依專案分類統計），故於 Actor 解析階段排除，`issues`／
+      `project_breakdown` 輸出與 `GET /api/issue_dashboard`／`GET /issues` 皆不會看到
+    - `spec/actors/sheets/fetch_issue_dashboard_spec.rb` 新增測試：tracker=測試 的列被跳過，其餘
+      正常列不受影響
+    - _需求：5a_
+
+  - [x] 15.2 `IssuesController` 新增 `BREAKDOWN_SORT_KEYS`／`BREAKDOWN_SORT_DIRS` 常數 +
+        `breakdown_sort`／`breakdown_dir` query params 解析 + `sort_project_breakdown` private
+        method；`IssuesHelper#breakdown_sort_link(key, label)` 產生可點擊的排序標題連結
+    - 起因：使用者詢問「依專案分類 能有排序嗎？例如可以依照客訴數量 測試數量 總數量」
+    - 連結保留目前所選 `month`、固定 `tab: "stats"`；同欄位再次點擊反轉方向，切換不同欄位預設
+      `desc`；非法 `breakdown_sort` 值忽略，維持原始順序；`_project_breakdown.html.erb` 四個數值
+      欄位標題改用 `breakdown_sort_link`
+    - 新增 `.sort-button` CSS（`application.css`），與 `docs/css/style.css` 的樣式意圖一致
+      （無底線、hover/`:focus-visible` 呈現 accent 色）
+    - _需求：3a.5_
+
+  - [x] 15.3 檢查點 — RSpec 驗證
+    - `spec/requests/issues_spec.rb` 新增 fixture：一筆 tracker=測試 的議題列（驗證排除）、一筆
+      不同專案的 8 月議題列（提供多列資料以驗證排序有意義）；新增 `describe` 區塊驗證：預設降冪、
+      同欄位切換反轉為升冪、▲／▼ 指示正確、非法 `breakdown_sort` 值忽略、排序連結保留 `month`
+      參數
+    - 37/37（`issues_spec.rb`）通過；全專案回歸 218/218 通過
+
 ---
 
 ## Notes

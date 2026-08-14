@@ -39,20 +39,28 @@
     { date: "2026-08-13", complaint: 0, testing: 0, other: 0, total: 0 }
   ];
 
-  var ISSUES = [
+  // 原始資料模擬 raw_2023~raw_2026 分頁：tracker 欄位值包含「臭蟲」與「測試」，「測試」為測試性質
+  // 議題（非真實缺陷），不列入品質相關統計與呈現，故載入後立即整批過濾掉，不進入本頁面任何區塊
+  // （KPI 摘要、每日趨勢、依專案分類統計、議題明細清單）。
+  var RAW_ISSUE_ROWS = [
     { issue_id: 4547, subject: "[客訴] 未匯入 2026 行事曆", type: "Complaint", tracker: "臭蟲", status: "已結束", assigned_to: "黃靖益", start_date: "2026-01-02", due_date: "2026-01-06", work_days: 3, project: "Virtuous HRM" },
     { issue_id: 4884, subject: "[測試] 按離職結算，出現伺服器錯誤", type: "TestingBug", tracker: "臭蟲", status: "已結束", assigned_to: "黃靖益", start_date: "2026-05-18", due_date: null, work_days: null, project: "Virtuous HRM" },
     { issue_id: 5160, subject: "[客訴] A3原料發貨異常", type: "Complaint", tracker: "臭蟲", status: "已解決", assigned_to: "王贊勛", start_date: "2026-08-11", due_date: "2026-08-11", work_days: 0, project: "JZN 舊振南智慧工廠" },
     { issue_id: 5165, subject: "[測試] Cloud Admin 申請白名單 申請時間錯誤", type: "TestingBug", tracker: "臭蟲", status: "新建立", assigned_to: "蔡秉逸", start_date: "2026-08-12", due_date: null, work_days: null, project: "Virtuous HRM" },
     { issue_id: 3058, subject: "[PMS] 結案小工序DeadlockVictim", type: "Other", tracker: "臭蟲", status: "已暫停", assigned_to: "王贊勛", start_date: "2024-04-29", due_date: null, work_days: null, project: "AG 亞炬" },
-    { issue_id: 4301, subject: "[客訴] QC登入後會出現無權限使用此功能的跳窗", type: "Complaint", tracker: "臭蟲", status: "已結束", assigned_to: "王贊勛", start_date: "2025-09-03", due_date: "2026-01-30", work_days: 108, project: "JieZhou 傑宙" }
+    { issue_id: 4301, subject: "[客訴] QC登入後會出現無權限使用此功能的跳窗", type: "Complaint", tracker: "臭蟲", status: "已結束", assigned_to: "王贊勛", start_date: "2025-09-03", due_date: "2026-01-30", work_days: 108, project: "JieZhou 傑宙" },
+    { issue_id: 5170, subject: "[測試] 測試環境資料回填驗證", type: "TestingBug", tracker: "測試", status: "新建立", assigned_to: "蔡秉逸", start_date: "2026-08-13", due_date: null, work_days: null, project: "Virtuous HRM" }
   ];
+
+  var ISSUES = RAW_ISSUE_ROWS.filter(function (issue) { return issue.tracker !== "測試"; });
 
   // ── 篩選狀態 ──────────────────────────────────────────────
 
   // 預設篩選：全部專案 + 狀態「新建立」，聚焦最需要處理的新進議題。
+  // breakdownSort：依專案分類表格目前的排序欄位／方向，key 為 null 時維持原始（依專案分組）順序。
   var state = {
-    issueFilters: { project: null, status: "新建立" }
+    issueFilters: { project: null, status: "新建立" },
+    breakdownSort: { key: null, dir: -1 }
   };
 
   // ── 共用輔助 ──────────────────────────────────────────────
@@ -159,10 +167,10 @@
   // （呼叫端已依 sameMonth() 過濾，這裡只負責分組計數）。
   var PROJECT_BREAKDOWN_COLUMNS = [
     { key: "project", label: "專案" },
-    { key: "complaint", label: "客訴" },
-    { key: "testing", label: "測試" },
-    { key: "other", label: "其他" },
-    { key: "total", label: "總計" }
+    { key: "complaint", label: "客訴", sortable: true },
+    { key: "testing", label: "測試", sortable: true },
+    { key: "other", label: "其他", sortable: true },
+    { key: "total", label: "總計", sortable: true }
   ];
 
   function computeProjectBreakdown(issues) {
@@ -181,7 +189,12 @@
     });
   }
 
+  // 記住最近一次渲染的月份子集，供排序欄位點擊後重新渲染使用（排序不需重新計算分組統計）。
+  var currentBreakdownMonthIssues = [];
+
   function renderProjectBreakdown(monthIssues) {
+    currentBreakdownMonthIssues = monthIssues;
+
     var el = document.getElementById("project-breakdown");
     el.innerHTML = "";
 
@@ -199,7 +212,30 @@
       return;
     }
 
-    el.appendChild(buildGenericTable(rows, PROJECT_BREAKDOWN_COLUMNS));
+    rows = sortBreakdownRows(rows);
+    el.appendChild(buildGenericTable(rows, PROJECT_BREAKDOWN_COLUMNS, state.breakdownSort, function (key) {
+      toggleBreakdownSort(key);
+    }));
+  }
+
+  function sortBreakdownRows(rows) {
+    var key = state.breakdownSort.key;
+    if (!key) return rows;
+
+    var dir = state.breakdownSort.dir;
+    return rows.slice().sort(function (a, b) { return (a[key] - b[key]) * dir; });
+  }
+
+  // 點選欄位標題排序：同一欄位再次點選時反轉方向；切換到不同欄位時預設由大到小
+  // （筆數統計通常最關心「最多」的專案，故預設降冪較符合使用情境）。
+  function toggleBreakdownSort(key) {
+    if (state.breakdownSort.key === key) {
+      state.breakdownSort.dir = state.breakdownSort.dir === 1 ? -1 : 1;
+    } else {
+      state.breakdownSort.key = key;
+      state.breakdownSort.dir = -1;
+    }
+    renderProjectBreakdown(currentBreakdownMonthIssues);
   }
 
   // ── 每日趨勢圖（手刻 SVG 折線圖，含橫軸日期標籤／縱軸數值刻度） ──
@@ -377,7 +413,10 @@
     });
   }
 
-  function buildGenericTable(records, columns) {
+  // sortState / onSortClick 為選填：欄位定義中標記 sortable: true 時，標題渲染為可點擊按鈕，
+  // 點擊後呼叫 onSortClick(key)；目前排序中的欄位標題附加 ▲／▼ 指示目前方向。
+  // （議題明細清單呼叫本函式時不帶這兩個參數，欄位標題維持純文字，不受影響。）
+  function buildGenericTable(records, columns, sortState, onSortClick) {
     var table = document.createElement("table");
     table.className = "project-tasks";
 
@@ -386,7 +425,20 @@
     columns.forEach(function (column) {
       var th = document.createElement("th");
       th.scope = "col";
-      th.textContent = column.label;
+
+      if (column.sortable && onSortClick) {
+        var button = document.createElement("button");
+        button.type = "button";
+        button.className = "sort-button";
+        var active = sortState && sortState.key === column.key;
+        button.textContent = column.label + (active ? (sortState.dir === 1 ? " ▲" : " ▼") : "");
+        button.setAttribute("aria-label", "依「" + column.label + "」排序");
+        button.addEventListener("click", function () { onSortClick(column.key); });
+        th.appendChild(button);
+      } else {
+        th.textContent = column.label;
+      }
+
       headRow.appendChild(th);
     });
     thead.appendChild(headRow);

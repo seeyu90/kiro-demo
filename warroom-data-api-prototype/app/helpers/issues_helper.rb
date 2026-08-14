@@ -12,6 +12,17 @@ module IssuesHelper
     ATTRIBUTION_CLASSES[type] || "attribution-other"
   end
 
+  # 依專案分類表格的可排序欄位標題連結：同一欄位再次點選時反轉方向，切換到不同欄位時預設降冪
+  # （筆數統計通常最關心「最多」的專案）；連結保留目前所選月份，並固定停留在「統計摘要」分頁籤。
+  def breakdown_sort_link(key, label)
+    active = @breakdown_sort == key.to_s
+    next_dir = active && @breakdown_dir == "desc" ? "asc" : "desc"
+    indicator = active ? (@breakdown_dir == "desc" ? " ▼" : " ▲") : ""
+
+    link_to label + indicator, issues_path(month: @selected_month, tab: "stats", breakdown_sort: key, breakdown_dir: next_dir),
+             class: "sort-button", "aria-label": "依「#{label}」排序"
+  end
+
   # 邏輯移植自 docs/js/issues.js 的 renderTrendChart：X 軸每個資料點都顯示日期標籤（-45 度旋轉
   # 避免重疊），Y 軸依 total 最大值等比例縮放，繪製 0／中間值／最大值三條格線。
   TREND_WIDTH = 640

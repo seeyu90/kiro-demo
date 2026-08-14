@@ -143,6 +143,15 @@ Webhook／排程更新、資料庫或本地快取層、OAuth 使用者登入、�
    改為由 **IssueDashboard_Page** 依 `start_date` 另行篩選 Actor 輸出的全量 `project_breakdown` 議題
    來源，Actor／API 層行為本身不變，變更僅發生在 HTML 頁面的渲染邏輯。對齊
    [warroom-issue-dashboard-static-prototype/requirements.md](../warroom-issue-dashboard-static-prototype/requirements.md) 需求 2.4a 的設計變更紀錄。）
+5. THE **IssueDashboard_Page** SHALL 提供「依專案分類」統計表的客訴／測試／其他／總計欄位排序功能
+   （`breakdown_sort`／`breakdown_dir` query params）：WHEN 使用者點擊欄位標題連結，THE
+   **IssueDashboard_Page** SHALL 依該欄位數值排序表格列並以 Turbo Frame 局部更新；WHEN 使用者再次
+   點擊同一欄位標題，THE **IssueDashboard_Page** SHALL 反轉排序方向；WHEN 使用者點擊不同欄位標題，
+   THE **IssueDashboard_Page** SHALL 預設以該欄位數值由大到小排序；THE **IssueDashboard_Page** SHALL
+   在目前排序中的欄位標題顯示排序方向指示（▲／▼）；排序連結 SHALL 保留目前所選月份（`month`）；
+   IF `breakdown_sort` 帶入非 `complaint`／`testing`／`other`／`total` 之一的值，THEN THE
+   **IssueDashboard_Page** SHALL 忽略該參數，維持原始（依專案分組）順序，不拋出錯誤；專案欄位不提供
+   排序。對齊 [warroom-issue-dashboard-static-prototype/requirements.md](../warroom-issue-dashboard-static-prototype/requirements.md) 需求 2.4b。
 
 ---
 
@@ -188,6 +197,11 @@ Webhook／排程更新、資料庫或本地快取層、OAuth 使用者登入、�
    原始值，不拋出例外。
 5. IF 任一列的 `issue_id`／`subject`／`status` 為空白，THEN THE **IssueDashboard_Actor** SHALL 跳過該筆
    紀錄，不納入輸出，其餘正常列不受影響。
+5a. IF 列的 `tracker` 欄位值為「測試」，THEN THE **IssueDashboard_Actor** SHALL 跳過該筆紀錄，不納入
+   `issues` 輸出（連帶不納入衍生的 `project_breakdown`），其餘正常列不受影響——`tracker=測試` 為測試
+   性質議題（例如測試環境驗證、測試資料回填），非真實缺陷或客訴，不應計入品質相關統計；此排除規則
+   於 Actor 解析階段套用，`GET /api/issue_dashboard` 與 `GET /issues` 皆不會看到，對齊
+   [warroom-issue-dashboard-static-prototype/requirements.md](../warroom-issue-dashboard-static-prototype/requirements.md) 需求 4.6。
 6. THE **IssueDashboard_Endpoint** 及 **IssueDashboard_Page** SHALL 依 `type` 欄位標示每筆議題的
    「歸屬類型」：`Complaint`（客訴）標示為「專案共同責任」，`TestingBug`（測試）標示為「個人責任」，
    其餘標示為「其他」；此標示 SHALL 為顯示層依 `type` 動態計算，不作為 Actor 輸出的獨立資料欄位

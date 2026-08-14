@@ -137,7 +137,8 @@ module Sheets
     # parse_issues：欄位對應 issue_id/subject/type/tracker/status/assigned_to/start_date/
     #   due_date/work_days/project（跳過 sheet_name 欄，該欄僅為來源標記不需輸出）；
     #   start_date/due_date 呼叫既有 normalize_date；work_days 嘗試轉 Integer 失敗則保留原值；
-    #   issue_id/subject/status 任一為空白則跳過該列。
+    #   issue_id/subject/status 任一為空白則跳過該列；tracker 為「測試」的列亦整批跳過（需求 5a），
+    #   不納入 issues 輸出（連帶不納入衍生的 project_breakdown），對齊 prototype 需求 4.6。
     #
     # compute_project_breakdown(issues)：與 prototype 的 computeProjectBreakdown 邏輯一致，依
     #   project 分組統計 complaint/testing/other 筆數與 total（需求 3a）；純記憶體運算，不再次
@@ -205,6 +206,9 @@ class IssuesController < ApplicationController
   DEFAULT_STATUS = "新建立".freeze
   TABS = %w[stats detail].freeze
   DEFAULT_TAB = "stats".freeze
+  BREAKDOWN_SORT_KEYS = %w[complaint testing other total].freeze
+  BREAKDOWN_SORT_DIRS = %w[asc desc].freeze
+  DEFAULT_BREAKDOWN_SORT_DIR = "desc".freeze
 
   def index
     result = Sheets::FetchIssueDashboard.result
@@ -237,7 +241,12 @@ class IssuesController < ApplicationController
     # Actor／API 層的 project_breakdown／daily_kpi 輸出本身仍為全量、不受此篩選影響。
     @daily_kpi = all_daily_kpi.select { |d| same_month?(d[:date], @selected_month) }
     month_issues = all_issues.select { |i| same_month?(i[:start_date], @selected_month) }
-    @project_breakdown = compute_project_breakdown(month_issues)
+
+    # 排序欄位／方向皆為選填 query params；未帶或帶入非法值時維持原始（依專案分組）順序（需求 3a.5）。
+    @breakdown_sort = params[:breakdown_sort] if BREAKDOWN_SORT_KEYS.include?(params[:breakdown_sort])
+    @breakdown_dir =
+      BREAKDOWN_SORT_DIRS.include?(params[:breakdown_dir]) ? params[:breakdown_dir] : DEFAULT_BREAKDOWN_SORT_DIR
+    @project_breakdown = sort_project_breakdown(compute_project_breakdown(month_issues))
 
     @projects = all_issues.map { |i| i[:project] }.compact.uniq
     @statuses = all_issues.map { |i| i[:status] }.compact.uniq
@@ -252,6 +261,8 @@ class IssuesController < ApplicationController
   def build_failure(message)
     @active_tab = DEFAULT_TAB
     @month_kpi = @daily_kpi = @project_breakdown = @available_months = @projects = @statuses = @issues = []
+    @breakdown_sort = nil
+    @breakdown_dir = DEFAULT_BREAKDOWN_SORT_DIR
     @selected_month = @selected_month_record = @selected_project = nil
     @selected_month_pending = false
     @selected_status = DEFAULT_STATUS
@@ -281,6 +292,14 @@ class IssuesController < ApplicationController
       end
     end
     grouped.values.map { |row| row.merge(total: row[:complaint] + row[:testing] + row[:other]) }
+  end
+
+  # @breakdown_sort 為 nil 時維持原始（依專案分組）順序，不排序（需求 3a.5）。
+  def sort_project_breakdown(rows)
+    return rows if @breakdown_sort.nil?
+
+    sorted = rows.sort_by { |row| row[@breakdown_sort.to_sym] }
+    @breakdown_dir == "desc" ? sorted.reverse : sorted
   end
 end
 ```
@@ -323,6 +342,14 @@ end
   `@project_breakdown` 為 Controller 依所選月份篩選過的議題子集重新計算的結果（見上方 Controller
   程式碼區塊的設計變更紀錄與需求 3a.4），隨月份切換更新；WHEN 篩選後為空陣列，顯示
   「所選月份無議題資料」。
+  - 客訴／測試／其他／總計四個欄位標題以 `IssuesHelper#breakdown_sort_link(key, label)` 渲染為
+    `link_to`（`class="sort-button"`），對齊 prototype 的 `.sort-button`／`sortable: true` 機制
+    （需求 3a.5）：連結網址帶 `breakdown_sort`／`breakdown_dir` query params，並保留目前所選
+    `month`、固定 `tab: "stats"`；同一欄位再次點擊時 `next_dir` 反轉（`desc`↔`asc`），切換不同
+    欄位時 `next_dir` 固定為 `desc`；目前排序中的欄位標題附加 ▲（`asc`）／▼（`desc`）指示；專案
+    欄位不提供排序連結，維持純文字 `<th>`。
+  - `tracker=測試` 的議題已在 Actor 層 `parse_issues` 排除（需求 5a），`compute_project_breakdown`
+    運算的議題子集本身已不含這些議題，Controller／View 不需重複過濾。
 - 議題明細表格欄位依序為：議題編號、專案、主旨、歸屬類型、狀態、負責人、開始日期、到期日期、工作
   天數（不顯示 type／tracker，見需求 5.7）。
 - 「歸屬類型」欄位：View helper（`IssuesHelper#attribution_label(type)` / `#attribution_class(type)`）

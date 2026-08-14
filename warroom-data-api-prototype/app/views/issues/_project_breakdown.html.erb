@@ -5,10 +5,10 @@
     <thead>
       <tr>
         <th>專案</th>
-        <th>客訴</th>
-        <th>測試</th>
-        <th>其他</th>
-        <th>總計</th>
+        <th><%= breakdown_sort_link(:complaint, "客訴") %></th>
+        <th><%= breakdown_sort_link(:testing, "測試") %></th>
+        <th><%= breakdown_sort_link(:other, "其他") %></th>
+        <th><%= breakdown_sort_link(:total, "總計") %></th>
       </tr>
     </thead>
     <tbody>
