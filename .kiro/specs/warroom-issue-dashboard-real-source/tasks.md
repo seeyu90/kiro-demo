@@ -25,15 +25,19 @@
     - 已更新 requirements.md「簡介」段落分頁結構表格與 design.md 的 `IssueSheetsClient` 常數
     - _需求：1.1, 1.2_
 
-- [ ] 2. `IssueSheetsClient`
-  - [ ] 2.1 新增 `app/clients/issue_sheets_client.rb`
+- [x] 2. `IssueSheetsClient`
+  - [x] 2.1 新增 `app/clients/issue_sheets_client.rb`
     - 依 [design.md](design.md) 實作 `fetch_month_kpi_rows`／`fetch_daily_kpi_rows`／`fetch_issue_rows`
-    - 沿用既有 `SheetsApiClient` 的憑證讀取、UTF-8 重標記邏輯
+    - 沿用既有 `SheetsApiClient` 的憑證讀取、UTF-8 重標記邏輯（維持獨立實作，未抽共用 module，見
+      design.md「Components and Interfaces」段落的抽象化取捨說明）
     - _需求：2.1, 2.2_
 
-  - [ ] 2.2 單元測試：`spec/clients/issue_sheets_client_spec.rb`
+  - [x] 2.2 單元測試：`spec/clients/issue_sheets_client_spec.rb`
     - stub `SheetsService`，驗證分頁名稱／range／合併邏輯（`raw_2023`〜`raw_2027` 僅保留第一個標題列，
-      含 `raw_2027` 空分頁邊界情況）
+      含 `raw_2027` 空分頁邊界情況）、UTF-8 重標記、憑證 fallback（Rails credentials → ENV → 例外）、
+      Google API 錯誤（403/404）原樣拋出不吞掉
+    - 15 examples, 0 failures（`bundle exec rspec spec/clients/issue_sheets_client_spec.rb`）；
+      全專案回歸 `bundle exec rspec` 99 examples, 0 failures
     - _需求：3.1, 4.1, 5.1_
 
 - [ ] 3. `Sheets::FetchIssueDashboard` — 月度 KPI／每日趨勢解析
