@@ -54,6 +54,8 @@ Webhook／排程更新、資料庫或本地快取層、OAuth 使用者登入、�
   已驗證的資料形狀。
 - **IssueDashboard_Endpoint**：回傳 306 全部資料的 HTTP JSON 端點（`GET /api/issue_dashboard`）。
 - **IssueDashboard_Page**：呈現 306 資料的 Rails 前端頁面（`GET /issues`）。
+- **Entry_Page**：`GET /`（root），列出「305 專案進度」（連到 `/dashboard`）與「306 臭蟲議題」
+  （連到 `/issues`）兩個入口的極簡入口頁，對齊 `docs/index.html` 已驗證過的入口頁模式。
 - **月度 KPI**：對應 `month_kpi` 分頁的單月統計列。
 - **每日趨勢**：對應 `daily_kpi` 分頁的逐日統計列。
 - **議題明細**：對應 `raw_2023`〜`raw_2026` 分頁合併後的逐筆議題紀錄。
@@ -240,3 +242,22 @@ Webhook／排程更新、資料庫或本地快取層、OAuth 使用者登入、�
    （`month_kpi` 資料中 `year_month` 最大值）。
 2. WHEN 使用者切換月份，THE **IssueDashboard_Page** SHALL 以 Turbo Frame 局部更新 KPI 卡片，不觸發
    整頁重載；依專案分類統計（`project_breakdown`）不隨月份篩選（見需求 3a.2），月份切換不影響其內容。
+
+---
+
+### 需求 10：Rails 入口頁（對齊 docs/index.html 模式）
+
+**使用者故事：** 身為戰情室使用者，我希望 Rails 也有一個入口頁可以選擇要看 305 專案進度還是 306
+臭蟲議題，而不是打開網站就直接進入 305 頁面，以便快速前往需要的頁面（與 `docs/` 靜態展示站的入口頁
+使用體驗一致）。
+
+#### 驗收標準
+
+1. THE **Entry_Page** SHALL 以 `GET /`（root）路由提供，取代原本直接指向 305 `dashboard#index` 的
+   root 路由。
+2. THE **Entry_Page** SHALL 提供至少兩個明顯的連結／卡片，分別導向 305 專案進度戰情室（`/dashboard`）
+   與 306 臭蟲議題（`/issues`）。
+3. THE **Entry_Page** SHALL 不包含任何資料讀取邏輯（不呼叫 `SheetsApiClient`／`IssueSheetsClient`），
+   純靜態連結頁面。
+4. THE **Entry_Page** 的視覺風格 SHALL 沿用既有 `application.css` 主題變數系統（含深色／淺色主題
+   切換），與 305／306 頁面一致。

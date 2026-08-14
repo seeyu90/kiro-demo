@@ -35,15 +35,19 @@ warroom-data-api-prototype/
 │   ├── controllers/
 │   │   ├── dashboard_controller.rb       ← 既有，不動
 │   │   ├── issues_controller.rb          ← 新增（GET /issues，HTML）
+│   │   ├── home_controller.rb            ← 新增（GET /，入口頁，需求 10）
 │   │   └── api/
 │   │       ├── project_progress_controller.rb  ← 既有，不動
 │   │       └── issue_dashboard_controller.rb    ← 新增（GET /api/issue_dashboard，JSON）
 │   ├── helpers/
 │   │   └── issues_helper.rb              ← 新增（attribution_label／attribution_class）
-│   └── views/issues/
-│       ├── index.html.erb                ← 新增（頁面骨架 + 3 個區塊）
-│       └── _issue_list.html.erb          ← 新增（Turbo Frame 局部：議題明細清單，供篩選局部更新）
-└── config/routes.rb                      ← 新增路由
+│   └── views/
+│       ├── home/
+│       │   └── index.html.erb            ← 新增（入口頁，兩張卡片連結，需求 10）
+│       └── issues/
+│           ├── index.html.erb            ← 新增（頁面骨架 + 3 個區塊）
+│           └── _issue_list.html.erb      ← 新增（Turbo Frame 局部：議題明細清單，供篩選局部更新）
+└── config/routes.rb                      ← 修改（root 改指向 home#index，需求 10.1）
 ```
 
 ---
@@ -177,12 +181,24 @@ end
 ### Controllers ／ Routes
 
 ```ruby
-# config/routes.rb 新增：
+# config/routes.rb 修改：
+root "home#index"                    # 原為 root "dashboard#index"（需求 10.1）
+get "/dashboard", to: "dashboard#index"  # 305 頁面路由不變，仍可直接訪問
 get "/issues", to: "issues#index"
 namespace :api do
   get "issue_dashboard", to: "issue_dashboard#index"
 end
 ```
+
+```ruby
+class HomeController < ApplicationController
+  def index; end  # 純靜態連結頁面，不讀取任何資料來源（需求 10.3）
+end
+```
+
+`app/views/home/index.html.erb` 比照 `docs/index.html` 的入口頁結構（`.entry-grid` /
+`.entry-card` 兩張卡片，分別連到 `/dashboard`、`/issues`），沿用既有 `application.css` 主題變數
+系統（需求 10.4）。
 
 ```ruby
 class IssuesController < ApplicationController

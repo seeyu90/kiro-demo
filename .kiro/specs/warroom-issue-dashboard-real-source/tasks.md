@@ -163,16 +163,32 @@
   - [ ] 9.8 樣式：`.issue-id-link`（沿用 prototype 的 CSS class，無底線、hover/focus 才顯示底線）
     - _需求：5.8_
 
-- [ ] 10. 檢查點 — 頁面功能驗證
+- [ ] 10. Rails 入口頁（對齊 docs/index.html 模式）
+  - [ ] 10.1 新增 `app/controllers/home_controller.rb`（`GET /`，純靜態，不讀取任何資料來源）
+    - _需求：10.1, 10.3_
+
+  - [ ] 10.2 修改 `config/routes.rb`：`root "home#index"` 取代原本 `root "dashboard#index"`；
+        補上 `get "/dashboard", to: "dashboard#index"` 保留 305 頁面可直接訪問
+    - _需求：10.1_
+
+  - [ ] 10.3 新增 `app/views/home/index.html.erb`：兩張卡片連結（「305 專案進度」→`/dashboard`、
+        「306 臭蟲議題」→`/issues`），比照 `docs/index.html` 的 `.entry-grid`／`.entry-card` 結構
+    - _需求：10.2, 10.4_
+
+  - [ ] 10.4 檢查點 — 入口頁驗證
+      - 瀏覽器手動驗證：訪問 `/` 顯示入口頁，兩個連結分別正確導向 `/dashboard`、`/issues`；
+        `/dashboard` 仍可直接訪問（未被移除）；深色／淺色主題切換正常
+
+- [ ] 11. 檢查點 — 頁面功能驗證
     - 瀏覽器手動驗證：首次載入時狀態篩選預設為「新建立」（非全部狀態）、專案篩選預設為全部專案、
       月份切換、專案／狀態篩選、Turbo Frame 局部更新（不整頁重載）、空結果提示、議題編號連結正確
       導向 Redmine 且新分頁開啟、響應式版面（沿用既有 CSS 斷點）
 
-- [ ] 11. Request spec：`spec/requests/issues_spec.rb`
+- [ ] 12. Request spec：`spec/requests/issues_spec.rb`
     - 驗證 `GET /issues` 帶各種 query params 組合的回應內容
     - _需求：8.1〜8.4, 9.1〜9.2_
 
-- [ ] 12. 端對端驗證
+- [ ] 13. 端對端驗證
     - 設定真實 Service Account 憑證，訪問 `/issues` 與 `/api/issue_dashboard`，確認回傳真實試算表
       資料且與 prototype 呈現方式一致（比照 `warroom-data-api-real-source` Task 10 驗證方式）
     - _需求：7.1〜7.4 全部_
@@ -206,9 +222,13 @@
     { "id": 9, "tasks": ["9.2", "9.3"] },
     { "id": 10, "tasks": ["9.4", "9.5", "9.6", "9.7"] },
     { "id": 11, "tasks": ["9.8"] },
-    { "id": 12, "tasks": ["10"] },
-    { "id": 13, "tasks": ["11"] },
-    { "id": 14, "tasks": ["12"] }
+    { "id": 12, "tasks": ["10.1"] },
+    { "id": 13, "tasks": ["10.2"] },
+    { "id": 14, "tasks": ["10.3"] },
+    { "id": 15, "tasks": ["10.4"] },
+    { "id": 16, "tasks": ["11"] },
+    { "id": 17, "tasks": ["12"] },
+    { "id": 18, "tasks": ["13"] }
   ]
 }
 ```
