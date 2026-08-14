@@ -158,28 +158,86 @@
     el.appendChild(buildGenericTable(computeProjectBreakdown(ISSUES), PROJECT_BREAKDOWN_COLUMNS));
   }
 
-  // ── 每日趨勢圖（手刻 SVG 折線圖） ──────────────────────────
+  // ── 每日趨勢圖（手刻 SVG 折線圖，含橫軸日期標籤／縱軸數值刻度） ──
+
+  var TREND_WIDTH = 640;
+  var TREND_HEIGHT = 220;
+  var TREND_PADDING_LEFT = 40;
+  var TREND_PADDING_RIGHT = 12;
+  var TREND_PADDING_TOP = 16;
+  var TREND_PADDING_BOTTOM = 28;
+  var TREND_MAX_X_LABELS = 6;
+  var TREND_Y_TICKS = 3; // 0、中間值、最大值
+
+  // 資料點數量超過可容納標籤數時，等距挑選索引（含首尾），避免橫軸標籤重疊。
+  function pickLabelIndices(count, maxLabels) {
+    if (count <= 1) return count === 1 ? [0] : [];
+    if (count <= maxLabels) {
+      var all = [];
+      for (var n = 0; n < count; n++) all.push(n);
+      return all;
+    }
+    var indices = [];
+    var step = (count - 1) / (maxLabels - 1);
+    for (var k = 0; k < maxLabels; k++) {
+      var idx = Math.round(k * step);
+      if (indices.indexOf(idx) === -1) indices.push(idx);
+    }
+    return indices;
+  }
+
+  function shortDate(dateStr) {
+    var parts = String(dateStr).split("-");
+    return parts.length === 3 ? parts[1] + "/" + parts[2] : dateStr;
+  }
 
   function renderTrendChart(records) {
     var wrap = document.getElementById("trend-chart");
     wrap.innerHTML = "";
 
-    var width = 640;
-    var height = 200;
-    var padding = 28;
     var max = Math.max.apply(null, records.map(function (r) { return r.total; }).concat([1]));
+    var plotWidth = TREND_WIDTH - TREND_PADDING_LEFT - TREND_PADDING_RIGHT;
+    var plotHeight = TREND_HEIGHT - TREND_PADDING_TOP - TREND_PADDING_BOTTOM;
+    var stepX = plotWidth / Math.max(records.length - 1, 1);
 
-    var stepX = (width - padding * 2) / Math.max(records.length - 1, 1);
-
-    function xAt(i) { return padding + i * stepX; }
-    function yAt(value) { return height - padding - (value / max) * (height - padding * 2); }
+    function xAt(i) { return TREND_PADDING_LEFT + i * stepX; }
+    function yAt(value) { return TREND_HEIGHT - TREND_PADDING_BOTTOM - (value / max) * plotHeight; }
 
     var svgNS = "http://www.w3.org/2000/svg";
     var svg = document.createElementNS(svgNS, "svg");
-    svg.setAttribute("viewBox", "0 0 " + width + " " + height);
+    svg.setAttribute("viewBox", "0 0 " + TREND_WIDTH + " " + TREND_HEIGHT);
     svg.setAttribute("class", "trend-svg");
     svg.setAttribute("role", "img");
     svg.setAttribute("aria-label", "每日議題總數趨勢圖");
+
+    function addText(x, y, text, anchor, extraClass) {
+      var el = document.createElementNS(svgNS, "text");
+      el.setAttribute("x", x);
+      el.setAttribute("y", y);
+      el.setAttribute("text-anchor", anchor);
+      el.setAttribute("class", "trend-axis-label" + (extraClass ? " " + extraClass : ""));
+      el.textContent = text;
+      svg.appendChild(el);
+    }
+
+    // 縱軸：0、中間值、最大值三條水平格線 + 數值標籤
+    for (var t = 0; t < TREND_Y_TICKS; t++) {
+      var value = Math.round((max / (TREND_Y_TICKS - 1)) * t);
+      var y = yAt(value);
+      var gridline = document.createElementNS(svgNS, "line");
+      gridline.setAttribute("x1", TREND_PADDING_LEFT);
+      gridline.setAttribute("x2", TREND_WIDTH - TREND_PADDING_RIGHT);
+      gridline.setAttribute("y1", y);
+      gridline.setAttribute("y2", y);
+      gridline.setAttribute("class", "trend-gridline");
+      svg.appendChild(gridline);
+      addText(TREND_PADDING_LEFT - 8, y + 3, String(value), "end", "trend-y-label");
+    }
+
+    // 橫軸：等距挑選日期標籤（含首尾），避免資料點過多時重疊
+    pickLabelIndices(records.length, TREND_MAX_X_LABELS).forEach(function (i) {
+      addText(xAt(i), TREND_HEIGHT - TREND_PADDING_BOTTOM + 16, shortDate(records[i].date), "middle", "trend-x-label");
+    });
 
     var points = records.map(function (r, i) { return xAt(i) + "," + yAt(r.total); }).join(" ");
     var polyline = document.createElementNS(svgNS, "polyline");

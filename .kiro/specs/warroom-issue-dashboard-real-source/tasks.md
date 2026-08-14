@@ -178,6 +178,20 @@
       深色／淺色主題皆正確呈現，無需另寫斷點（表格響應式已由既有 `.project-tasks` 規則涵蓋）
     - _需求：5.8_
 
+  - [x] 9.10 每日趨勢圖新增橫軸日期標籤／縱軸數值刻度（Prototype 確認畫面後追加需求，見需求 3.4、3.5）
+    - `docs/js/issues.js`：`renderTrendChart` 改用 `TREND_PADDING_LEFT/RIGHT/TOP/BOTTOM` 分向留白，
+      新增 `pickLabelIndices`（等距挑選含首尾的橫軸標籤索引，資料點超過 `TREND_MAX_X_LABELS`＝6 時
+      自動精簡）、`shortDate`（`YYYY-MM-DD`→`MM/DD`）；繪製 3 條縱軸格線＋數字標籤
+    - `docs/css/style.css`：新增 `.trend-gridline`／`.trend-axis-label`
+    - Rails `IssuesHelper`：新增 `trend_chart_y_ticks`／`trend_chart_x_labels`，邏輯與 JS 版本
+      完全一致；`_trend_chart.html.erb` 對應渲染格線與標籤；`application.css` 同步新增相同樣式
+    - 兩端座標計算邏輯保持一致，避免 prototype 與正式頁面呈現不同步
+    - 檢查點：`docs/js/issues.js` 以 Playwright 驗證 6/6 通過（3 條縱軸格線、橫軸標籤含首尾且超過
+      6 個資料點時自動精簡）；Rails `issues_helper_spec.rb` 擴充至 19 examples；全專案回歸
+      196 examples, 0 failures；並以 `ActionDispatch::Integration::Session` 直接檢視渲染出的
+      `<svg>`，確認格線／標籤／折線座標互相對應無誤
+    - _需求：3.4, 3.5_
+
   - [x] 9.9 測試：`spec/helpers/issues_helper_spec.rb`（12 examples）、
         `spec/requests/issues_spec.rb`（16 examples，對應原 Task 12）
     - Request spec 涵蓋：預設篩選（月份最新、狀態「新建立」）、月份／專案／狀態切換、清空狀態篩選、
@@ -185,21 +199,27 @@
       頁面內顯示錯誤訊息而非拋出例外
     - 全專案回歸 181 examples, 0 failures
 
-- [ ] 10. Rails 入口頁（對齊 docs/index.html 模式）
-  - [ ] 10.1 新增 `app/controllers/home_controller.rb`（`GET /`，純靜態，不讀取任何資料來源）
+- [x] 10. Rails 入口頁（對齊 docs/index.html 模式）
+  - [x] 10.1 新增 `app/controllers/home_controller.rb`（`GET /`，純靜態，不讀取任何資料來源）
+    - `index` 為空動作，不呼叫 `SheetsApiClient`／`IssueSheetsClient`
     - _需求：10.1, 10.3_
 
-  - [ ] 10.2 修改 `config/routes.rb`：`root "home#index"` 取代原本 `root "dashboard#index"`；
-        補上 `get "/dashboard", to: "dashboard#index"` 保留 305 頁面可直接訪問
+  - [x] 10.2 修改 `config/routes.rb`：`root "home#index"` 取代原本 `root "dashboard#index"`；
+        `get "/dashboard", to: "dashboard#index"` 維持不變，305 頁面仍可直接訪問
     - _需求：10.1_
 
-  - [ ] 10.3 新增 `app/views/home/index.html.erb`：兩張卡片連結（「305 專案進度」→`/dashboard`、
-        「306 臭蟲議題」→`/issues`），比照 `docs/index.html` 的 `.entry-grid`／`.entry-card` 結構
+  - [x] 10.3 新增 `app/views/home/index.html.erb`：兩張卡片連結（「305 專案進度」→`/dashboard`、
+        「306 臭蟲議題」→`/issues`），比照 `docs/index.html` 的 `.entry-grid`／`.entry-card` 結構；
+        新增 `.entry-grid`／`.entry-card`／`.back-link` 樣式至 `application.css`
+    - 額外於 `/dashboard`、`/issues` 頁首加上「← 返回入口頁」連結（回到 `/`），對齊 `docs/` 靜態站
+      每個子頁面皆有返回入口頁連結的既有體驗（超出原始任務描述，但屬同一需求 10 的自然延伸）
     - _需求：10.2, 10.4_
 
-  - [ ] 10.4 檢查點 — 入口頁驗證
-      - 瀏覽器手動驗證：訪問 `/` 顯示入口頁，兩個連結分別正確導向 `/dashboard`、`/issues`；
-        `/dashboard` 仍可直接訪問（未被移除）；深色／淺色主題切換正常
+  - [x] 10.4 檢查點 — 入口頁驗證
+      - 新增 `spec/requests/home_spec.rb`（8 examples）：`GET /` 回傳 200、不呼叫任何 SheetsClient
+        （需求 10.3）、正確連結至 `/dashboard`／`/issues`、theme-toggle 按鈕存在；`GET /dashboard`
+        與 `GET /issues` 皆能正常直接訪問並各自渲染「返回入口頁」連結
+      - 全專案回歸 196 examples, 0 failures（含本次新增）
 
 - [ ] 11. 檢查點 — 頁面功能驗證
     - 瀏覽器手動驗證：首次載入時狀態篩選預設為「新建立」（非全部狀態）、專案篩選預設為全部專案、

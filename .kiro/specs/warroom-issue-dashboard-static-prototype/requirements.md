@@ -84,6 +84,9 @@
 2. THE **Issue_Dashboard_Page** SHALL 確保趨勢圖不需外部圖表函式庫或建置工具即可運作。
 3. WHEN 使用者將滑鼠移至（或觸控點選）圖上某一資料點，THE **Issue_Dashboard_Page** SHALL 顯示該日期
    的詳細數值（tooltip 或等效呈現方式）。
+4. THE **Issue_Dashboard_Page** SHALL 顯示縱軸數值刻度（0、中間值、最大值三條水平格線與對應數字）。
+5. THE **Issue_Dashboard_Page** SHALL 顯示橫軸日期標籤；WHEN 資料點數量超過可清楚顯示的標籤數（6 個）
+   時，THE **Issue_Dashboard_Page** SHALL 等距挑選標籤（含首尾資料點），避免標籤重疊。
 
 ---
 

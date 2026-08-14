@@ -2,7 +2,17 @@
   <p class="empty-state">目前無資料</p>
 <% else %>
   <% points = trend_chart_points(daily_kpi) %>
-  <svg viewBox="0 0 640 200" class="trend-svg" role="img" aria-label="每日議題總數趨勢圖">
+  <svg viewBox="0 0 <%= IssuesHelper::TREND_WIDTH %> <%= IssuesHelper::TREND_HEIGHT %>" class="trend-svg" role="img" aria-label="每日議題總數趨勢圖">
+    <% trend_chart_y_ticks(daily_kpi).each do |tick| %>
+      <line x1="<%= IssuesHelper::TREND_PADDING_LEFT %>" x2="<%= IssuesHelper::TREND_WIDTH - IssuesHelper::TREND_PADDING_RIGHT %>"
+            y1="<%= tick[:y] %>" y2="<%= tick[:y] %>" class="trend-gridline"></line>
+      <text x="<%= IssuesHelper::TREND_PADDING_LEFT - 8 %>" y="<%= tick[:y] + 3 %>" text-anchor="end" class="trend-axis-label trend-y-label"><%= tick[:value] %></text>
+    <% end %>
+
+    <% trend_chart_x_labels(daily_kpi).each do |label| %>
+      <text x="<%= label[:x] %>" y="<%= IssuesHelper::TREND_HEIGHT - IssuesHelper::TREND_PADDING_BOTTOM + 16 %>" text-anchor="middle" class="trend-axis-label trend-x-label"><%= label[:text] %></text>
+    <% end %>
+
     <polyline points="<%= trend_chart_polyline(points) %>" class="trend-line"></polyline>
     <% points.each do |point| %>
       <circle cx="<%= point[:x] %>" cy="<%= point[:y] %>" r="4" class="trend-point" tabindex="0">

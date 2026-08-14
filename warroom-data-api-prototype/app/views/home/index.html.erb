@@ -1,0 +1,19 @@
+<% content_for :title, "戰情室 — 入口頁" %>
+
+<header class="dashboard-header">
+  <div class="header-top">
+    <h1 class="dashboard-title">戰情室 <span>— 入口頁</span></h1>
+    <button type="button" id="theme-toggle" class="theme-toggle" aria-label="切換至淺色模式">🌙 深色</button>
+  </div>
+</header>
+
+<div class="entry-grid">
+  <%= link_to "/dashboard", class: "entry-card" do %>
+    <h2>305 專案進度</h2>
+    <p>依專案分組檢視任務進度、逾期與本週到期任務。</p>
+  <% end %>
+  <%= link_to "/issues", class: "entry-card" do %>
+    <h2>306 臭蟲議題</h2>
+    <p>月度／每日 KPI、依專案分類統計、議題明細。</p>
+  <% end %>
+</div>

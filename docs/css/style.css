@@ -529,6 +529,16 @@ table.project-tasks tbody tr:hover td {
   fill: var(--color-accent);
 }
 
+.trend-gridline {
+  stroke: var(--color-border);
+  stroke-width: 1;
+}
+
+.trend-axis-label {
+  fill: var(--color-text-muted);
+  font-size: 10px;
+}
+
 /* ── Tablet ── */
 @media (max-width: 768px) {
   .dashboard-header,

@@ -239,10 +239,12 @@ end
 比照 `docs/issues.html` 的三個區塊（月度 KPI＋依專案分類統計／每日趨勢／議題明細），差異：
 - 月份選單、專案／狀態篩選改為 `<select>` + `form_with` 觸發 GET 請求（Turbo Frame 局部更新），
   取代 prototype 的純前端 JS 事件監聽。
-- 每日趨勢圖：手刻 SVG 邏輯可直接搬移自 `docs/js/issues.js` 的 `renderTrendChart`，但改為 ERB 迴圈於
-  伺服器端輸出 `<svg>`（避免額外引入前端框架，符合 rails-standards 的最簡方案原則），或維持極輕量的
-  内嵌 `<script>` 於頁面載入後渲染（兩種皆可，實作階段依複雜度決定；SVG 資料點數量少，伺服器端 ERB
-  產生較單純、不需額外 JS 檔案）。
+- 每日趨勢圖：手刻 SVG 邏輯移植自 `docs/js/issues.js` 的 `renderTrendChart`，改為伺服器端
+  `IssuesHelper`（`trend_chart_points`／`trend_chart_polyline`／`trend_chart_y_ticks`／
+  `trend_chart_x_labels`）計算座標，ERB 迴圈輸出 `<svg>`（不引入前端框架，符合 rails-standards 的
+  最簡方案原則）。含縱軸 0／中間值／最大值三條格線與數字標籤、橫軸日期標籤（資料點數量超過 6 個時
+  等距挑選含首尾的標籤索引，避免重疊）——此為 prototype 確認畫面後追加的需求，`docs/js/issues.js`
+  已同步更新，兩端座標計算邏輯完全一致。
 - 依專案分類統計：直接以 `<table>` 渲染 `@project_breakdown`（`ProjectBreakdownBlueprint` 序列化），
   取代 prototype 已移除的 Top3 排行；不隨月份切換更新（見需求 3a.2）。
 - 議題明細表格欄位依序為：議題編號、專案、主旨、歸屬類型、狀態、負責人、開始日期、到期日期、工作
