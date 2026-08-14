@@ -1,6 +1,6 @@
-# Implementation Plan: 306 臭蟲議題靜態 Prototype
+# 實作計畫：306 臭蟲議題靜態 Prototype
 
-## Overview
+## 概述
 
 新增 `docs/issues.html` + `docs/js/issues.js` 呈現 306 臭蟲議題模擬資料，並將既有 `docs/index.html`
 （305 內容）搬移為 `docs/project-progress.html` + `docs/js/project-progress.js`，`docs/index.html`
@@ -13,7 +13,7 @@
 
 ---
 
-## Tasks
+## 任務
 
 - [x] 1. 首頁改版：305 搬移 + 入口頁
   - [x] 1.1 新增 `docs/project-progress.html`（原 `docs/index.html` 內容原樣搬移）
@@ -70,7 +70,7 @@
     - _需求：5.1, 5.2, 5.3（舊編號，本需求已於後續 requirements.md 修訂中移除）_
 
 - [x] 7. 檢查點 — 306 頁面功能驗證
-    - 依 [design.md](design.md) 的「Testing Strategy」章節第 3 點逐項於瀏覽器手動驗證
+    - 依 [design.md](design.md) 的「測試策略」章節第 3 點逐項於瀏覽器手動驗證
 
 - [x] 8. 樣式調整
   - [x] 8.1 新增入口頁卡片樣式（`docs/index.html` 用）
@@ -81,7 +81,7 @@
     - _需求：5.2, 5.3（舊編號 6.2/6.3，requirements.md 需求 6 已改編號為需求 5）_
 
 - [x] 9. 最終檢查點 — 全面驗證
-    - 完整走過 [design.md](design.md) Testing Strategy 全部項目，所有需求驗收標準逐一符合，
+    - 完整走過 [design.md](design.md)「測試策略」全部項目，所有需求驗收標準逐一符合，
       無 console 錯誤
 
 - [x] 10. 依專案分類統計 + 議題歸屬類型標示（取代 Top3 責任人排行）

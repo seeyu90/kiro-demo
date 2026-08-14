@@ -1,6 +1,6 @@
 # 設計文件
 
-## Overview
+## 概述
 
 新增 `docs/issues.html` + `docs/js/issues.js`，並將既有 `docs/index.html`（305 戰情室本體）搬移為
 `docs/project-progress.html` + `docs/js/project-progress.js`（由 `app.js` 更名，內容不變），`docs/index.html`
@@ -9,7 +9,7 @@
 
 ---
 
-## Architecture
+## 架構
 
 ```
 docs/
@@ -80,7 +80,7 @@ renderIssueTable(state)           ← 需求 4，篩選變更時重新渲染（�
 
 ---
 
-## Components and Interfaces
+## 元件與介面
 
 ### 模擬資料（`docs/js/issues.js`）
 
@@ -195,7 +195,7 @@ var REDMINE_ISSUE_URL_BASE = "https://redmine.amastek.com.tw/issues/";
 
 ---
 
-## Data Models
+## 資料模型
 
 | 資料集 | 欄位 |
 |---|---|
@@ -209,14 +209,14 @@ var REDMINE_ISSUE_URL_BASE = "https://redmine.amastek.com.tw/issues/";
 
 ---
 
-## Error Handling
+## 錯誤處理
 
 - 空值欄位（`due_date`、`work_days`、`assigned_to`、`expire_month` 等）一律顯示 `—`，不拋出例外。
 - 篩選後無資料：顯示提示文字，不留白、不隱藏欄位標題列。
 
 ---
 
-## Testing Strategy（手動驗證）
+## 測試策略（手動驗證）
 
 由於 `docs/` 靜態站不使用建置工具或測試框架，以手動瀏覽器驗證為主：
 

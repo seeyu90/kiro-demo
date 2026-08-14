@@ -1,6 +1,6 @@
-# Implementation Plan: 306 臭蟲議題真實資料串接
+# 實作計畫：306 臭蟲議題真實資料串接
 
-## Overview
+## 概述
 
 把 306 臭蟲議題資料從 `docs/issues.html` prototype 的模擬資料，串接為真實 Google Sheets
 （`306_臭蟲議題紀錄`）資料，實作於 `warroom-data-api-prototype` Rails 專案，遵循
@@ -10,7 +10,7 @@
 
 ---
 
-## Tasks
+## 任務
 
 - [x] 1. 確認真實分頁名稱
   - [x] 1.1 取得 `1RdU2p9b7fwNgO5e59jN-00a5KLOQ91xrFhj2NenyKTc` 完整分頁名稱清單
@@ -29,7 +29,7 @@
   - [x] 2.1 新增 `app/clients/issue_sheets_client.rb`
     - 依 [design.md](design.md) 實作 `fetch_month_kpi_rows`／`fetch_daily_kpi_rows`／`fetch_issue_rows`
     - 沿用既有 `SheetsApiClient` 的憑證讀取、UTF-8 重標記邏輯（維持獨立實作，未抽共用 module，見
-      design.md「Components and Interfaces」段落的抽象化取捨說明）
+      design.md「元件與介面」段落的抽象化取捨說明）
     - _需求：2.1, 2.2_
 
   - [x] 2.2 單元測試：`spec/clients/issue_sheets_client_spec.rb`
@@ -101,7 +101,7 @@
 - [x] 6. 檢查點 — Actor 層驗證
     - 以 `bin/rails runner`（`RAILS_ENV=test`）stub `IssueSheetsClient` 三個 fetch 方法後實際呼叫
       `Sheets::FetchIssueDashboard.result`，確認 `success?` 為 true，四個 output 欄位
-      （`month_kpi`／`daily_kpi`／`issues`／`project_breakdown`）結構皆符合 design.md 的 Data Models
+      （`month_kpi`／`daily_kpi`／`issues`／`project_breakdown`）結構皆符合 design.md 的「資料模型」
 
 - [x] 7. Blueprints
   - [x] 7.1 新增 `MonthKpiBlueprint`／`DailyKpiBlueprint`／`IssueBlueprint`／`ProjectBreakdownBlueprint`
@@ -252,7 +252,7 @@
       - 全專案回歸 196 examples, 0 failures（含本次新增）
 
 - [x] 11. 檢查點 — 頁面功能驗證（改以 Playwright E2E 取代原規劃的瀏覽器手動驗證，見
-      design.md「Testing Strategy」段落的設計變更紀錄）
+      design.md「測試策略」段落的設計變更紀錄）
     - 起因：本機開發環境已在 `config/credentials/development.yml.enc` 設定真實 Service Account
       憑證，`rails server` 可直接以真實試算表資料運作；改用 Playwright 驅動實際運行中的伺服器
       （斷言針對真實資料的結構性質，不寫死具體筆數／專案名稱），比純手動點擊更可重複執行、更不
@@ -344,7 +344,7 @@
 ## Notes
 
 - 305 與 306 兩條資料流刻意平行、不共用 Client／Actor／Blueprint／Controller，降低耦合（見
-  design.md「Components and Interfaces」段落的抽象化取捨說明）
+  design.md「元件與介面」段落的抽象化取捨說明）
 - 每項任務參照對應需求編號以利追溯
 - 依 karpathy-guidelines：每項工作開始前先確認可驗證標準，完成後才勾選
 - Task 1（分頁名稱確認）為阻塞性前置任務，Task 2 之後任何涉及分頁名稱的實作都依賴其結果

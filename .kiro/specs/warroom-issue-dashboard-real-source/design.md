@@ -1,6 +1,6 @@
 # 設計文件
 
-## Overview
+## 概述
 
 在 `warroom-data-api-prototype` Rails 專案中新增一組獨立於 305 資料流的 306 資料流，遵循
 [rails-standards.md](../../steering/rails-standards.md) 的 Controller → Actor → Client → Blueprint
@@ -15,7 +15,7 @@
 
 ---
 
-## Architecture
+## 架構
 
 ```
 warroom-data-api-prototype/
@@ -52,7 +52,7 @@ warroom-data-api-prototype/
 
 ---
 
-## Components and Interfaces
+## 元件與介面
 
 ### `IssueSheetsClient`（`app/clients/issue_sheets_client.rb`）
 
@@ -179,7 +179,7 @@ end
 
 （`DailyKpiBlueprint` 比照辦理，欄位對應需求 4。）
 
-### Controllers ／ Routes
+### 控制器／路由
 
 ```ruby
 # config/routes.rb 修改：
@@ -361,7 +361,7 @@ end
 
 ---
 
-## Data Models
+## 資料模型
 
 | 資料集 | 欄位 |
 |---|---|
@@ -377,7 +377,7 @@ end
 
 ---
 
-## Error Handling
+## 錯誤處理
 
 沿用 [rails-standards.md](../../steering/rails-standards.md) 統一錯誤格式與 `failure_code` 對應表。
 三個讀取類別（`project_breakdown` 為衍生計算，不另外呼叫 API，故不計入）中任一讀取失敗即整體失敗
@@ -386,7 +386,7 @@ end
 
 ---
 
-## Testing Strategy
+## 測試策略
 
 - **單元測試**（RSpec，比照既有 `spec/clients/`、`spec/actors/` 慣例）：
   - `IssueSheetsClient`：stub `Google::Apis::SheetsV4::SheetsService`，驗證分頁名稱／range 正確、
