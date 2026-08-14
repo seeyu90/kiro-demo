@@ -211,5 +211,30 @@ RSpec.describe ProjectProgressSheetsClient do
 
       described_class.fetch_rows(force: true)
     end
+
+    it "does not overwrite fetched_at when a forced refetch fails" do
+      # 真實情境：快取內已有先前成功寫入的資料，使用者按「重新整理資料」(force: true)，
+      # 這次 API 呼叫卻失敗（額度、網路錯誤等）。舊的快取資料與 fetched_at 都不應被
+      # 這次失敗的嘗試污染──fetched_at 必須仍然反映「上一次真正成功」的時間，
+      # 否則 Dashboard 會顯示「資料剛剛更新」，但實際資料早就過期了。
+      allow(Rails).to receive(:cache).and_return(ActiveSupport::Cache::MemoryStore.new)
+      stub_credentials
+
+      success_time = Time.zone.parse("2026-03-01 09:00:00")
+      failure_time = Time.zone.parse("2026-03-01 09:02:00")
+
+      fake_service = stub_service_for(all_sheets_rows(header_only: true))
+
+      travel_to success_time do
+        described_class.fetch_rows
+      end
+
+      allow(fake_service).to receive(:get_spreadsheet_values).and_raise(Google::Apis::RateLimitError.new("Rate limit exceeded"))
+
+      travel_to failure_time do
+        expect { described_class.fetch_rows(force: true) }.to raise_error(Google::Apis::RateLimitError)
+        expect(described_class.fetched_at).to eq(success_time)
+      end
+    end
   end
 end

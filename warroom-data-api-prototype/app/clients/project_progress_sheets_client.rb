@@ -36,8 +36,9 @@ class ProjectProgressSheetsClient
   # Rails.cache.fetch 不會快取例外，下次請求會照常重試，不會卡住舊的錯誤結果。
   def fetch_rows(force: false)
     Rails.cache.fetch(CACHE_KEY, expires_in: CACHE_EXPIRY, force: force) do
-      Rails.cache.write(FETCHED_AT_CACHE_KEY, Time.current, expires_in: CACHE_EXPIRY)
-      fetch_rows_from_api
+      fetch_rows_from_api.tap do
+        Rails.cache.write(FETCHED_AT_CACHE_KEY, Time.current, expires_in: CACHE_EXPIRY)
+      end
     end
   end
 
