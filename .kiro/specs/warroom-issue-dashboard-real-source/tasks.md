@@ -103,8 +103,14 @@
       `Sheets::FetchIssueDashboard.result`，確認 `success?` 為 true，四個 output 欄位
       （`month_kpi`／`daily_kpi`／`issues`／`project_breakdown`）結構皆符合 design.md 的 Data Models
 
-- [ ] 7. Blueprints
-  - [ ] 7.1 新增 `MonthKpiBlueprint`／`DailyKpiBlueprint`／`IssueBlueprint`／`ProjectBreakdownBlueprint`
+- [x] 7. Blueprints
+  - [x] 7.1 新增 `MonthKpiBlueprint`／`DailyKpiBlueprint`／`IssueBlueprint`／`ProjectBreakdownBlueprint`
+    - 比照既有 `ProjectTaskBlueprint` 慣例（`identifier` 欄位同時列於 `fields`）；`IssueBlueprint`
+      刻意不包含「歸屬類型」／Redmine 連結（View-only 動態計算，見需求 5.6〜5.8）
+    - 對應 spec：`spec/blueprints/{month_kpi,daily_kpi,issue,project_breakdown}_blueprint_spec.rb`，
+      驗證 `render_as_hash` 恰好輸出預期欄位（含 `IssueBlueprint` 不外洩 `:attribution`／
+      `:sheet_name` 的斷言）
+    - 9 examples, 0 failures；全專案回歸 144 examples, 0 failures
     - _需求：7.4_
 
 - [ ] 8. API Endpoint
