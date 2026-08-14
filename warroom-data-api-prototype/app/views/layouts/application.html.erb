@@ -1,6 +1,18 @@
 <!DOCTYPE html>
 <html>
   <head>
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem("warroom-theme");
+          if (saved === "light") {
+            document.documentElement.setAttribute("data-theme", "light");
+          }
+        } catch (e) {
+          // localStorage 不可用：靜默忽略，維持預設深色
+        }
+      })();
+    </script>
     <title><%= content_for(:title) || "戰情室 — 專案進度" %></title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -23,5 +35,49 @@
     <div class="dashboard-container">
       <%= yield %>
     </div>
+
+    <script>
+      (function () {
+        "use strict";
+        var THEME_KEY = "warroom-theme";
+
+        function getCurrentTheme() {
+          return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+        }
+
+        function applyThemeToggleLabel(theme) {
+          var btn = document.getElementById("theme-toggle");
+          if (!btn) return;
+          if (theme === "light") {
+            btn.textContent = "☀️ 淺色";
+            btn.setAttribute("aria-label", "切換至深色模式");
+          } else {
+            btn.textContent = "🌙 深色";
+            btn.setAttribute("aria-label", "切換至淺色模式");
+          }
+        }
+
+        function toggleTheme() {
+          var next = getCurrentTheme() === "light" ? "dark" : "light";
+          if (next === "light") {
+            document.documentElement.setAttribute("data-theme", "light");
+          } else {
+            document.documentElement.removeAttribute("data-theme");
+          }
+          applyThemeToggleLabel(next);
+          try {
+            localStorage.setItem(THEME_KEY, next);
+          } catch (e) {
+            // localStorage 不可用：僅本次瀏覽切換有效
+          }
+        }
+
+        document.addEventListener("DOMContentLoaded", function () {
+          applyThemeToggleLabel(getCurrentTheme());
+          var btn = document.getElementById("theme-toggle");
+          if (btn) btn.addEventListener("click", toggleTheme);
+        });
+      })();
+    </script>
   </body>
 </html>
