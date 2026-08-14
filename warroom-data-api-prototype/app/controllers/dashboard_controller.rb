@@ -6,13 +6,14 @@ class DashboardController < ApplicationController
   # 的紀錄一律已有實際完成日期），故兩者皆視為完成狀態；沒有「進行中」「待開始」的細分。
   COMPLETED_STATUSES = ["完成", "已確認"].freeze
   UNFINISHED_STATUS = "未完成".freeze
+  FRESH_THRESHOLD = 10.seconds
 
   helper_method :overdue?
 
   def index
-    result = Sheets::FetchProjectProgress.result
+    result = Sheets::FetchProjectProgress.result(force: params[:refresh].present?)
     if result.success?
-      build_success(result.grouped_data)
+      build_success(result.grouped_data, result.fetched_at)
     else
       build_failure(result.message)
     end
@@ -20,7 +21,8 @@ class DashboardController < ApplicationController
 
   private
 
-  def build_success(grouped_data)
+  def build_success(grouped_data, fetched_at)
+    @freshness_label   = freshness_label(fetched_at)
     @grouped_data      = grouped_data
     @project_names     = grouped_data.keys
     @selected_project  = params[:project].presence
@@ -47,6 +49,7 @@ class DashboardController < ApplicationController
   end
 
   def build_failure(message)
+    @freshness_label  = nil
     @grouped_data     = {}
     @project_names    = []
     @selected_project = nil
@@ -129,5 +132,18 @@ class DashboardController < ApplicationController
 
   def sort_overdue_first(tasks)
     tasks.sort_by { |t| overdue?(t) ? 0 : 1 }
+  end
+
+  # fetched_at 為 nil 代表快取層尚未成功寫入過（理論上不會發生於成功結果，防禦性處理）。
+  # 剛從 Google Sheets API 取得（快取未命中）時 elapsed 趨近 0，一律顯示「剛剛更新」；
+  # 否則以快取寫入時間換算成「X 分鐘前」，讓使用者知道畫面資料的時效。
+  def freshness_label(fetched_at)
+    return nil if fetched_at.nil?
+
+    elapsed = Time.current - fetched_at
+    return "資料剛剛更新" if elapsed < FRESH_THRESHOLD
+
+    minutes = (elapsed / 60).floor
+    minutes.zero? ? "資料剛剛更新" : "資料更新於 #{minutes} 分鐘前"
   end
 end

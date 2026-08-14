@@ -24,7 +24,8 @@
       </div>
 
       <div class="tab-panel" id="tab-panel-stats">
-        <%= form_with url: "/issues", method: :get, local: true, class: "project-selector" do %>
+        <%= form_with url: "/issues", method: :get, class: "project-selector",
+                      data: { turbo_frame: "issue-content" } do %>
           <%= hidden_field_tag :tab, "stats" %>
           <%# 兩個分頁籤的表單各自獨立送出，但 Controller 是無狀態的：若不帶入「議題資料」分頁目前
               的篩選值，送出本表單時 project／status 會被重設為預設值，等於覆蓋掉使用者在另一個
@@ -97,7 +98,8 @@
       </div>
 
       <div class="tab-panel" id="tab-panel-detail">
-        <%= form_with url: "/issues", method: :get, local: true, class: "project-selector" do %>
+        <%= form_with url: "/issues", method: :get, class: "project-selector",
+                      data: { turbo_frame: "issue-content" } do %>
           <%= hidden_field_tag :tab, "detail" %>
           <%# 同上：帶入「統計摘要」分頁目前的月份與排序選擇，避免送出本表單時把它們重設為預設值。 %>
           <%= hidden_field_tag :month, @selected_month %>

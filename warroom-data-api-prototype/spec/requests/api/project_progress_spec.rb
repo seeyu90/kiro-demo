@@ -13,7 +13,7 @@ RSpec.describe "Api::ProjectProgress", type: :request do
 
   describe "GET /api/project_progress" do
     before do
-      allow(SheetsApiClient).to receive(:fetch_rows).and_return(valid_rows)
+      allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_return(valid_rows)
       get "/api/project_progress"
     end
 
@@ -60,11 +60,11 @@ RSpec.describe "Api::ProjectProgress", type: :request do
     end
   end
 
-  describe "GET /api/project_progress when SheetsApiClient raises ClientError (404)" do
+  describe "GET /api/project_progress when ProjectProgressSheetsClient raises ClientError (404)" do
     before do
       error = Google::Apis::ClientError.new("Not Found")
       allow(error).to receive(:status_code).and_return(404)
-      allow(SheetsApiClient).to receive(:fetch_rows).and_raise(error)
+      allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_raise(error)
       get "/api/project_progress"
     end
 
@@ -82,11 +82,11 @@ RSpec.describe "Api::ProjectProgress", type: :request do
     end
   end
 
-  describe "GET /api/project_progress when SheetsApiClient raises ClientError (403)" do
+  describe "GET /api/project_progress when ProjectProgressSheetsClient raises ClientError (403)" do
     before do
       error = Google::Apis::ClientError.new("Forbidden")
       allow(error).to receive(:status_code).and_return(403)
-      allow(SheetsApiClient).to receive(:fetch_rows).and_raise(error)
+      allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_raise(error)
       get "/api/project_progress"
     end
 
@@ -113,7 +113,7 @@ RSpec.describe "Api::ProjectProgress", type: :request do
     end
 
     before do
-      allow(SheetsApiClient).to receive(:fetch_rows).and_return(rows_with_blank_field)
+      allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_return(rows_with_blank_field)
       get "/api/project_progress"
     end
 
@@ -126,9 +126,9 @@ RSpec.describe "Api::ProjectProgress", type: :request do
     end
   end
 
-  describe "GET /api/project_progress when SheetsApiClient raises StandardError" do
+  describe "GET /api/project_progress when ProjectProgressSheetsClient raises StandardError" do
     before do
-      allow(SheetsApiClient).to receive(:fetch_rows).and_raise(StandardError.new("憑證載入失敗"))
+      allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_raise(StandardError.new("憑證載入失敗"))
       get "/api/project_progress"
     end
 
@@ -147,7 +147,7 @@ RSpec.describe "Api::ProjectProgress", type: :request do
   # 需求 5.3：simulate_error 機制已移除，query parameter 被忽略、不產生任何效果
   describe "GET /api/project_progress?simulate_error=sheet_not_found" do
     before do
-      allow(SheetsApiClient).to receive(:fetch_rows).and_return(valid_rows)
+      allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_return(valid_rows)
       get "/api/project_progress", params: { simulate_error: "sheet_not_found" }
     end
 

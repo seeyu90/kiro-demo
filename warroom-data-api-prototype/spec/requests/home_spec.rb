@@ -8,8 +8,8 @@ RSpec.describe "Home", type: :request do
       expect(response).to have_http_status(200)
     end
 
-    it "does not call either SheetsApiClient or IssueSheetsClient (需求 10.3)" do
-      expect(SheetsApiClient).not_to receive(:fetch_rows)
+    it "does not call either ProjectProgressSheetsClient or IssueSheetsClient (需求 10.3)" do
+      expect(ProjectProgressSheetsClient).not_to receive(:fetch_rows)
       expect(IssueSheetsClient).not_to receive(:fetch_month_kpi_rows)
 
       get "/"
@@ -30,7 +30,7 @@ RSpec.describe "Home", type: :request do
 
   describe "GET /dashboard is still directly reachable after root changed to home#index" do
     before do
-      allow(SheetsApiClient).to receive(:fetch_rows).and_return([["專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延誤"]])
+      allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_return([["專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延誤"]])
       get "/dashboard"
     end
 

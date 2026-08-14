@@ -79,5 +79,47 @@
         });
       })();
     </script>
+
+    <script>
+      (function () {
+        "use strict";
+        // 篩選表單只更新對應的 Turbo Frame（見 dashboard/index.html.erb、issues/index.html.erb，
+        // 後者一個頁面有兩個獨立表單；Dashboard 的表單則有兩個送出按鈕：套用篩選／重新整理資料），
+        // 送出期間停用該表單內所有送出按鈕、把「實際被點擊的那個」文字改成載入中提示，完成後
+        // 全部恢復，避免使用者以為沒反應而重複點擊。
+        //
+        // 用事件委派綁在 document 上（而非個別表單節點）：issues/index.html.erb 的表單位於
+        // 會被 Turbo Frame 替換掉的 turbo-frame 內，每次篩選送出後表單都是全新的 DOM 節點，
+        // 直接綁在表單節點上的監聽器只在第一次送出後就失效；Turbo 的 submit 事件會冒泡到
+        // document，委派可以涵蓋每一次送出，不論表單節點是否被重新渲染過。
+        var BUSY_LABEL = "套用中…";
+
+        document.addEventListener("turbo:submit-start", function (event) {
+          var form = event.target.closest(".project-selector");
+          if (!form) return;
+          var buttons = form.querySelectorAll(".apply-filters-btn");
+          if (!buttons.length) return;
+
+          var submission = event.detail && event.detail.formSubmission;
+          var submitter = submission && submission.submitter;
+
+          buttons.forEach(function (btn) {
+            btn.dataset.defaultLabel = btn.textContent;
+            btn.disabled = true;
+            if (btn === submitter) btn.textContent = BUSY_LABEL;
+          });
+        });
+
+        document.addEventListener("turbo:submit-end", function (event) {
+          var form = event.target.closest(".project-selector");
+          if (!form) return;
+
+          form.querySelectorAll(".apply-filters-btn").forEach(function (btn) {
+            btn.disabled = false;
+            if (btn.dataset.defaultLabel) btn.textContent = btn.dataset.defaultLabel;
+          });
+        });
+      })();
+    </script>
   </body>
 </html>

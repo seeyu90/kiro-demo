@@ -11,7 +11,7 @@ RSpec.describe "Dashboard", type: :request do
     ]
   end
 
-  before { allow(SheetsApiClient).to receive(:fetch_rows).and_return(valid_rows) }
+  before { allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_return(valid_rows) }
 
   describe "GET /dashboard with filters disabled (scope=all, incomplete_only=0, all types)" do
     before do
@@ -80,17 +80,57 @@ RSpec.describe "Dashboard", type: :request do
     end
   end
 
-  describe "GET /dashboard when SheetsApiClient raises an error" do
+  describe "GET /dashboard when ProjectProgressSheetsClient raises an error" do
     before do
       error = Google::Apis::ClientError.new("Not Found")
       allow(error).to receive(:status_code).and_return(404)
-      allow(SheetsApiClient).to receive(:fetch_rows).and_raise(error)
+      allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_raise(error)
       get "/dashboard"
     end
 
     it "returns HTTP 200 and shows the error message instead of raising" do
       expect(response).to have_http_status(200)
       expect(response.body).to include("錯誤")
+    end
+  end
+
+  describe "GET /dashboard freshness label (task 4)" do
+    it "shows the freshness text when ProjectProgressSheetsClient reports a fetched_at time" do
+      allow(ProjectProgressSheetsClient).to receive(:fetched_at).and_return(Time.current)
+
+      get "/dashboard"
+
+      expect(response.body).to include("freshness-label")
+    end
+
+    it "omits the freshness text when there is no recorded fetched_at (e.g. :null_store in test env)" do
+      allow(ProjectProgressSheetsClient).to receive(:fetched_at).and_return(nil)
+
+      get "/dashboard"
+
+      expect(response.body).not_to include("freshness-label")
+    end
+  end
+
+  describe "GET /dashboard?refresh=1 (task 5)" do
+    it "requests ProjectProgressSheetsClient.fetch_rows with force: true" do
+      expect(ProjectProgressSheetsClient).to receive(:fetch_rows).with(force: true).and_return(valid_rows)
+
+      get "/dashboard", params: { refresh: "1" }
+
+      expect(response).to have_http_status(200)
+    end
+
+    it "does not force a refresh on a normal request" do
+      expect(ProjectProgressSheetsClient).to receive(:fetch_rows).with(force: false).and_return(valid_rows)
+
+      get "/dashboard"
+    end
+
+    it "renders a '重新整理資料' button in the filter form" do
+      get "/dashboard"
+
+      expect(response.body).to include("重新整理資料")
     end
   end
 end
