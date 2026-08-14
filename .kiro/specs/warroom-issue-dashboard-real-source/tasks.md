@@ -12,11 +12,17 @@
 
 ## Tasks
 
-- [ ] 1. 確認真實分頁名稱
-  - [ ] 1.1 透過 Google Sheets API 或人工開啟試算表，列出 `1RdU2p9b7fwNgO5e59jN-00a5KLOQ91xrFhj2NenyKTc`
-        完整分頁名稱清單
-    - 確認 `raw_2023`〜`raw_2026` 的實際分頁名稱；若與 design.md 推測不同，更新 design.md 的
-      `IssueSheetsClient` 常數
+- [x] 1. 確認真實分頁名稱
+  - [x] 1.1 取得 `1RdU2p9b7fwNgO5e59jN-00a5KLOQ91xrFhj2NenyKTc` 完整分頁名稱清單
+    - 透過解析試算表原生 XLSX 匯出檔的 `xl/workbook.xml`（`<sheet name="..." state="visible|hidden">`
+      標籤）取得官方分頁清單與可見性狀態，比人工開啟試算表逐一核對更可靠、不遺漏
+    - 結果：`month_kpi`／`daily_kpi`（顯示）、`raw_2023`〜`raw_2025`（隱藏）、`raw_2026`（顯示）、
+      **新發現** `raw_2027`（隱藏，僅標題列無資料）、`工程師比例表`／`專案工程師對照表`（顯示，即
+      原推測的「工程師負載表」「專案清單表」，已確認真實名稱但仍不納入範圍）、`2026_測試臭蟲`／
+      `2026_客訴問題`（顯示，即先前描述的兩個用途不明分頁，已知真實名稱但用途仍待確認）
+    - `raw_2023`〜`raw_2026` 原推測分頁名稱正確；已將 `raw_2027` 加入 `IssueSheetsClient.ISSUE_SHEETS`
+    - 分頁隱藏狀態不影響 Google Sheets API 讀取，無需額外處理
+    - 已更新 requirements.md「簡介」段落分頁結構表格與 design.md 的 `IssueSheetsClient` 常數
     - _需求：1.1, 1.2_
 
 - [ ] 2. `IssueSheetsClient`
@@ -26,7 +32,8 @@
     - _需求：2.1, 2.2_
 
   - [ ] 2.2 單元測試：`spec/clients/issue_sheets_client_spec.rb`
-    - stub `SheetsService`，驗證分頁名稱／range／合併邏輯（`raw_2023`〜`raw_2026` 僅保留第一個標題列）
+    - stub `SheetsService`，驗證分頁名稱／range／合併邏輯（`raw_2023`〜`raw_2027` 僅保留第一個標題列，
+      含 `raw_2027` 空分頁邊界情況）
     - _需求：3.1, 4.1, 5.1_
 
 - [ ] 3. `Sheets::FetchIssueDashboard` — 月度 KPI／每日趨勢解析

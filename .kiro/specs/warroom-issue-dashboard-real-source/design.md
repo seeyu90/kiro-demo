@@ -56,10 +56,11 @@ warroom-data-api-prototype/
 class IssueSheetsClient
   SPREADSHEET_ID = "1RdU2p9b7fwNgO5e59jN-00a5KLOQ91xrFhj2NenyKTc"
 
-  # 分頁名稱依需求 1 確認結果調整；raw_2023~raw_2026 為推測值。
+  # 分頁名稱已依需求 1（Task 1）確認，取自試算表 xl/workbook.xml 的官方分頁清單。
+  # raw_2023~raw_2025、raw_2027 為隱藏分頁（不影響 API 讀取）；raw_2027 目前僅有標題列、無資料列。
   MONTH_KPI_SHEET    = "month_kpi"
   DAILY_KPI_SHEET    = "daily_kpi"
-  ISSUE_SHEETS       = %w[raw_2023 raw_2024 raw_2025 raw_2026].freeze
+  ISSUE_SHEETS       = %w[raw_2023 raw_2024 raw_2025 raw_2026 raw_2027].freeze
 
   SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"].freeze
 
@@ -265,7 +266,8 @@ end
 
 - **單元測試**（RSpec，比照既有 `spec/clients/`、`spec/actors/` 慣例）：
   - `IssueSheetsClient`：stub `Google::Apis::SheetsV4::SheetsService`，驗證分頁名稱／range 正確、
-    UTF-8 重標記、合併邏輯（`raw_2023`〜`raw_2026`）僅保留第一個分頁標題列。
+    UTF-8 重標記、合併邏輯（`raw_2023`〜`raw_2027`）僅保留第一個分頁標題列；`raw_2027` 為空分頁的
+    邊界情況（僅標題列、無資料列）需涵蓋。
   - `Sheets::FetchIssueDashboard`：驗證三類資料解析正確（含 `project_breakdown` 分組統計、日期正規化、空列跳過、
     整數轉換失敗容錯）、錯誤對應（404/403/其他）。
 - **Request specs**：`GET /api/issue_dashboard` 回傳結構符合需求 7.3；`GET /issues` 帶

@@ -9,22 +9,33 @@ ID `1RdU2p9b7fwNgO5e59jN-00a5KLOQ91xrFhj2NenyKTc`）串接進 `warroom-data-api-
 [.kiro/steering/rails-standards.md](../../steering/rails-standards.md)），並將畫面呈現方式對齊
 `docs/issues.html` 已驗證過的版面（KPI 摘要卡片、依專案分類統計、每日趨勢圖、議題明細清單）。
 
-真實 306 試算表分頁結構（已透過 Google Drive 讀取試算表內容確認）：
+真實 306 試算表分頁結構（Task 1 已透過解析試算表原生 XLSX 匯出檔的 `xl/workbook.xml` 取得完整分頁
+清單，**確認**狀態為最終結果，非推測）：
 
-| 分頁 | 確認狀態 | 欄位 |
-|---|---|---|
-| `month_kpi` | 已確認（分頁名稱取自試算表 metadata） | `year_month, 客訴, 測試, 總Bug, 攔截率, 完成數, 未結案, 平均天數, SLA達標率, Top3` |
-| `daily_kpi` | 已確認 | `日期, 客訴, 測試, 其他, 總計, 未結束數量, 未結束IDs, slack_message` |
-| `raw_2023`〜`raw_2026` | 高度推測（依各列 `sheet_name` 欄位值命名，與該欄位值完全一致，但未逐一開啟試算表分頁列表確認） | `issue_id, subject, type, tracker, status, assigned_to, start_date, due_date, work_days, sheet_name, project` |
+| 分頁 | 可見性 | 確認狀態 | 欄位 |
+|---|---|---|---|
+| `month_kpi` | 顯示 | 已確認 | `year_month, 客訴, 測試, 總Bug, 攔截率, 完成數, 未結案, 平均天數, SLA達標率, Top3` |
+| `daily_kpi` | 顯示 | 已確認 | `日期, 客訴, 測試, 其他, 總計, 未結束數量, 未結束IDs, slack_message` |
+| `raw_2023` | 隱藏 | 已確認（原推測正確） | `issue_id, subject, type, tracker, status, assigned_to, start_date, due_date, work_days, sheet_name, project` |
+| `raw_2024` | 隱藏 | 已確認（原推測正確） | 同上 |
+| `raw_2025` | 隱藏 | 已確認（原推測正確） | 同上 |
+| `raw_2026` | 顯示 | 已確認（原推測正確） | 同上 |
+| `raw_2027` | 隱藏 | 已確認（**Task 1 新發現**，原規劃未涵蓋） | 同上；目前僅有標題列，無資料列 |
 
-試算表中另外還觀察到工程師負載表、專案清單表，以及兩個內容重疊但結構不同的分頁（一個是缺少
-`work_days`／`sheet_name`／`project` 欄位、日期格式為 `YYYY/M/D` 的類似議題列表；另一個是僅含
-`issue_id, project, subject, status, start_date, due_date` 六欄的精簡摘要列表），**本階段皆不納入
-範圍**：工程師負載表／專案清單表經評估後排除（見 static prototype 需求文件的決策記錄），另外兩個
-用途不明分頁待後續確認用途後再議。
+分頁隱藏狀態（`state="hidden"`）僅影響 Google Sheets 使用者介面顯示，**不影響** Google Sheets API
+`spreadsheets.values.get` 讀取，故 `IssueSheetsClient` 可正常讀取 `raw_2023`〜`raw_2025` 的隱藏分頁
+資料，無需額外處理。
 
-**不納入範圍**：工程師負載表、專案清單表、上述用途不明的兩個分頁、即時同步／Webhook／排程更新、
-資料庫或本地快取層、OAuth 使用者登入、資料寫入（僅唯讀）。
+試算表中另外還有四個分頁，Task 1 已確認其真實名稱：`工程師比例表`（原文件推測名「工程師負載表」）、
+`專案工程師對照表`（原文件推測名「專案清單表」）、`2026_測試臭蟲`（先前描述為「缺少 work_days／
+sheet_name／project 欄位、日期格式為 YYYY/M/D 的類似議題列表」）、`2026_客訴問題`（先前描述為
+「僅含 issue_id, project, subject, status, start_date, due_date 六欄的精簡摘要列表」）。**本階段皆
+不納入範圍**：`工程師比例表`／`專案工程師對照表` 經評估後排除（見 static prototype 需求文件的決策
+記錄）；`2026_測試臭蟲`／`2026_客訴問題` 從名稱推測可能是 `raw_2026` 依類型拆分的子集視圖，但用途
+與是否與 `raw_2026` 資料重複仍待後續確認，暫不納入範圍。
+
+**不納入範圍**：`工程師比例表`、`專案工程師對照表`、`2026_測試臭蟲`、`2026_客訴問題`、即時同步／
+Webhook／排程更新、資料庫或本地快取層、OAuth 使用者登入、資料寫入（僅唯讀）。
 
 **技術棧說明**：本 spec 延續 `warroom-data-api-prototype`／`warroom-data-api-real-source` 的技術選型，
 採 Ruby on Rails 獨立伺服器實作，使用 `google-apis-sheets_v4` + `googleauth`，以 service_actor 封裝讀取
@@ -60,13 +71,18 @@ ID `1RdU2p9b7fwNgO5e59jN-00a5KLOQ91xrFhj2NenyKTc`）串接進 `warroom-data-api-
 **使用者故事：** 身為後端開發者，我希望在開始串接前先確認試算表實際分頁名稱，以便 Client 的分頁請求
 不會因分頁名稱猜測錯誤而失敗。
 
+**狀態：已完成。** 透過解析試算表原生 XLSX 匯出檔的 `xl/workbook.xml`（比 Google Sheets API 的
+`spreadsheets.get` 更直接可靠，同樣取得官方分頁清單）取得完整分頁清單與可見性狀態，結果見「簡介」
+段落的分頁結構表格：`raw_2023`〜`raw_2026` 原推測正確；新發現 `raw_2027`（隱藏，目前僅標題列）；
+工程師負載表／專案清單表的真實名稱為 `工程師比例表`／`專案工程師對照表`。
+
 #### 驗收標準
 
 1. 實作開始前，THE 開發者 SHALL 透過 Google Sheets API（或人工開啟試算表）取得
    `1RdU2p9b7fwNgO5e59jN-00a5KLOQ91xrFhj2NenyKTc` 的完整分頁名稱清單，確認 `raw_2023`〜`raw_2026`
-   的實際分頁名稱是否與本文件推測一致。
+   的實際分頁名稱是否與本文件推測一致。✅ 已完成，見上方「狀態」。
 2. IF 實際分頁名稱與推測不同，THEN THE 開發者 SHALL 以實際名稱更新本 spec 與後續 `IssueSheetsClient`
-   常數定義，不得沿用錯誤名稱。
+   常數定義，不得沿用錯誤名稱。✅ 已依 Task 1 發現更新（新增 `raw_2027`）。
 
 ---
 
@@ -140,8 +156,9 @@ ID `1RdU2p9b7fwNgO5e59jN-00a5KLOQ91xrFhj2NenyKTc`）串接進 `warroom-data-api-
 
 #### 驗收標準
 
-1. WHEN **IssueDashboard_Actor** 被呼叫，THE **IssueSheetsClient** SHALL 對 `raw_2023`〜`raw_2026`
-   （或需求 1 確認後的實際分頁名稱）各分頁發起請求，合併為單一列陣列（僅保留第一個分頁的標題列）。
+1. WHEN **IssueDashboard_Actor** 被呼叫，THE **IssueSheetsClient** SHALL 對 `raw_2023`〜`raw_2027`
+   （Task 1 確認後的完整清單，含新發現的 `raw_2027`）各分頁發起請求，合併為單一列陣列（僅保留第一個
+   分頁的標題列）；分頁隱藏狀態不影響讀取（見「簡介」段落）。
 2. THE **IssueDashboard_Actor** SHALL 將每一列解析為 Hash：`issue_id, subject, type, tracker, status,
    assigned_to, start_date, due_date, work_days, project`（試算表本身已含 `sheet_name`／`project` 欄位，
    不需如 305 的 Client 額外附加分頁標記）。
