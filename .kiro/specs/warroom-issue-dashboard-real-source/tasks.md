@@ -40,14 +40,25 @@
       全專案回歸 `bundle exec rspec` 99 examples, 0 failures
     - _需求：3.1, 4.1, 5.1_
 
-- [ ] 3. `Sheets::FetchIssueDashboard` — 月度 KPI／每日趨勢解析
-  - [ ] 3.1 新增 `app/actors/sheets/fetch_issue_dashboard.rb`，實作 `parse_month_kpi`
+- [x] 3. `Sheets::FetchIssueDashboard` — 月度 KPI／每日趨勢解析
+  - [x] 3.1 新增 `app/actors/sheets/fetch_issue_dashboard.rb`，實作 `parse_month_kpi`
     - 不解析 `Top3` 欄位，不納入輸出（負責人不作為統計主軸，見需求 3.3）
+    - 數值欄位（complaint/testing/total_bug/completed/unresolved/block_rate/avg_days/sla_rate）
+      有效則轉換為 Integer／Float，否則保留原始字串不拋出例外（沿用 305
+      `Sheets::FetchProjectProgress` 的 `delay_days` 容錯慣例）
+    - `call` 目前僅串接 `parse_month_kpi`／`parse_daily_kpi`；`issues`／`project_breakdown` 待
+      Task 4、錯誤處理待 Task 5 補上
     - _需求：3.2, 3.3_
 
-  - [ ] 3.2 實作 `parse_daily_kpi`
+  - [x] 3.2 實作 `parse_daily_kpi`
     - 空字串 `total` 視為 0；結果依 `date` 升冪排序
     - _需求：4.2, 4.3, 4.4_
+
+  - [x] 3.3 單元測試：`spec/actors/sheets/fetch_issue_dashboard_spec.rb`
+    - `#parse_month_kpi`／`#parse_daily_kpi` 私有方法直接測試（`.send`，比照既有
+      `fetch_project_progress_spec.rb` 慣例）：欄位對應、Top3 排除、空列跳過、必要欄位空白跳過、
+      非數字值容錯、日期排序；`#call` 驗證 stub `IssueSheetsClient` 後兩個 output 正確填入
+    - 13 examples, 0 failures；全專案回歸 112 examples, 0 failures
 
 - [ ] 4. `Sheets::FetchIssueDashboard` — 議題明細解析與依專案分類統計
   - [ ] 4.1 實作 `parse_issues`
@@ -157,7 +168,7 @@
   "waves": [
     { "id": 0, "tasks": ["1.1"] },
     { "id": 1, "tasks": ["2.1"] },
-    { "id": 2, "tasks": ["2.2", "3.1", "3.2", "4.1"] },
+    { "id": 2, "tasks": ["2.2", "3.1", "3.2", "3.3", "4.1"] },
     { "id": 3, "tasks": ["4.2", "5.1"] },
     { "id": 4, "tasks": ["5.2"] },
     { "id": 5, "tasks": ["6"] },
