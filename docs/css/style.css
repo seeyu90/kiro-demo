@@ -463,6 +463,12 @@ table.project-tasks tbody tr:hover td {
   margin: 0;
 }
 
+.section-note {
+  margin: 0 0 0.75rem;
+  font-size: 0.8rem;
+  color: var(--color-text-faint, var(--color-text-muted));
+}
+
 .breakdown-wrap {
   margin-top: 0.75rem;
 }

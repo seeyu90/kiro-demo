@@ -403,6 +403,12 @@ body {
   margin-bottom: 0.75rem;
 }
 
+.section-note {
+  margin: -0.5rem 0 0.75rem;
+  font-size: 0.8rem;
+  color: var(--color-text-faint);
+}
+
 .attribution-badge {
   display: inline-block;
   padding: 0.15rem 0.55rem;

@@ -178,6 +178,13 @@
       深色／淺色主題皆正確呈現，無需另寫斷點（表格響應式已由既有 `.project-tasks` 規則涵蓋）
     - _需求：5.8_
 
+  - [x] 9.9 測試：`spec/helpers/issues_helper_spec.rb`（12 examples）、
+        `spec/requests/issues_spec.rb`（16 examples，對應原 Task 12）
+    - Request spec 涵蓋：預設篩選（月份最新、狀態「新建立」）、月份／專案／狀態切換、清空狀態篩選、
+      無符合結果時的提示文字、`project_breakdown` 不受月份篩選影響、Redmine 連結正確性、404 錯誤時
+      頁面內顯示錯誤訊息而非拋出例外
+    - 全專案回歸 181 examples, 0 failures
+
   - [x] 9.10 每日趨勢圖新增橫軸日期標籤／縱軸數值刻度（Prototype 確認畫面後追加需求，見需求 3.4、3.5）
     - `docs/js/issues.js`：`renderTrendChart` 改用 `TREND_PADDING_LEFT/RIGHT/TOP/BOTTOM` 分向留白，
       新增 `pickLabelIndices`（等距挑選含首尾的橫軸標籤索引，資料點超過 `TREND_MAX_X_LABELS`＝6 時
@@ -192,12 +199,17 @@
       `<svg>`，確認格線／標籤／折線座標互相對應無誤
     - _需求：3.4, 3.5_
 
-  - [x] 9.9 測試：`spec/helpers/issues_helper_spec.rb`（12 examples）、
-        `spec/requests/issues_spec.rb`（16 examples，對應原 Task 12）
-    - Request spec 涵蓋：預設篩選（月份最新、狀態「新建立」）、月份／專案／狀態切換、清空狀態篩選、
-      無符合結果時的提示文字、`project_breakdown` 不受月份篩選影響、Redmine 連結正確性、404 錯誤時
-      頁面內顯示錯誤訊息而非拋出例外
-    - 全專案回歸 181 examples, 0 failures
+  - [x] 9.11 月度 KPI 區塊新增說明文字，釐清「月結」與「即時資料」的關係（見需求 9.3、9.4）
+    - 起因：使用者反映「當月仍有議題要顯示，但統計資料是月底結算」，容易誤解為「當月無資料」
+    - `app/views/issues/index.html.erb`：於「月度 KPI」`<h2>` 下新增
+      `<p class="section-note">月結數字，當月進行中尚未結算；下方依專案分類統計與議題明細皆為即時
+      資料，不受此處月份選擇影響</p>`；`application.css` 新增 `.section-note`
+    - 說明文字僅置於月度 KPI 區塊一處，不重複放在議題明細的專案／狀態篩選控制項附近——初版曾一併在
+      議題明細篩選列旁加註，使用者指出容易讓人誤以為專案／狀態篩選未生效（實際上這兩個篩選確實會
+      影響下方議題明細清單，僅「月份」不影響），故收斂為單一位置，與 prototype 的修正同步
+    - 測試：`issues_spec.rb` 新增 2 examples（`.section-note` 恰好出現一次、文字含「月結」與
+      「即時」關鍵字），全專案回歸 198 examples, 0 failures
+    - _需求：9.3, 9.4_
 
 - [x] 10. Rails 入口頁（對齊 docs/index.html 模式）
   - [x] 10.1 新增 `app/controllers/home_controller.rb`（`GET /`，純靜態，不讀取任何資料來源）
@@ -263,7 +275,7 @@
     { "id": 8, "tasks": ["8.2", "9.1"] },
     { "id": 9, "tasks": ["9.2", "9.3"] },
     { "id": 10, "tasks": ["9.4", "9.5", "9.6", "9.7"] },
-    { "id": 11, "tasks": ["9.8"] },
+    { "id": 11, "tasks": ["9.8", "9.9", "9.10", "9.11"] },
     { "id": 12, "tasks": ["10.1"] },
     { "id": 13, "tasks": ["10.2"] },
     { "id": 14, "tasks": ["10.3"] },

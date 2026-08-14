@@ -51,6 +51,17 @@ RSpec.describe "Issues", type: :request do
       expect(response.body).to include("25.0")
     end
 
+    it "shows exactly one section-note, explaining the settlement/live-data distinction near the KPI heading" do
+      notes = response.body.scan(%r{<p class="section-note">([^<]*)</p>})
+      expect(notes.size).to eq(1)
+      expect(notes.first.first).to include("月結").and include("即時")
+    end
+
+    it "does not repeat the note near the project/status filters (which do actively filter the list below)" do
+      # 確認「不受此處月份選擇影響」字樣只出現一次（在月度 KPI 區塊），不會出現在議題明細篩選附近造成混淆
+      expect(response.body.scan("不受此處月份選擇影響").size).to eq(1)
+    end
+
     it "shows the project breakdown table" do
       expect(response.body).to include("Virtuous HRM")
       expect(response.body).to include("AG 亞炬")

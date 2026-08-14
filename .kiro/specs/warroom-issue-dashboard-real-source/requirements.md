@@ -242,6 +242,11 @@ Webhook／排程更新、資料庫或本地快取層、OAuth 使用者登入、�
    （`month_kpi` 資料中 `year_month` 最大值）。
 2. WHEN 使用者切換月份，THE **IssueDashboard_Page** SHALL 以 Turbo Frame 局部更新 KPI 卡片，不觸發
    整頁重載；依專案分類統計（`project_breakdown`）不隨月份篩選（見需求 3a.2），月份切換不影響其內容。
+3. THE **IssueDashboard_Page** SHALL 在月度 KPI 區塊顯示說明文字，明確告知：KPI 卡片為月結數字
+   （當月進行中尚未結算），而依專案分類統計與議題明細清單皆為即時資料、不受月份選擇影響，與
+   prototype 一致（見 [warroom-issue-dashboard-static-prototype/requirements.md](../warroom-issue-dashboard-static-prototype/requirements.md) 需求 2.5、2.6）。
+4. THE **IssueDashboard_Page** SHALL 確保此說明文字僅出現在月度 KPI 區塊一處，不得重複出現在議題
+   明細的專案／狀態篩選控制項附近，避免使用者誤解為「篩選功能未生效」。
 
 ---
 
