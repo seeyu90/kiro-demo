@@ -70,11 +70,11 @@ toggleTheme()
 :root {
   --color-bg: #0f1117;
   --color-surface: #1a202c;
-  --color-surface-alt: #171923;
   --color-border: #2d3748;
   --color-text: #e2e8f0;
   --color-text-strong: #f7fafc;
   --color-text-muted: #a0aec0;
+  --color-text-faint: #718096;
   --color-accent: #63b3ed;
 
   --badge-completed-bg: rgba(104, 211, 145, 0.15);
@@ -97,11 +97,11 @@ toggleTheme()
 html[data-theme="light"] {
   --color-bg: #f7fafc;
   --color-surface: #ffffff;
-  --color-surface-alt: #edf2f7;
   --color-border: #cbd5e0;
   --color-text: #1a202c;
   --color-text-strong: #171923;
   --color-text-muted: #4a5568;
+  --color-text-faint: #64748b;
   --color-accent: #2b6cb0;
 
   --badge-completed-bg: #c6f6d5;
@@ -121,14 +121,23 @@ html[data-theme="light"] {
 淺色主題的狀態 badge／逾期標示改用**不透明淺色底 + 深色文字**（而非沿用深色主題的半透明疊色），
 因為半透明疊色在白底上會過淡、文字對比不足（需求 2.2）。
 
+> **修正記錄**：`--color-text-faint` 淺色值最初沿用深色主題的 `#718096`，經 code review 用
+> WCAG 對比度公式核算，對白色背景（`--color-surface: #ffffff`）僅約 4.02:1，未達需求 2.2 的
+> 4.5:1 門檻（影響 `table.project-tasks th`／Rails `.empty-state`）。已改為 `#64748b`
+> （對白底約 4.76:1，通過 AA），兩處實作同步修正。
+
 ### 既有樣式規則改寫對照（兩檔案皆比照辦理）
+
+實作時另外新增了一些本表未列出的工具變數（如 `--color-border-hover`、`--btn-text`、
+`--table-row-border`、`--table-row-hover-bg`、`--color-accent-strong`、`--select-arrow`、
+Rails 專屬的 `--error-*`），用途皆為既有樣式規則的直接色碼替換，不影響本節列出的核心對照關係。
 
 | 既有寫死色碼 | 改用變數 |
 |---|---|
 | `background: #0f1117`（body） | `background: var(--color-bg)` |
 | `color: #e2e8f0`（body） | `color: var(--color-text)` |
 | `#1a202c`（`.stat-item`／`select`／`table.project-tasks`） | `var(--color-surface)` |
-| `#171923`（`table th`） | `var(--color-surface-alt)` |
+| `#718096`（`table th`） | `var(--color-text-faint)` |
 | `#2d3748`（各邊框） | `var(--color-border)` |
 | `#a0aec0`（`.subtitle`／`.stat-label`／legend） | `var(--color-text-muted)` |
 | `#f7fafc`（標題／`.stat-value`） | `var(--color-text-strong)` |
