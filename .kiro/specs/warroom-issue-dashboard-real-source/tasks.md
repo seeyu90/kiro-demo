@@ -251,18 +251,32 @@
         與 `GET /issues` 皆能正常直接訪問並各自渲染「返回入口頁」連結
       - 全專案回歸 196 examples, 0 failures（含本次新增）
 
-- [ ] 11. 檢查點 — 頁面功能驗證
-    - 瀏覽器手動驗證：首次載入時狀態篩選預設為「新建立」（非全部狀態）、專案篩選預設為全部專案、
-      月份切換、專案／狀態篩選、Turbo Frame 局部更新（不整頁重載）、空結果提示、議題編號連結正確
-      導向 Redmine 且新分頁開啟、響應式版面（沿用既有 CSS 斷點）
+- [x] 11. 檢查點 — 頁面功能驗證（改以 Playwright E2E 取代原規劃的瀏覽器手動驗證，見
+      design.md「Testing Strategy」段落的設計變更紀錄）
+    - 起因：本機開發環境已在 `config/credentials/development.yml.enc` 設定真實 Service Account
+      憑證，`rails server` 可直接以真實試算表資料運作；改用 Playwright 驅動實際運行中的伺服器
+      （斷言針對真實資料的結構性質，不寫死具體筆數／專案名稱），比純手動點擊更可重複執行、更不
+      容易遺漏
+    - 驗證項目：首次載入時狀態篩選預設為「新建立」、專案篩選預設為全部專案；Turbo Frame 局部更新
+      （監聽 `framenavigated` 確認主畫面未整頁重載）；月份切換正確套用；清空狀態篩選後議題筆數
+      增加；依專案篩選正確縮小結果；某專案＋狀態組合命中空結果時顯示「目前無符合條件的議題」；
+      議題編號連結正確導向 Redmine（`target="_blank"`、`rel="noopener noreferrer"`）；響應式版面
+      （480px 寬度下議題表格橫向捲動，Rails 版與 prototype 的堆疊卡片版面為刻意不同的響應式設計
+      選擇）
+    - 17/17（`e2e_rails_task11.js`）通過，無 console error
+    - _需求：7a.4, 8.1〜8.4, 9.1〜9.2_
 
 - [x] 12. Request spec：`spec/requests/issues_spec.rb`
     - 已於 Task 9.9 一併完成（實作與測試同步進行，避免無測試覆蓋的中間狀態）；16 examples, 0 failures
     - _需求：8.1〜8.4, 9.1〜9.2_
 
-- [ ] 13. 端對端驗證
-    - 設定真實 Service Account 憑證，訪問 `/issues` 與 `/api/issue_dashboard`，確認回傳真實試算表
-      資料且與 prototype 呈現方式一致（比照 `warroom-data-api-real-source` Task 10 驗證方式）
+- [x] 13. 端對端驗證（Playwright E2E，見 Task 11 的設計變更紀錄）
+    - 訪問真實運行中的 `/issues` 與 `/api/issue_dashboard`：確認 API 回傳真實試算表資料（`issues`
+      412 筆，非模擬資料的個位數筆數）；確認 `tracker=測試` 的議題已被排除（`issues` 輸出的
+      `tracker` 值僅有「臭蟲」）；確認頁面預設選中的月份與 `month_kpi` 最新 `year_month` 一致；
+      確認 KPI 卡片的攔截率數值與 API 回傳值一致；確認清空篩選後 HTML 頁面議題筆數與 API `issues`
+      筆數一致（HTML 與 JSON 兩種呈現方式資料一致）
+    - 6/6（`e2e_rails_task13.js`）通過
     - _需求：7.1〜7.4 全部_
 
 - [x] 14. 每日趨勢與依專案分類改為依所選月份篩選；依專案分類移回統計摘要分頁籤；橫軸標籤改為全部

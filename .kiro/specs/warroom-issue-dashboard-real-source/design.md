@@ -396,6 +396,16 @@ end
     整數轉換失敗容錯）、錯誤對應（404/403/其他）。
 - **Request specs**：`GET /api/issue_dashboard` 回傳結構符合需求 7.3；`GET /issues` 帶
   `project`／`status`／`month` query params 時回傳正確篩選結果。
-- **端對端驗證**（比照 `warroom-data-api-real-source` Task 10 的驗證方式）：設定真實 Service Account
-  憑證後，訪問 `/issues` 確認畫面呈現與 `docs/issues.html` prototype 一致，且資料為真實試算表內容
-  （非模擬資料）。
+- **頁面功能與端對端驗證（Playwright E2E，取代原規劃的瀏覽器手動檢查）**：本機開發環境已於
+  `config/credentials/development.yml.enc` 設定真實 Service Account 憑證，`rails server` 可直接
+  以真實試算表資料運作，故 Task 11／13 改以 Playwright 驅動實際運行中的 `rails server`（而非僅
+  RSpec 的純 HTTP 字串比對）進行驗證，取代原規劃的人工瀏覽器操作：
+  - 驗證斷言 SHALL 針對真實資料的**結構性質**（例如「清空狀態篩選後議題筆數增加」「切換月份後
+    KPI 卡片數值與 `GET /api/issue_dashboard` 回傳值一致」），不得寫死特定筆數或特定專案名稱等
+    隨真實資料變動的具體數值，避免測試隨試算表內容變動而失準。
+  - 涵蓋範圍：Turbo Frame 局部更新（監聽 `framenavigated` 事件確認主畫面未整頁重載）、月份／
+    專案／狀態篩選正確套用、空結果狀態訊息、Redmine 連結屬性、響應式表格版面（Rails 版為橫向
+    捲動，非 prototype 的堆疊卡片版面，兩者為刻意不同的響應式設計選擇）、`GET /api/issue_dashboard`
+    JSON 與 `GET /issues` HTML 呈現的資料一致性、`tracker=測試` 議題確實從真實資料中被排除。
+  - 測試腳本為一次性驗證腳本，不納入 CI 常態測試套件（不同於 RSpec，不需要固定憑證），比照
+    `docs/` prototype 既有的 Playwright 驗證慣例（`scratchpad` 目錄下的腳本）。
