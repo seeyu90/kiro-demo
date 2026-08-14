@@ -313,5 +313,104 @@ RSpec.describe Sheets::FetchIssueDashboard do
         { project: "Virtuous HRM", complaint: 1, testing: 1, other: 0, total: 2 }
       ])
     end
+
+    context "when IssueSheetsClient raises Google::Apis::ClientError status 404" do
+      before do
+        error = Google::Apis::ClientError.new("Not Found")
+        allow(error).to receive(:status_code).and_return(404)
+        allow(IssueSheetsClient).to receive(:fetch_month_kpi_rows).and_raise(error)
+      end
+
+      it "returns failure_code: :sheet_not_found" do
+        expect(result).not_to be_success
+        expect(result.failure_code).to eq(:sheet_not_found)
+        expect(result.message).to include("找不到指定分頁或試算表")
+      end
+    end
+
+    context "when IssueSheetsClient raises Google::Apis::ClientError with 'Unable to parse range'" do
+      before do
+        error = Google::Apis::ClientError.new("Unable to parse range: raw_2099!A:K")
+        allow(error).to receive(:status_code).and_return(400)
+        allow(IssueSheetsClient).to receive(:fetch_issue_rows).and_raise(error)
+      end
+
+      it "returns failure_code: :sheet_not_found" do
+        expect(result).not_to be_success
+        expect(result.failure_code).to eq(:sheet_not_found)
+      end
+    end
+
+    context "when IssueSheetsClient raises Google::Apis::ClientError status 403" do
+      before do
+        error = Google::Apis::ClientError.new("Forbidden")
+        allow(error).to receive(:status_code).and_return(403)
+        allow(IssueSheetsClient).to receive(:fetch_daily_kpi_rows).and_raise(error)
+      end
+
+      it "returns failure_code: :access_denied" do
+        expect(result).not_to be_success
+        expect(result.failure_code).to eq(:access_denied)
+        expect(result.message).to include("資料來源存取權限不足")
+      end
+    end
+
+    context "when IssueSheetsClient raises Google::Apis::ClientError with another status code" do
+      before do
+        error = Google::Apis::ClientError.new("Bad Request")
+        allow(error).to receive(:status_code).and_return(400)
+        allow(IssueSheetsClient).to receive(:fetch_issue_rows).and_raise(error)
+      end
+
+      it "returns failure_code: :internal_error" do
+        expect(result).not_to be_success
+        expect(result.failure_code).to eq(:internal_error)
+        expect(result.message).to include("Google Sheets API 錯誤")
+      end
+    end
+
+    context "when IssueSheetsClient raises a StandardError (e.g. missing credentials)" do
+      before do
+        allow(IssueSheetsClient).to receive(:fetch_month_kpi_rows)
+          .and_raise(StandardError.new("找不到 Google Service Account 憑證"))
+      end
+
+      it "returns failure_code: :internal_error" do
+        expect(result).not_to be_success
+        expect(result.failure_code).to eq(:internal_error)
+        expect(result.message).to include("未預期的內部錯誤")
+      end
+    end
+
+    context "when Google::Apis::RateLimitError is raised" do
+      before do
+        allow(IssueSheetsClient).to receive(:fetch_daily_kpi_rows)
+          .and_raise(Google::Apis::RateLimitError.new("Rate limit exceeded"))
+      end
+
+      it "returns failure_code: :internal_error" do
+        expect(result).not_to be_success
+        expect(result.failure_code).to eq(:internal_error)
+      end
+    end
+
+    context "when a later fetch fails after earlier ones succeeded" do
+      before do
+        error = Google::Apis::ClientError.new("Forbidden")
+        allow(error).to receive(:status_code).and_return(403)
+        allow(IssueSheetsClient).to receive(:fetch_issue_rows).and_raise(error)
+      end
+
+      it "fails the whole request rather than a partial success (需求 6.2)" do
+        # month_kpi／daily_kpi 已在 fetch_issue_rows 拋出例外前解析完成並賦值給 output，
+        # 但 fail! 不會清除先前已設定的 output——真正的「整體失敗」契約在於 result.success?
+        # 為 false，呼叫端（IssuesController）依 rails-standards.md 慣例一律先檢查
+        # success? 再決定是否使用任何欄位，不會因 month_kpi 有值就誤判為部分成功。
+        expect(result).not_to be_success
+        expect(result.failure_code).to eq(:access_denied)
+        expect(result.issues).to be_nil
+        expect(result.project_breakdown).to be_nil
+      end
+    end
   end
 end

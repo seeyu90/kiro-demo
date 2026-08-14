@@ -14,8 +14,20 @@ module Sheets
       self.daily_kpi          = parse_daily_kpi(IssueSheetsClient.fetch_daily_kpi_rows)
       self.issues              = parse_issues(IssueSheetsClient.fetch_issue_rows)
       self.project_breakdown = compute_project_breakdown(issues)
-
-      # 錯誤處理（rescue Google::Apis::ClientError 等）：Task 5 實作
+    rescue Google::Apis::ClientError => e
+      # 錯誤對應邏輯與 305 Sheets::FetchProjectProgress 相同（見 rails-standards.md 的
+      # failure_code 對應表）：三個讀取類別（月度 KPI／每日趨勢／議題明細）中任一失敗，
+      # 整個請求即失敗，不做部分成功回傳（需求 6.2）；project_breakdown 為衍生計算，
+      # 不會單獨觸發此例外。
+      if e.status_code == 404 || e.message.to_s.include?("Unable to parse range")
+        fail!(failure_code: :sheet_not_found, message: "找不到指定分頁或試算表：#{e.message}")
+      elsif e.status_code == 403
+        fail!(failure_code: :access_denied, message: "資料來源存取權限不足：#{e.message}")
+      else
+        fail!(failure_code: :internal_error, message: "Google Sheets API 錯誤：#{e.message}")
+      end
+    rescue => e
+      fail!(failure_code: :internal_error, message: "未預期的內部錯誤：#{e.message}")
     end
 
     private

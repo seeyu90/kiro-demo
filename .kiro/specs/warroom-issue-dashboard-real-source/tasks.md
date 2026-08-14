@@ -84,19 +84,24 @@
     - `#call`：驗證 stub 後 `issues`／`project_breakdown` 正確填入
     - 29 examples, 0 failures；全專案回歸 128 examples, 0 failures
 
-- [ ] 5. `Sheets::FetchIssueDashboard` — 錯誤處理
-  - [ ] 5.1 實作統一錯誤對應（404/403/內部錯誤），任一資料類別失敗即整體失敗
-    - 沿用 [rails-standards.md](../../steering/rails-standards.md) 的 `failure_code` 對應表
+- [x] 5. `Sheets::FetchIssueDashboard` — 錯誤處理
+  - [x] 5.1 實作統一錯誤對應（404/403/內部錯誤），任一資料類別失敗即整體失敗
+    - 沿用 [rails-standards.md](../../steering/rails-standards.md) 的 `failure_code` 對應表，
+      邏輯與 305 `Sheets::FetchProjectProgress` 完全相同：`404` 或訊息含 `"Unable to parse range"`
+      → `:sheet_not_found`；`403` → `:access_denied`；其餘 `Google::Apis::ClientError` →
+      `:internal_error`；任何其他 `StandardError`（如憑證缺失）→ `:internal_error`
     - _需求：6.1, 6.2_
 
-  - [ ] 5.2 單元測試：`spec/actors/sheets/fetch_issue_dashboard_spec.rb`
-    - 涵蓋三類讀取資料解析、`project_breakdown` 分組統計、錯誤對應、邊界情況（空列、格式不符）
-    - _需求：3〜6 全部驗收標準_
+  - [x] 5.2 單元測試：`spec/actors/sheets/fetch_issue_dashboard_spec.rb`
+    - 涵蓋 404／`"Unable to parse range"`／403／其他狀態碼／`StandardError`／`RateLimitError`
+      六種錯誤情境對應的 `failure_code`；驗證任一讀取類別失敗即整體失敗（`result.success?` 為
+      false），而非部分成功回傳
+    - 全檔累計 36 examples, 0 failures；全專案回歸 135 examples, 0 failures
 
-- [ ] 6. 檢查點 — Actor 層驗證
-    - 於 Rails console 手動呼叫 `Sheets::FetchIssueDashboard.result`（可先搭配假憑證或
-      mock client 驗證流程），確認四個 output 欄位（`month_kpi`／`daily_kpi`／`issues`／
-      `project_breakdown`）結構符合 design.md 的 Data Models
+- [x] 6. 檢查點 — Actor 層驗證
+    - 以 `bin/rails runner`（`RAILS_ENV=test`）stub `IssueSheetsClient` 三個 fetch 方法後實際呼叫
+      `Sheets::FetchIssueDashboard.result`，確認 `success?` 為 true，四個 output 欄位
+      （`month_kpi`／`daily_kpi`／`issues`／`project_breakdown`）結構皆符合 design.md 的 Data Models
 
 - [ ] 7. Blueprints
   - [ ] 7.1 新增 `MonthKpiBlueprint`／`DailyKpiBlueprint`／`IssueBlueprint`／`ProjectBreakdownBlueprint`
