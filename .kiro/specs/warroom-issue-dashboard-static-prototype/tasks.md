@@ -6,7 +6,8 @@
 （305 內容）搬移為 `docs/project-progress.html` + `docs/js/project-progress.js`，`docs/index.html`
 改為極簡入口頁。純前端修改，不引入建置工具或框架。每項任務均可獨立開發、於瀏覽器手動驗證並 Commit。
 
-**狀態**：已完成實作並驗證（頁面互連、資產路徑、JS 語法皆以本機 HTTP server 驗證通過；因無法使用瀏覽器自動化工具，互動細節建議實作者/使用者於瀏覽器中再次目視確認）。
+**狀態**：已完成實作並以 Playwright E2E 驗證通過（含 Task 10 的依專案分類統計／歸屬類型徽章，
+共 40/40 項自動化檢查通過：初版 32 項 + Task 10 新增 8 項）。
 
 ---
 
@@ -82,6 +83,29 @@
     - 完整走過 [design.md](design.md) Testing Strategy 全部項目，所有需求驗收標準逐一符合，
       無 console 錯誤
 
+- [x] 10. 依專案分類統計 + 議題歸屬類型標示（取代 Top3 責任人排行）
+  - [x] 10.1 移除 `MONTH_KPI` 的 `top3` 欄位與 `renderTop3()`，改為 `computeProjectBreakdown(issues)` +
+        `renderProjectBreakdown()`，依專案分組統計客訴／測試／其他數量與總計
+    - 理由：客訴問題影響整個專案（全專案成員共同承擔），測試階段問題歸屬個別開發者，兩者性質不同，
+      故以「專案」而非「負責人」作為統計分類主軸
+    - `docs/issues.html` 的 `#top3` 容器改為 `#project-breakdown`
+    - _需求：2.4_
+
+  - [x] 10.2 Issue 明細清單新增「歸屬類型」欄位（徽章樣式）
+    - `buildGenericTable` 支援欄位可選的 `render(value, record)` 函式；新增
+      `attributionLabel(type)` / `attributionClass(type)` 依 `type` 對應
+      `Complaint→專案共同責任 / TestingBug→個人責任 / 其餘→其他`
+    - _需求：4.1, 4.1a_
+
+  - [x] 10.3 樣式：`.breakdown-heading`／`.attribution-badge`（`-shared`／`-individual`／`-other`）
+    - `.top3-list`／`.top3-heading`／`.top3-badge` 改名為 `.breakdown-wrap`／`.breakdown-heading`
+    - _需求：2.4, 4.1a_
+
+  - [x] 10.4 檢查點 — Playwright E2E 驗證
+    - 依專案分類統計表正確渲染（4 個專案分組，數字正確）；`#top3` 元素已移除；議題明細清單 6 筆
+      皆正確標示歸屬類型徽章（含 class 正確對應）；月份切換仍正常更新 KPI 卡片；無 console error
+    - 8/8 通過
+
 ---
 
 ## Notes
@@ -104,7 +128,10 @@
     { "id": 6, "tasks": ["5.2"] },
     { "id": 7, "tasks": ["7"] },
     { "id": 8, "tasks": ["8.1", "8.2"] },
-    { "id": 9, "tasks": ["9"] }
+    { "id": 9, "tasks": ["9"] },
+    { "id": 10, "tasks": ["10.1", "10.2"] },
+    { "id": 11, "tasks": ["10.3"] },
+    { "id": 12, "tasks": ["10.4"] }
   ]
 }
 ```

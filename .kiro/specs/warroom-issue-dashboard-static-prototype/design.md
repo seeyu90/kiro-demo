@@ -51,10 +51,16 @@ renderProjectListTable()          ← 需求 5，靜態渲染一次
 
 ```js
 var MONTH_KPI = [
-  { year_month: "2026-06", complaint: 34, testing: 8, total_bug: 42, block_rate: 19.05, completed: 5, unresolved: 1, avg_days: 1.88, sla_rate: 11.76, top3: [["王贊勛", 16], ["黃靖益", 7], ["蔡秉逸", 6]] },
-  { year_month: "2026-07", complaint: 28, testing: 7, total_bug: 35, block_rate: 20.00, completed: 10, unresolved: 7, avg_days: 2.61, sla_rate: 10.71, top3: [["王贊勛", 20], ["沈舫竹", 6], ["陳謹皓", 4]] },
-  { year_month: "2026-08", complaint: 15, testing: 9, total_bug: 24, block_rate: 37.50, completed: 6, unresolved: 3, avg_days: 3.10, sla_rate: 25.00, top3: [["黃靖益", 9], ["王贊勛", 8], ["邱珮玲", 4]] }
+  { year_month: "2026-06", complaint: 34, testing: 8, total_bug: 42, block_rate: 19.05, completed: 5, unresolved: 1, avg_days: 1.88, sla_rate: 11.76 },
+  { year_month: "2026-07", complaint: 28, testing: 7, total_bug: 35, block_rate: 20.00, completed: 10, unresolved: 7, avg_days: 2.61, sla_rate: 10.71 },
+  { year_month: "2026-08", complaint: 15, testing: 9, total_bug: 24, block_rate: 37.50, completed: 6, unresolved: 3, avg_days: 3.10, sla_rate: 25.00 }
 ];
+
+// type 欄位對應歸屬責任：Complaint（客訴）＝專案共同責任（影響範圍為整個專案），
+// TestingBug（測試）＝個人責任（開發階段自行發現），其餘（Other）列為「其他」。
+// 負責人（assigned_to）不作為統計分類主軸，「專案」才是本頁面的分類主軸。
+var ATTRIBUTION_LABELS = { Complaint: "專案共同責任", TestingBug: "個人責任" };
+var ATTRIBUTION_CLASSES = { Complaint: "attribution-shared", TestingBug: "attribution-individual" };
 
 var DAILY_KPI = [
   // { date: "YYYY-MM-DD", complaint, testing, other, total }
@@ -91,11 +97,17 @@ var PROJECT_LIST = [
 `assigned_to` 可能為空字串／`null`（真實資料常見未指派情境），渲染時比照既有 `formatValue()` 慣例
 顯示 `—`。`due_date`／`work_days` 亦常為空，同樣處理。
 
-### KPI 摘要卡片（需求 2）
+### KPI 摘要卡片與依專案分類統計（需求 2）
 
 - `populateMonthSelect()`：讀取 `MONTH_KPI` 產生月份下拉選單，預設選中陣列最後一筆（最新月份）。
-- `renderKpiCards(monthRecord)`：依卡片渲染 8 個統計值 + Top3 排行列表，複用既有 `.stat-item` /
-  `.stat-value` / `.stat-label` CSS class 命名慣例（沿用 `project-progress` 頁面摘要列風格）。
+- `renderKpiCards(monthRecord)`：依卡片渲染 8 個統計值，複用既有 `.stat-item` / `.stat-value` /
+  `.stat-label` CSS class 命名慣例（沿用 `project-progress` 頁面摘要列風格），渲染完成後呼叫
+  `renderProjectBreakdown()`。
+- `computeProjectBreakdown(issues)`：依 `ISSUES` 的 `project` 欄位分組，統計各專案的
+  `complaint`／`testing`／`other` 筆數與 `total`；`renderProjectBreakdown()` 將結果渲染為表格
+  （複用 `buildGenericTable`），取代原本以負責人為主軸的 Top3 排行——理由見需求 2.4：客訴問題影響
+  整個專案（全專案成員共同承擔），測試階段問題則歸屬個別開發者，兩者性質不同，故以「專案」而非
+  「負責人」作為統計分類主軸。
 
 ### 每日趨勢圖（需求 3）
 
@@ -113,6 +125,10 @@ var PROJECT_LIST = [
   `state.issueFilters` 並呼叫 `renderIssueTable()`。
 - `renderIssueTable(state)`：依 `state.issueFilters` 過濾 `ISSUES`，複用既有 `buildTable`-like 邏輯
   （建立 `<table>`／`<thead>`／`<tbody>`），欄位標籤中文化（如「議題編號」「主旨」「類型」…）。
+- 「歸屬類型」欄位以徽章（badge）呈現，依 `type` 對應 `ATTRIBUTION_LABELS`／`ATTRIBUTION_CLASSES`
+  （見「模擬資料」章節）。`buildGenericTable` 的欄位定義支援可選的 `render(value, record)` 函式，
+  該欄位有定義時優先呼叫並將回傳的 DOM 節點插入儲存格，取代預設的純文字渲染，讓「歸屬類型」欄位
+  可渲染出彩色徽章而非純文字（需求 4.1a）。
 - 篩選後為空集合時顯示「目前無符合條件的議題」（比照既有 `.empty-state` class）。
 
 ### 工程師負載／專案清單（需求 5）
@@ -126,9 +142,9 @@ var PROJECT_LIST = [
 
 | 資料集 | 欄位 |
 |---|---|
-| `MONTH_KPI` | `year_month, complaint, testing, total_bug, block_rate, completed, unresolved, avg_days, sla_rate, top3` |
+| `MONTH_KPI` | `year_month, complaint, testing, total_bug, block_rate, completed, unresolved, avg_days, sla_rate` |
 | `DAILY_KPI` | `date, complaint, testing, other, total` |
-| `ISSUES` | `issue_id, subject, type, tracker, status, assigned_to, start_date, due_date, work_days, project` |
+| `ISSUES` | `issue_id, subject, type, tracker, status, assigned_to, start_date, due_date, work_days, project`（`attribution` 為渲染時依 `type` 動態計算，非資料欄位） |
 | `ENGINEER_LOAD` | `name, project, allocation_pct, effective_month, expire_month, total_pct` |
 | `PROJECT_LIST` | `name, abbr, status, allocation_pct, effective_month, expire_month, owner_rd` |
 
@@ -153,9 +169,11 @@ var PROJECT_LIST = [
 2. 開啟 `docs/project-progress.html`，確認與搬移前的 `index.html` 行為完全一致（篩選、摘要列、逾期標示皆正常）（需求 1.3）。
 3. 開啟 `docs/issues.html`：
    - 確認 KPI 卡片預設顯示最新月份數值；切換月份下拉選單，確認卡片數值隨之更新（需求 2.2、2.3）。
-   - 確認 Top3 排行正確顯示姓名與數量（需求 2.4）。
+   - 確認「依專案分類」統計表正確顯示各專案的客訴／測試／其他數量與總計（需求 2.4）。
    - 確認每日趨勢圖正確繪製，滑鼠移到資料點可看到當日數值（需求 3.1、3.3）。
-   - 確認 Issue 明細表格顯示全部欄位；切換專案／狀態篩選後清單正確過濾；篩選至無結果時顯示提示文字（需求 4.1〜4.5）。
+   - 確認 Issue 明細表格顯示全部欄位，含「歸屬類型」徽章（Complaint→專案共同責任、TestingBug→
+     個人責任、其餘→其他）；切換專案／狀態篩選後清單正確過濾；篩選至無結果時顯示提示文字
+     （需求 4.1、4.1a、4.2〜4.5）。
    - 確認工程師負載表、專案清單表正確顯示（需求 5.1、5.2）。
    - 縮小視窗至手機寬度，確認所有區塊（KPI 卡片、趨勢圖、表格）不破版，表格切換為堆疊卡片版型（需求 6.3，沿用既有 560px 斷點慣例）。
 4. 確認整頁繁體中文，無 console 錯誤。

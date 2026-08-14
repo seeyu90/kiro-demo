@@ -453,25 +453,39 @@ table.project-tasks tbody tr:hover td {
   margin: 0;
 }
 
-.top3-list {
+.breakdown-wrap {
   margin-top: 0.75rem;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
 }
 
-.top3-heading {
+.breakdown-heading {
   font-weight: 600;
   color: var(--color-text-muted);
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
 }
 
-.top3-badge {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+.attribution-badge {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
   border-radius: 999px;
-  padding: 0.2rem 0.7rem;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.attribution-shared {
+  background: var(--overdue-bg);
+  color: var(--overdue-text);
+}
+
+.attribution-individual {
+  background: var(--badge-progress-bg);
+  color: var(--badge-progress-text);
+}
+
+.attribution-other {
+  background: var(--badge-pending-bg);
+  color: var(--badge-pending-text);
 }
 
 .trend-chart-wrap {

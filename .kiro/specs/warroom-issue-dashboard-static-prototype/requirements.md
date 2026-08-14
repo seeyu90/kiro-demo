@@ -64,7 +64,9 @@
    完成數、未結案、平均天數、SLA達標率。
 2. THE **Issue_Dashboard_Page** SHALL 提供月份選擇（下拉選單），預設選中模擬資料中最新月份。
 3. WHEN 使用者切換月份，THE **Issue_Dashboard_Page** SHALL 更新 KPI 摘要卡片為所選月份的數值。
-4. THE **Issue_Dashboard_Page** SHALL 顯示所選月份的 Top3 責任人排行（姓名與數量）。
+4. THE **Issue_Dashboard_Page** SHALL 顯示「依專案分類」統計表（客訴／測試／其他數量與總計，依專案
+   分組），不以負責人作為統計分類主軸——客訴問題影響範圍為整個專案（全專案成員共同承擔），測試階段
+   發現的問題則歸屬個別開發者，兩者分類意義不同，故以「專案」而非「負責人」作為統計主軸。
 
 ---
 
@@ -88,8 +90,11 @@
 
 #### 驗收標準
 
-1. THE **Issue_Dashboard_Page** SHALL 顯示 Issue 明細表格，欄位涵蓋：issue_id、subject、type、
-   tracker、status、assigned_to、start_date、due_date、work_days、project。
+1. THE **Issue_Dashboard_Page** SHALL 顯示 Issue 明細表格，欄位涵蓋：issue_id、subject、project、
+   歸屬類型、type、tracker、status、assigned_to、start_date、due_date、work_days。
+1a. THE **Issue_Dashboard_Page** SHALL 依 `type` 欄位為每筆議題標示「歸屬類型」徽章：
+   `Complaint`（客訴）標示為「專案共同責任」，`TestingBug`（測試）標示為「個人責任」，其餘
+   （`Other`）標示為「其他」。
 2. THE **Issue_Dashboard_Page** SHALL 提供依「專案」篩選的下拉選單，預設「全部專案」。
 3. THE **Issue_Dashboard_Page** SHALL 提供依「狀態」篩選的下拉選單或多選控制項，預設顯示全部狀態。
 4. WHEN 使用者變更專案或狀態篩選，THE **Issue_Dashboard_Page** SHALL 只顯示符合條件的議題列。

@@ -7,10 +7,24 @@
   // 本頁面為靜態 prototype，全部資料為模擬資料，不呼叫任何 API。
 
   var MONTH_KPI = [
-    { year_month: "2026-06", complaint: 34, testing: 8, total_bug: 42, block_rate: 19.05, completed: 5, unresolved: 1, avg_days: 1.88, sla_rate: 11.76, top3: [["王贊勛", 16], ["黃靖益", 7], ["蔡秉逸", 6]] },
-    { year_month: "2026-07", complaint: 28, testing: 7, total_bug: 35, block_rate: 20.00, completed: 10, unresolved: 7, avg_days: 2.61, sla_rate: 10.71, top3: [["王贊勛", 20], ["沈舫竹", 6], ["陳謹皓", 4]] },
-    { year_month: "2026-08", complaint: 15, testing: 9, total_bug: 24, block_rate: 37.50, completed: 6, unresolved: 3, avg_days: 3.10, sla_rate: 25.00, top3: [["黃靖益", 9], ["王贊勛", 8], ["邱珮玲", 4]] }
+    { year_month: "2026-06", complaint: 34, testing: 8, total_bug: 42, block_rate: 19.05, completed: 5, unresolved: 1, avg_days: 1.88, sla_rate: 11.76 },
+    { year_month: "2026-07", complaint: 28, testing: 7, total_bug: 35, block_rate: 20.00, completed: 10, unresolved: 7, avg_days: 2.61, sla_rate: 10.71 },
+    { year_month: "2026-08", complaint: 15, testing: 9, total_bug: 24, block_rate: 37.50, completed: 6, unresolved: 3, avg_days: 3.10, sla_rate: 25.00 }
   ];
+
+  // type 欄位對應歸屬責任：Complaint（客訴）＝專案共同責任，TestingBug（測試）＝個人責任，
+  // 其餘（Other）歸屬待釐清，暫列為「其他」。負責人（assigned_to）不作為分類主軸，
+  // 專案才是本頁面統計與檢視的分類主軸。
+  var ATTRIBUTION_LABELS = { Complaint: "專案共同責任", TestingBug: "個人責任" };
+  var ATTRIBUTION_CLASSES = { Complaint: "attribution-shared", TestingBug: "attribution-individual" };
+
+  function attributionLabel(type) {
+    return ATTRIBUTION_LABELS[type] || "其他";
+  }
+
+  function attributionClass(type) {
+    return ATTRIBUTION_CLASSES[type] || "attribution-other";
+  }
 
   var DAILY_KPI = [
     { date: "2026-08-01", complaint: 0, testing: 1, other: 0, total: 1 },
@@ -110,24 +124,45 @@
       el.appendChild(stat);
     });
 
-    renderTop3(monthRecord.top3);
+    renderProjectBreakdown();
   }
 
-  function renderTop3(top3) {
-    var el = document.getElementById("top3");
+  // 依專案分類統計客訴／測試／其他數量（跨全部議題，非僅限所選月份 —
+  // 議題明細目前無月份維度可篩選，真實資料串接時視需求決定是否依月份篩選）。
+  var PROJECT_BREAKDOWN_COLUMNS = [
+    { key: "project", label: "專案" },
+    { key: "complaint", label: "客訴" },
+    { key: "testing", label: "測試" },
+    { key: "other", label: "其他" },
+    { key: "total", label: "總計" }
+  ];
+
+  function computeProjectBreakdown(issues) {
+    var map = {};
+    issues.forEach(function (issue) {
+      var key = issue.project || "未分類";
+      if (!map[key]) map[key] = { project: key, complaint: 0, testing: 0, other: 0 };
+      if (issue.type === "Complaint") map[key].complaint += 1;
+      else if (issue.type === "TestingBug") map[key].testing += 1;
+      else map[key].other += 1;
+    });
+    return Object.keys(map).map(function (key) {
+      var row = map[key];
+      row.total = row.complaint + row.testing + row.other;
+      return row;
+    });
+  }
+
+  function renderProjectBreakdown() {
+    var el = document.getElementById("project-breakdown");
     el.innerHTML = "";
 
-    var heading = document.createElement("span");
-    heading.className = "top3-heading";
-    heading.textContent = "Top3 責任人：";
+    var heading = document.createElement("p");
+    heading.className = "breakdown-heading";
+    heading.textContent = "依專案分類（客訴／測試／其他）";
     el.appendChild(heading);
 
-    top3.forEach(function (entry, index) {
-      var badge = document.createElement("span");
-      badge.className = "top3-badge";
-      badge.textContent = (index + 1) + ". " + entry[0] + "（" + entry[1] + "）";
-      el.appendChild(badge);
-    });
+    el.appendChild(buildGenericTable(computeProjectBreakdown(ISSUES), PROJECT_BREAKDOWN_COLUMNS));
   }
 
   // ── 每日趨勢圖（手刻 SVG 折線圖） ──────────────────────────
@@ -221,14 +256,20 @@
   var ISSUE_COLUMNS = [
     { key: "issue_id", label: "議題編號" },
     { key: "subject", label: "主旨" },
+    { key: "project", label: "專案" },
+    { key: "attribution", label: "歸屬類型", render: function (value, record) {
+      var badge = document.createElement("span");
+      badge.className = "attribution-badge " + attributionClass(record.type);
+      badge.textContent = attributionLabel(record.type);
+      return badge;
+    } },
     { key: "type", label: "類型" },
     { key: "tracker", label: "追蹤標籤" },
     { key: "status", label: "狀態" },
     { key: "assigned_to", label: "負責人" },
     { key: "start_date", label: "開始日期" },
     { key: "due_date", label: "到期日期" },
-    { key: "work_days", label: "工作天數" },
-    { key: "project", label: "專案" }
+    { key: "work_days", label: "工作天數" }
   ];
 
   function filterIssues() {
@@ -260,7 +301,11 @@
       columns.forEach(function (column) {
         var td = document.createElement("td");
         td.setAttribute("data-label", column.label);
-        td.textContent = formatValue(record[column.key]);
+        if (column.render) {
+          td.appendChild(column.render(record[column.key], record));
+        } else {
+          td.textContent = formatValue(record[column.key]);
+        }
         row.appendChild(td);
       });
       tbody.appendChild(row);
