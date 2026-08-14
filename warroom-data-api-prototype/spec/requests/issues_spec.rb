@@ -216,6 +216,60 @@ RSpec.describe "Issues", type: :request do
       expect(section).to include("month=2026-01")
       expect(section).to include("breakdown_sort=complaint")
     end
+
+    it "sorts ties deterministically by project name (tie-breaker, avoids Ruby's non-stable sort_by)" do
+      # 2026-08：JZN 舊振南智慧工廠（complaint=1）、Virtuous HRM（complaint=0）不會平手，故換一個
+      # 兩專案同分的欄位（total 各為 1）驗證平手時的順序固定為 project 字典序
+      get "/issues", params: { breakdown_sort: "total" }
+
+      expect(breakdown_project_order(response.body)).to eq(["JZN 舊振南智慧工廠", "Virtuous HRM"].sort.reverse)
+    end
+  end
+
+  describe "GET /issues 兩個分頁籤的表單各自送出時，不得覆蓋另一個分頁籤目前的篩選狀態" do
+    it "keeps the 議題資料 tab's project/status filters when submitting the 統計摘要 tab's month form" do
+      get "/issues", params: { tab: "detail", project: "AG 亞炬", status: "" }
+      get "/issues", params: { tab: "stats", month: "2026-07", project: "AG 亞炬", status: "" }
+
+      expect(response.body).to match(/<option [^>]*selected="selected"[^>]*value="AG 亞炬"/)
+      expect(response.body).to match(/<option [^>]*selected="selected"[^>]*value=""[^>]*>全部狀態<\/option>/)
+    end
+
+    it "keeps the 統計摘要 tab's month/sort selections when submitting the 議題資料 tab's filter form" do
+      get "/issues", params: { tab: "stats", month: "2026-08", breakdown_sort: "complaint", breakdown_dir: "asc" }
+      get "/issues", params: { tab: "detail", project: "", status: "", month: "2026-08",
+                                breakdown_sort: "complaint", breakdown_dir: "asc" }
+
+      expect(response.body).to match(/<option [^>]*selected="selected"[^>]*>2026-08<\/option>/)
+      section = project_breakdown_section(response.body)
+      expect(section).to include("breakdown_sort=complaint")
+      expect(section).to include("breakdown_dir=desc") # 反轉方向的連結會顯示 desc（因目前是 asc）
+    end
+
+    it "the 統計摘要 tab's form includes hidden project/status fields carrying the current filter" do
+      get "/issues", params: { project: "AG 亞炬", status: "已暫停" }
+
+      stats_panel = response.body[/<div class="tab-panel" id="tab-panel-stats">.*?(?=<div class="tab-panel" id="tab-panel-detail">)/m]
+      expect(stats_panel).to include('<input type="hidden" name="project" id="project" value="AG 亞炬"')
+      expect(stats_panel).to include('<input type="hidden" name="status" id="status" value="已暫停"')
+    end
+
+    it "the 議題資料 tab's form includes hidden month/breakdown_sort/breakdown_dir fields carrying the current state" do
+      get "/issues", params: { month: "2026-01", breakdown_sort: "testing", breakdown_dir: "asc" }
+
+      detail_panel = response.body[/<div class="tab-panel" id="tab-panel-detail">.*/m]
+      expect(detail_panel).to include('<input type="hidden" name="month" id="month" value="2026-01"')
+      expect(detail_panel).to include('<input type="hidden" name="breakdown_sort" id="breakdown_sort" value="testing"')
+      expect(detail_panel).to include('<input type="hidden" name="breakdown_dir" id="breakdown_dir" value="asc"')
+    end
+
+    it "the breakdown sort links preserve the 議題資料 tab's current project/status filters" do
+      get "/issues", params: { project: "AG 亞炬", status: "已暫停" }
+
+      section = project_breakdown_section(response.body)
+      expect(section).to include("project=AG")
+      expect(section).to include("status=%E5%B7%B2%E6%9A%AB%E5%81%9C")
+    end
   end
 
   describe "GET /issues?project=DoesNotExist&status=" do

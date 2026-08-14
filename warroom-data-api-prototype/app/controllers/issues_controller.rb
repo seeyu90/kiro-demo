@@ -106,10 +106,12 @@ class IssuesController < ApplicationController
   end
 
   # @breakdown_sort 為 nil 時維持原始（依專案分組）順序，不排序。
+  # 以 project 名稱作為次要排序鍵（tie-breaker）：Ruby 的 sort_by 不保證穩定排序，若僅依主要
+  # 排序欄位排序，同分的列在不同請求間相對順序可能不一致，畫面上會不穩定地跳動。
   def sort_project_breakdown(rows)
     return rows if @breakdown_sort.nil?
 
-    sorted = rows.sort_by { |row| row[@breakdown_sort.to_sym] }
+    sorted = rows.sort_by { |row| [row[@breakdown_sort.to_sym], row[:project]] }
     @breakdown_dir == "desc" ? sorted.reverse : sorted
   end
 end

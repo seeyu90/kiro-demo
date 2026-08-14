@@ -26,6 +26,11 @@
       <div class="tab-panel" id="tab-panel-stats">
         <%= form_with url: "/issues", method: :get, local: true, class: "project-selector" do %>
           <%= hidden_field_tag :tab, "stats" %>
+          <%# 兩個分頁籤的表單各自獨立送出，但 Controller 是無狀態的：若不帶入「議題資料」分頁目前
+              的篩選值，送出本表單時 project／status 會被重設為預設值，等於覆蓋掉使用者在另一個
+              分頁的選擇。故補上這兩個 hidden fields，讓它們原樣跟著送出。 %>
+          <%= hidden_field_tag :project, @selected_project %>
+          <%= hidden_field_tag :status, @selected_status %>
           <div class="control-group">
             <label for="month">月份：</label>
             <%= select_tag :month, options_for_select(@available_months, @selected_month) %>
@@ -94,6 +99,10 @@
       <div class="tab-panel" id="tab-panel-detail">
         <%= form_with url: "/issues", method: :get, local: true, class: "project-selector" do %>
           <%= hidden_field_tag :tab, "detail" %>
+          <%# 同上：帶入「統計摘要」分頁目前的月份與排序選擇，避免送出本表單時把它們重設為預設值。 %>
+          <%= hidden_field_tag :month, @selected_month %>
+          <%= hidden_field_tag :breakdown_sort, @breakdown_sort %>
+          <%= hidden_field_tag :breakdown_dir, @breakdown_dir %>
           <div class="control-group">
             <label for="project">專案：</label>
             <%= select_tag :project,

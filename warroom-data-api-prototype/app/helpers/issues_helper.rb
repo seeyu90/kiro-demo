@@ -14,12 +14,16 @@ module IssuesHelper
 
   # 依專案分類表格的可排序欄位標題連結：同一欄位再次點選時反轉方向，切換到不同欄位時預設降冪
   # （筆數統計通常最關心「最多」的專案）；連結保留目前所選月份，並固定停留在「統計摘要」分頁籤。
+  # 同時帶入 project／status，因為這也是一個不含這兩個 query params 的 GET 請求，若不帶入，
+  # 點擊排序連結會把「議題資料」分頁目前的篩選值重設為預設值（與兩個表單各自獨立的設計意圖牴觸）。
   def breakdown_sort_link(key, label)
     active = @breakdown_sort == key.to_s
     next_dir = active && @breakdown_dir == "desc" ? "asc" : "desc"
     indicator = active ? (@breakdown_dir == "desc" ? " ▼" : " ▲") : ""
 
-    link_to label + indicator, issues_path(month: @selected_month, tab: "stats", breakdown_sort: key, breakdown_dir: next_dir),
+    link_to label + indicator,
+             issues_path(month: @selected_month, tab: "stats", breakdown_sort: key, breakdown_dir: next_dir,
+                          project: @selected_project, status: @selected_status),
              class: "sort-button", "aria-label": "依「#{label}」排序"
   end
 
