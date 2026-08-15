@@ -25,6 +25,30 @@ Things you may want to cover:
 
 ---
 
+## 目前功能
+
+本專案為戰情室 Dashboard 原型，串接 Google Sheets 資料來源，目前提供三個路由：
+
+| 路由 | 說明 |
+| --- | --- |
+| `/dashboard` | 305 專案進度：依專案分組檢視任務進度、逾期與本週到期任務 |
+| `/issues` | 306 臭蟲議題：月度／每日 KPI、依專案分類統計、議題明細 |
+| `/burndown` | 307 人時燃盡追蹤：依議題呈現理想／實際剩餘人時燃盡圖，支援專案／人員／狀態篩選（見下方「307 人時燃盡追蹤」段落） |
+
+三者各自獨立串接不同分頁／試算表，互不影響。詳細規格與任務清單見
+`.kiro/specs/`（`warroom-data-api-real-source`、`warroom-issue-dashboard-real-source`、
+`warroom-project-burndown-tracking`）。
+
+### 307 人時燃盡追蹤
+
+- 同一議題若拆給多位人員分別填寫（同 `議題 ID`），會自動合併為一張卡片（人員清單、預估／
+  剩餘人時加總、週人時加總；起訖日取合法列中的最早開案／最晚完成）
+- 議題狀態優先讀取試算表「狀態」欄位（未開始／執行中／已完成），欄位無法辨識（空白或髒資料）
+  時退回以完成日期與今天比較判斷；預設篩選只顯示進行中議題
+- 單一議題燃盡圖只顯示開案週之後的資料，理想線頭尾補上開案／完成錨點，確保斜線完整畫到底；
+  Y 軸支援負值（實際人時超支時剩餘人時可能為負），並固定畫出「剩餘 = 0」的參考線
+- 同一議題有多位人員時，卡片下方會顯示各人員累積消耗人時的堆疊圖，另附總預估人時參考線
+
 ## Google Sheets API Service Account 憑證設定
 
 本專案使用 Google Sheets API 讀取 305 專案進度資料，需設定 Service Account 憑證。
@@ -97,6 +121,7 @@ export GOOGLE_SHEETS_CREDENTIALS_JSON='{"type":"service_account","project_id":".
 
 ### 確認憑證設定成功
 
-設定完成後，訪問 `/api/project_progress` 若回傳 305 專案進度資料，表示憑證設定成功。
+設定完成後，訪問 `/api/project_progress` 若回傳 305 專案進度資料，表示憑證設定成功（`/burndown`
+也可用來驗證，會讀取 307 試算表資料）。
 
 若回傳 `500 Internal Server Error` 並包含「找不到 Google Service Account 憑證」等錯誤訊息，請檢查憑證設定。
