@@ -135,7 +135,22 @@ module Sheets
 
         remaining_values = group.filter_map { |r| r[:reported_remaining_hours] }
         estimated_hours = group.sum { |r| r[:estimated_hours] }
-        weekly_hours = sorted_week_dates.each_index.map { |i| group.sum { |r| r[:weekly_hours][i] } }
+
+        # 議題自己的燃盡圖只畫「該議題開案當週之後」的週次，不套用整份試算表的完整週範圍
+        # （否則議題開案前那幾個月會被畫成一條沒有意義的平線）。開案日期取全部列裡「任一列本身
+        # 合法的日期」（不要求該列同時有合法的完成日期，跟上面 start_date／due_date 的合併規則
+        # 是兩件事）；找不到任何合法開案日期時，維持顯示完整週範圍（無法判斷該從哪週開始裁切）。
+        # 週欄位代表的是「當週固定那一天」（例如每週一），比對時先把開案日期正規化到當週週一
+        # 再比較，避免像「開案 08/13（週四）」被誤判晚於「週欄位 08/10（週一）」而整週被裁掉
+        # ——兩者其實屬於同一週。
+        # 取捨：若開案日期之前的週欄位仍被填了人時（理論上不該發生），該部分人時會被裁掉、不計入
+        # 實際序列的累加。
+        trim_from = group.filter_map { |r| parse_date(r[:start_date]) }.min&.beginning_of_week(:monday)
+        window_indices = sorted_week_dates.each_index.select do |i|
+          trim_from.nil? || sorted_week_dates[i][:date] >= trim_from
+        end
+        week_window = window_indices.map { |i| sorted_week_dates[i] }
+        weekly_hours = window_indices.map { |i| group.sum { |r| r[:weekly_hours][i] } }
 
         {
           issue_id: issue_id,
@@ -147,8 +162,8 @@ module Sheets
           status: merge_status(group),
           estimated_hours: estimated_hours,
           reported_remaining_hours: remaining_values.empty? ? nil : remaining_values.sum,
-          actual_series: compute_actual_series(sorted_week_dates, weekly_hours, estimated_hours),
-          ideal_series: compute_ideal_series(sorted_week_dates, start_date, due_date, estimated_hours)
+          actual_series: compute_actual_series(week_window, weekly_hours, estimated_hours),
+          ideal_series: compute_ideal_series(week_window, start_date, due_date, estimated_hours)
         }
       end
     end
@@ -177,6 +192,12 @@ module Sheets
     # 理想剩餘人時序列：start_date／due_date 皆合法且 due_date 晚於 start_date 時，依時間比例
     # 線性計算（比例 0 時＝estimated_hours，比例 1 時＝0，clamp 至 0..1）；否則回傳空陣列，
     # 不拋出例外（需求 3.1、3.2）。
+    #
+    # 開案／完成兩端補上錨點：試算表目前的週欄位不一定剛好涵蓋到開案週或完成週（例如完成日期
+    # 還沒到，試算表最新一週還沒到那天），若只依現有週欄位畫線，理想線會在試算表資料範圍的
+    # 邊界處被截斷，看起來像是線沒畫完。這裡確保理想線一定包含「開案＝滿額」「完成＝歸零」
+    # 這兩個端點，即使超出目前週欄位範圍，讓斜線完整畫到底。錨點日期正規化到當週週一（比照
+    # 其他週欄位一律是週一），維持 X 軸日期格式一致，不會冒出一個非週一的孤立日期。
     def compute_ideal_series(sorted_week_dates, start_date, due_date, estimated_hours)
       start_d = parse_date(start_date)
       due_d = parse_date(due_date)
@@ -184,10 +205,16 @@ module Sheets
 
       total_span = (due_d - start_d).to_f
 
-      sorted_week_dates.map do |w|
+      points = sorted_week_dates.map do |w|
         ratio = ((w[:date] - start_d).to_f / total_span).clamp(0.0, 1.0)
         { date: w[:date].iso8601, hours: (estimated_hours * (1 - ratio)).round(2) }
       end
+
+      anchors = [
+        { date: start_d.beginning_of_week(:monday).iso8601, hours: estimated_hours.round(2) },
+        { date: due_d.beginning_of_week(:monday).iso8601, hours: 0.0 }
+      ]
+      (points + anchors).uniq { |p| p[:date] }.sort_by { |p| p[:date] }
     end
 
     def parse_date(date_str)

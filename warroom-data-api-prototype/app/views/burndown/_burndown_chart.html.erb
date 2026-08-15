@@ -3,17 +3,18 @@
   <% if actual_series.blank? %>
     <p class="empty-state">無燃盡資料</p>
   <% else %>
-    <% max = burndown_chart_max(actual_series, ideal_series) %>
-    <% actual_points = burndown_chart_points(actual_series, max) %>
-    <% ideal_points = ideal_series.present? ? burndown_chart_points(ideal_series, max) : [] %>
+    <% min, max = burndown_chart_range(actual_series, ideal_series) %>
+    <% dates = burndown_chart_dates(actual_series, ideal_series) %>
+    <% actual_points = burndown_chart_points(actual_series, dates, min, max) %>
+    <% ideal_points = ideal_series.present? ? burndown_chart_points(ideal_series, dates, min, max) : [] %>
     <svg viewBox="0 0 <%= BurndownHelper::BURNDOWN_WIDTH %> <%= BurndownHelper::BURNDOWN_HEIGHT %>" class="trend-svg" role="img" aria-label="<%= title %> 燃盡圖">
-      <% burndown_chart_y_ticks(max).each do |tick| %>
+      <% burndown_chart_y_ticks(min, max).each do |tick| %>
         <line x1="<%= BurndownHelper::BURNDOWN_PADDING_LEFT %>" x2="<%= BurndownHelper::BURNDOWN_WIDTH - BurndownHelper::BURNDOWN_PADDING_RIGHT %>"
               y1="<%= tick[:y] %>" y2="<%= tick[:y] %>" class="trend-gridline"></line>
         <text x="<%= BurndownHelper::BURNDOWN_PADDING_LEFT - 8 %>" y="<%= tick[:y] + 3 %>" text-anchor="end" class="trend-axis-label trend-y-label"><%= tick[:value] %></text>
       <% end %>
 
-      <% burndown_chart_x_labels(actual_series).each do |label| %>
+      <% burndown_chart_x_labels(dates).each do |label| %>
         <% label_y = BurndownHelper::BURNDOWN_HEIGHT - BurndownHelper::BURNDOWN_PADDING_BOTTOM + 18 %>
         <text x="<%= label[:x] %>" y="<%= label_y %>" text-anchor="end" transform="rotate(-45 <%= label[:x] %> <%= label_y %>)" class="trend-axis-label trend-x-label"><%= label[:text] %></text>
       <% end %>

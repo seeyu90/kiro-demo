@@ -118,10 +118,31 @@ RSpec.describe Sheets::FetchProjectBurndown do
     it "linearly interpolates remaining hours between start_date and due_date" do
       result = actor.send(:compute_ideal_series, sorted, "2026-08-01", "2026-08-31", 30.0)
 
+      # 2026-08-01 是週六，start_date 錨點正規化到當週週一（2026-07-27）後排在最前面；
+      # 2026-08-31 本身已是週一，直接當作 due_date 錨點。
       expect(result).to eq([
+        { date: "2026-07-27", hours: 30.0 },
         { date: "2026-08-01", hours: 30.0 },
-        { date: "2026-08-15", hours: 16.0 }
+        { date: "2026-08-15", hours: 16.0 },
+        { date: "2026-08-31", hours: 0.0 }
       ])
+    end
+
+    it "appends start_date/due_date anchor points snapped to that week's Monday, so the diagonal always reaches full/zero even beyond the given week columns" do
+      # 2026-08-01 是週六，正規化到週一是 2026-07-27；2026-08-31 已經是週一，維持不變。
+      result = actor.send(:compute_ideal_series, sorted, "2026-08-01", "2026-08-31", 30.0)
+
+      expect(result.first).to eq({ date: "2026-07-27", hours: 30.0 })
+      expect(result.last).to eq({ date: "2026-08-31", hours: 0.0 })
+    end
+
+    it "does not duplicate an anchor when a week column already lands exactly on that Monday" do
+      sorted_with_monday = [ { index: 8, date: Date.new(2026, 8, 10) } ]
+      # start_date 已經是週一（2026-08-10），跟週欄位本身重複，不應該出現兩筆同日期的資料點。
+      result = actor.send(:compute_ideal_series, sorted_with_monday, "2026-08-10", "2026-08-31", 21.0)
+
+      expect(result.map { |p| p[:date] }).to eq([ "2026-08-10", "2026-08-31" ])
+      expect(result.first[:hours]).to eq(21.0)
     end
 
     it "clamps weeks before start_date to the full estimated hours" do
@@ -278,6 +299,62 @@ RSpec.describe Sheets::FetchProjectBurndown do
           { date: "2026-08-03", hours: 148.25 },
           { date: "2026-08-10", hours: 128.25 }
         ])
+      end
+
+      it "trims the issue's own actual_series/ideal_series to weeks on or after start_date, not the full sheet week range" do
+        header = fixed_header + [ "08/10", "08/03", "07/27" ]
+        week_dates = actor.send(:parse_week_dates, header)
+        # start_date (08/03) falls between the 07/27 and 08/03 week columns, so only 08/03 and
+        # 08/10 should appear — 07/27 (before the issue existed) should be trimmed out.
+        rows = [
+          [ "", "P", "T", "A", "1001", "2026/08/03", "2026/08/17", "執行中", "10", "3", "2", "1" ]
+        ]
+
+        result = actor.send(:parse_issues, rows, week_dates)
+        issue = result.first
+
+        expect(issue[:actual_series].map { |p| p[:date] }).to eq([ "2026-08-03", "2026-08-10" ])
+        # cumulative from a clean start at the trimmed window: 08/03 hours=2 → remaining 10-2=8;
+        # 08/10 hours=3 → cumulative 5 → remaining 10-5=5 (the 07/27 column's "1" must NOT count).
+        expect(issue[:actual_series]).to eq([
+          { date: "2026-08-03", hours: 8.0 },
+          { date: "2026-08-10", hours: 5.0 }
+        ])
+      end
+
+      it "does not trim out a week column that falls in the same Monday-start week as start_date, even if the exact date is later" do
+        # 2026-08-10 is a Monday; 2026-08-13 (Thursday) is later in the same week. A naive exact-date
+        # comparison would wrongly exclude the 08/10 column（真實案例：issue_id 5146，開案 08/13、
+        # 週欄位只到 08/10）。
+        header = fixed_header + [ "08/10" ]
+        week_dates = actor.send(:parse_week_dates, header)
+        rows = [ [ "7", "RAG", "優化 202608", "黃紹鈞", "5146", "2026/08/13", "", "未開始", "8", "1" ] ]
+
+        result = actor.send(:parse_issues, rows, week_dates)
+
+        expect(result.first[:actual_series]).to eq([ { date: "2026-08-10", hours: 7.0 } ])
+      end
+
+      it "still trims out a week column from an earlier Monday-start week than start_date" do
+        header = fixed_header + [ "08/10" ]
+        week_dates = actor.send(:parse_week_dates, header)
+        # start_date (08/17, a Monday) is a full week after the 08/10 column's week — genuinely
+        # not the same week, so 08/10 should still be trimmed out.
+        rows = [ [ "", "P", "T", "A", "1001", "2026/08/17", "", "執行中", "10", "5" ] ]
+
+        result = actor.send(:parse_issues, rows, week_dates)
+
+        expect(result.first[:actual_series]).to eq([])
+      end
+
+      it "shows the full week range when the issue has no individually-valid start_date to trim from" do
+        header = fixed_header + [ "08/10", "08/03" ]
+        week_dates = actor.send(:parse_week_dates, header)
+        rows = [ [ "", "P", "T", "A", "1001", "", "", "執行中", "10", "3", "2" ] ]
+
+        result = actor.send(:parse_issues, rows, week_dates)
+
+        expect(result.first[:actual_series].map { |p| p[:date] }).to eq([ "2026-08-03", "2026-08-10" ])
       end
 
       it "takes the earliest valid start_date and the latest valid due_date across rows, ignoring rows whose own range is invalid" do
