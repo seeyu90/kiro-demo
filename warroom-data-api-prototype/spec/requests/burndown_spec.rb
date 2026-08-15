@@ -11,15 +11,17 @@ RSpec.describe "Burndown", type: :request do
     body[%r{<h2>議題燃盡圖</h2>.*?</section>}m]
   end
 
-  let(:fixed_header) { %w[剩餘人時 專案 議題 人員 議題ID 開案日期 完成日期 預估人時] }
+  let(:fixed_header) { %w[剩餘人時 專案 議題 人員 議題ID 開案日期 完成日期 狀態 預估人時] }
   let(:header) { fixed_header + [ "08/10", "08/03" ] }
 
+  # travel_to 固定為 2026-08-14；狀態欄位（H 欄）皆留白，故以下 fallback 到 due_date 判斷：
+  # 議題A（due 08-15）／議題B（due 08-20）晚於今天視為進行中，議題C（due 08-10）早於今天視為已完成。
   let(:burndown_rows) do
     [
       header,
-      [ "2", "AG 亞炬", "議題A", "王贊勛", "1001", "2026/08/01", "2026/08/15", "10", "3", "2" ],
-      [ "1", "AG 亞炬", "議題B", "蔡秉逸", "1002", "2026/08/01", "2026/08/20", "8", "1", "1" ],
-      [ "0", "Virtuous HRM", "議題C", "王贊勛", "1003", "2026/08/01", "2026/08/10", "5", "2", "3" ]
+      [ "2", "AG 亞炬", "議題A", "王贊勛", "1001", "2026/08/01", "2026/08/15", "", "10", "3", "2" ],
+      [ "1", "AG 亞炬", "議題B", "蔡秉逸", "1002", "2026/08/01", "2026/08/20", "", "8", "1", "1" ],
+      [ "0", "Virtuous HRM", "議題C", "王贊勛", "1003", "2026/08/01", "2026/08/10", "", "5", "2", "3" ]
     ]
   end
 
@@ -32,8 +34,11 @@ RSpec.describe "Burndown", type: :request do
       expect(response).to have_http_status(200)
     end
 
-    it "shows a burndown chart for every issue" do
-      expect(response.body).to include("議題A").and include("議題B").and include("議題C")
+    it "defaults to showing only in-progress issues (due_date after today)" do
+      section = issue_series_section(response.body)
+      expect(section).to include("議題A")
+      expect(section).to include("議題B")
+      expect(section).not_to include("議題C")
     end
 
     it "lists both projects and both assignees in the filter dropdowns" do
@@ -42,8 +47,52 @@ RSpec.describe "Burndown", type: :request do
     end
   end
 
+  describe "GET /burndown?status=... (status filter)" do
+    it "status=done shows only issues whose due_date is on or before today" do
+      get "/burndown", params: { status: "done" }
+      section = issue_series_section(response.body)
+      expect(section).not_to include("議題A")
+      expect(section).not_to include("議題B")
+      expect(section).to include("議題C")
+    end
+
+    it "status=all shows issues regardless of due_date" do
+      get "/burndown", params: { status: "all" }
+      section = issue_series_section(response.body)
+      expect(section).to include("議題A")
+      expect(section).to include("議題B")
+      expect(section).to include("議題C")
+    end
+  end
+
+  describe "GET /burndown?status=... when the sheet's 狀態 column has valid values" do
+    # 議題D 的 due_date（08-20）晚於今天，若靠 due_date fallback 會判斷為進行中，
+    # 但狀態欄位填「已完成」，應以狀態欄位為準；議題E 反過來驗證同一件事。
+    let(:burndown_rows) do
+      [
+        header,
+        [ "0", "AG 亞炬", "議題D", "王贊勛", "2001", "2026/08/01", "2026/08/20", "已完成", "10", "3", "2" ],
+        [ "5", "AG 亞炬", "議題E", "蔡秉逸", "2002", "2026/08/01", "2026/08/05", "執行中", "8", "1", "1" ]
+      ]
+    end
+
+    it "defaults to showing only issues whose 狀態 column says 未開始／執行中, honoring the sheet over due_date" do
+      get "/burndown"
+      section = issue_series_section(response.body)
+      expect(section).not_to include("議題D")
+      expect(section).to include("議題E")
+    end
+
+    it "status=done shows only the issue marked 已完成 in the sheet" do
+      get "/burndown", params: { status: "done" }
+      section = issue_series_section(response.body)
+      expect(section).to include("議題D")
+      expect(section).not_to include("議題E")
+    end
+  end
+
   describe "GET /burndown?project=... (project filter only)" do
-    before { get "/burndown", params: { project: "AG 亞炬" } }
+    before { get "/burndown", params: { project: "AG 亞炬", status: "all" } }
 
     it "shows only the issues under the selected project" do
       section = issue_series_section(response.body)
@@ -54,7 +103,7 @@ RSpec.describe "Burndown", type: :request do
   end
 
   describe "GET /burndown?assignee=... (assignee filter only)" do
-    before { get "/burndown", params: { assignee: "王贊勛" } }
+    before { get "/burndown", params: { assignee: "王贊勛", status: "all" } }
 
     it "shows only the issues assigned to the selected person" do
       section = issue_series_section(response.body)
@@ -65,7 +114,7 @@ RSpec.describe "Burndown", type: :request do
   end
 
   describe "GET /burndown?project=...&assignee=... (both filters, intersection)" do
-    before { get "/burndown", params: { project: "AG 亞炬", assignee: "王贊勛" } }
+    before { get "/burndown", params: { project: "AG 亞炬", assignee: "王贊勛", status: "all" } }
 
     it "shows only issues matching both filters (需求 4.4)" do
       section = issue_series_section(response.body)

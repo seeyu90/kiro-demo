@@ -8,8 +8,12 @@ module Sheets
 
     # 表頭週欄位格式：MM/DD（例如 "8/10"、"08/10"）。
     WEEK_HEADER_PATTERN = /\A(\d{1,2})\/(\d{1,2})\z/
-    # 固定欄位 A~H 共 8 欄，週欄位自第 9 欄（I 欄，0-based index 8）起。
-    FIXED_COLUMN_COUNT = 8
+    # 固定欄位 A~I 共 9 欄（新增「狀態」於 H 欄，完成日期與預估人時之間），週欄位自第 10 欄
+    # （J 欄，0-based index 9）起。
+    FIXED_COLUMN_COUNT = 9
+    # 狀態欄位（H 欄）的合法值；其餘內容（空白、殘留數字等髒資料）視為無法辨識，交由
+    # controller 端 fallback 到 due_date 判斷進行中／已完成（見 BurndownController#issue_in_progress?）。
+    VALID_STATUSES = %w[未開始 執行中 已完成].freeze
 
     def call
       rows = BurndownSheetsClient.fetch_rows
@@ -78,40 +82,85 @@ module Sheets
       nil
     end
 
-    # 列解析：固定欄位 A~H → reported_remaining_hours, project, issue_title, assignee, issue_id,
-    # start_date, due_date, estimated_hours；project／issue_title／issue_id 任一空白則跳過整列。
-    # 每一列解析完成後即計算該議題自己的 ideal_series／actual_series（見需求 3），一併寫入輸出的
-    # Hash（BurndownIssueBlueprint 的 :actual_series／:ideal_series 欄位即取自這裡）。
+    # 列解析與合併：固定欄位 A~I → reported_remaining_hours, project, issue_title, assignee,
+    # issue_id, start_date, due_date, status_raw, estimated_hours；project／issue_title／issue_id
+    # 任一空白則跳過整列。同一議題（同 issue_id）可能拆成多列分別填給不同人員，故先逐列解析成
+    # 原始資料，再依 issue_id 合併為單一議題後才計算 ideal_series／actual_series（見下方
+    # merge_rows）。
     def parse_issues(rows, week_dates)
       sorted_week_dates = week_dates.sort_by { |w| w[:date] }
+      raw_rows = rows.filter_map { |row| parse_row(row, sorted_week_dates) }
+      merge_rows(raw_rows, sorted_week_dates)
+    end
 
-      rows.filter_map do |row|
-        next if blank_row?(row)
+    def parse_row(row, sorted_week_dates)
+      return nil if blank_row?(row)
 
-        reported_remaining_hours, project, issue_title, assignee, issue_id,
-          start_date_raw, due_date_raw, estimated_hours_raw = row.values_at(0, 1, 2, 3, 4, 5, 6, 7)
-        next if [ project, issue_title, issue_id ].any? { |value| value.to_s.strip.empty? }
+      reported_remaining_hours, project, issue_title, assignee, issue_id,
+        start_date_raw, due_date_raw, status_raw, estimated_hours_raw = row.values_at(0, 1, 2, 3, 4, 5, 6, 7, 8)
+      return nil if [ project, issue_title, issue_id ].any? { |value| value.to_s.strip.empty? }
 
-        estimated_hours = safe_float(estimated_hours_raw) || 0.0
-        start_date = normalize_date(start_date_raw)
-        due_date = normalize_date(due_date_raw)
-
+      {
+        issue_id: issue_id,
+        project: project,
+        issue_title: issue_title,
+        assignee: assignee,
+        start_date: normalize_date(start_date_raw),
+        due_date: normalize_date(due_date_raw),
+        status_raw: status_raw,
+        estimated_hours: safe_float(estimated_hours_raw) || 0.0,
+        reported_remaining_hours: safe_float(reported_remaining_hours),
         # 週欄位儲存格為空白時視為 0 人時，不拋出例外（需求 1.4）。
-        weekly_hours = sorted_week_dates.map { |w| safe_float(row[w[:index]]) || 0.0 }
+        weekly_hours: sorted_week_dates.map { |w| safe_float(row[w[:index]]) || 0.0 }
+      }
+    end
+
+    # 依 issue_id 合併同議題的多列（真實資料常見：同一議題拆給多位人員分別填寫）：
+    # - assignees：該議題所有人員清單（保留原始順序、去重）
+    # - estimated_hours／reported_remaining_hours：加總（後者若各列皆空白則維持 nil）
+    # - 週人時：同一週的各列人時加總
+    # - start_date／due_date：僅在「該列 due_date 晚於 start_date」時視為合法列，取合法列中最早
+    #   的 start_date、最晚的 due_date；全部列皆不合法（含空白）時回傳 nil（進而讓 ideal_series
+    #   算出空陣列，而非讓單一列的髒資料拖累或誤植整個議題的區間）。
+    def merge_rows(raw_rows, sorted_week_dates)
+      raw_rows.group_by { |r| r[:issue_id] }.map do |issue_id, group|
+        first = group.first
+        valid_ranges = group.filter_map do |r|
+          start_d = parse_date(r[:start_date])
+          due_d = parse_date(r[:due_date])
+          [ start_d, due_d ] if start_d && due_d && due_d > start_d
+        end
+        start_date = valid_ranges.map(&:first).min&.iso8601
+        due_date = valid_ranges.map(&:last).max&.iso8601
+
+        remaining_values = group.filter_map { |r| r[:reported_remaining_hours] }
+        estimated_hours = group.sum { |r| r[:estimated_hours] }
+        weekly_hours = sorted_week_dates.each_index.map { |i| group.sum { |r| r[:weekly_hours][i] } }
 
         {
           issue_id: issue_id,
-          project: project,
-          issue_title: issue_title,
-          assignee: assignee,
+          project: first[:project],
+          issue_title: first[:issue_title],
+          assignees: group.map { |r| r[:assignee] }.compact_blank.uniq,
           start_date: start_date,
           due_date: due_date,
+          status: merge_status(group),
           estimated_hours: estimated_hours,
-          reported_remaining_hours: safe_float(reported_remaining_hours),
+          reported_remaining_hours: remaining_values.empty? ? nil : remaining_values.sum,
           actual_series: compute_actual_series(sorted_week_dates, weekly_hours, estimated_hours),
           ideal_series: compute_ideal_series(sorted_week_dates, start_date, due_date, estimated_hours)
         }
       end
+    end
+
+    # 合併同議題多列的狀態：只採計合法值（VALID_STATUSES）；任一列為「未開始」或「執行中」即代表
+    # 議題整體尚未完成（回傳 "in_progress"），全部合法列皆為「已完成」才回傳 "done"；沒有任何一列
+    # 是合法值時回傳 nil（交由 controller fallback 到 due_date 判斷）。
+    def merge_status(group)
+      valid = group.map { |r| r[:status_raw].to_s.strip }.select { |s| VALID_STATUSES.include?(s) }
+      return nil if valid.empty?
+
+      valid.any? { |s| s != "已完成" } ? "in_progress" : "done"
     end
 
     # 實際剩餘人時序列：週欄位依日期由舊到新排序後，逐週累加該欄位人時，

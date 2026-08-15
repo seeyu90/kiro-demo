@@ -6,7 +6,7 @@ RSpec.describe Sheets::FetchProjectBurndown do
   include ActiveSupport::Testing::TimeHelpers
 
   let(:actor) { described_class.new(ServiceActor::Result.to_result({})) }
-  let(:fixed_header) { %w[剩餘人時 專案 議題 人員 議題ID 開案日期 完成日期 預估人時] }
+  let(:fixed_header) { %w[剩餘人時 專案 議題 人員 議題ID 開案日期 完成日期 狀態 預估人時] }
 
   before { travel_to(Date.new(2026, 8, 14)) }
   after { travel_back }
@@ -17,7 +17,7 @@ RSpec.describe Sheets::FetchProjectBurndown do
 
       result = actor.send(:parse_week_dates, header)
 
-      expect(result).to eq([ { index: 8, date: Date.new(2026, 8, 10) } ])
+      expect(result).to eq([ { index: 9, date: Date.new(2026, 8, 10) } ])
     end
 
     it "steps back a year for the first column when it would land more than 3 days in the future" do
@@ -27,7 +27,7 @@ RSpec.describe Sheets::FetchProjectBurndown do
 
       result = actor.send(:parse_week_dates, header)
 
-      expect(result).to eq([ { index: 8, date: Date.new(2025, 1, 10) } ])
+      expect(result).to eq([ { index: 9, date: Date.new(2025, 1, 10) } ])
     end
 
     it "keeps this year for the first column within the 3-day tolerance window" do
@@ -37,7 +37,7 @@ RSpec.describe Sheets::FetchProjectBurndown do
 
       result = actor.send(:parse_week_dates, header)
 
-      expect(result).to eq([ { index: 8, date: Date.new(2026, 1, 4) } ])
+      expect(result).to eq([ { index: 9, date: Date.new(2026, 1, 4) } ])
     end
 
     it "decrements the year for a later (earlier-week) column that crosses the year boundary" do
@@ -46,8 +46,8 @@ RSpec.describe Sheets::FetchProjectBurndown do
       result = actor.send(:parse_week_dates, header)
 
       expect(result).to eq([
-        { index: 8, date: Date.new(2026, 1, 5) },
-        { index: 9, date: Date.new(2025, 12, 29) }
+        { index: 9, date: Date.new(2026, 1, 5) },
+        { index: 10, date: Date.new(2025, 12, 29) }
       ])
     end
 
@@ -66,7 +66,7 @@ RSpec.describe Sheets::FetchProjectBurndown do
 
       result = actor.send(:parse_week_dates, header)
 
-      expect(result.map { |w| w[:index] }).to eq([ 8, 10 ])
+      expect(result.map { |w| w[:index] }).to eq([ 9, 11 ])
       expect(result.map { |w| w[:date] }).to eq([ Date.new(2026, 8, 10), Date.new(2026, 7, 27) ])
     end
 
@@ -75,7 +75,7 @@ RSpec.describe Sheets::FetchProjectBurndown do
 
       result = actor.send(:parse_week_dates, header)
 
-      expect(result).to eq([ { index: 9, date: Date.new(2026, 8, 10) } ])
+      expect(result).to eq([ { index: 10, date: Date.new(2026, 8, 10) } ])
     end
 
     it "returns an empty array when there are no week columns" do
@@ -152,16 +152,16 @@ RSpec.describe Sheets::FetchProjectBurndown do
   describe "#parse_issues" do
     let(:header) { fixed_header + [ "08/10", "08/03" ] }
 
-    it "maps fixed columns A~H to the expected keys and computes both series" do
-      rows = [ [ "2", "AG 亞炬", "議題A", "王贊勛", "1001", "2026/08/01", "2026/08/15", "10", "3", "2" ] ]
+    it "maps fixed columns A~I to the expected keys and computes both series" do
+      rows = [ [ "2", "AG 亞炬", "議題A", "王贊勛", "1001", "2026/08/01", "2026/08/15", "執行中", "10", "3", "2" ] ]
 
       result = actor.send(:parse_issues, rows, actor.send(:parse_week_dates, header))
 
       expect(result.size).to eq(1)
       issue = result.first
       expect(issue).to include(
-        issue_id: "1001", project: "AG 亞炬", issue_title: "議題A", assignee: "王贊勛",
-        start_date: "2026-08-01", due_date: "2026-08-15", estimated_hours: 10.0,
+        issue_id: "1001", project: "AG 亞炬", issue_title: "議題A", assignees: [ "王贊勛" ],
+        start_date: "2026-08-01", due_date: "2026-08-15", status: "in_progress", estimated_hours: 10.0,
         reported_remaining_hours: 2.0
       )
       expect(issue[:actual_series]).to eq([
@@ -172,7 +172,7 @@ RSpec.describe Sheets::FetchProjectBurndown do
     end
 
     it "treats a blank weekly cell as 0 hours instead of raising" do
-      rows = [ [ "", "P", "T", "A", "1001", "2026/08/01", "2026/08/15", "10", "", "2" ] ]
+      rows = [ [ "", "P", "T", "A", "1001", "2026/08/01", "2026/08/15", "", "10", "", "2" ] ]
 
       result = actor.send(:parse_issues, rows, actor.send(:parse_week_dates, header))
 
@@ -180,33 +180,141 @@ RSpec.describe Sheets::FetchProjectBurndown do
     end
 
     it "skips a row when project is blank" do
-      rows = [ [ "2", "", "T", "A", "1001", "", "", "10", "", "" ] ]
+      rows = [ [ "2", "", "T", "A", "1001", "", "", "", "10", "", "" ] ]
 
       expect(actor.send(:parse_issues, rows, [])).to eq([])
     end
 
     it "skips a row when issue_title is blank" do
-      rows = [ [ "2", "P", "", "A", "1001", "", "", "10", "", "" ] ]
+      rows = [ [ "2", "P", "", "A", "1001", "", "", "", "10", "", "" ] ]
 
       expect(actor.send(:parse_issues, rows, [])).to eq([])
     end
 
     it "skips a row when issue_id is blank" do
-      rows = [ [ "2", "P", "T", "A", "", "", "", "10", "", "" ] ]
+      rows = [ [ "2", "P", "T", "A", "", "", "", "", "10", "", "" ] ]
 
       expect(actor.send(:parse_issues, rows, [])).to eq([])
     end
 
     it "skips blank rows" do
-      rows = [ [ "2", "P", "T", "A", "1001", "", "", "10", "", "" ], [], Array.new(10) ]
+      rows = [ [ "2", "P", "T", "A", "1001", "", "", "", "10", "", "" ], [], Array.new(11) ]
 
       expect(actor.send(:parse_issues, rows, []).size).to eq(1)
     end
 
     it "defaults estimated_hours to 0.0 when the cell is blank" do
-      rows = [ [ "", "P", "T", "A", "1001", "", "", "", "", "" ] ]
+      rows = [ [ "", "P", "T", "A", "1001", "", "", "", "", "", "" ] ]
 
       expect(actor.send(:parse_issues, rows, []).first[:estimated_hours]).to eq(0.0)
+    end
+
+    context "status merging (依 issue_id 合併後推斷議題整體狀態)" do
+      it "maps a valid single-row status to :status (未開始/執行中 → in_progress, 已完成 → done)" do
+        row = ->(status) { [ "", "P", "T", "A", "1001", "", "", status, "10", "", "" ] }
+
+        expect(actor.send(:parse_issues, [ row.call("未開始") ], []).first[:status]).to eq("in_progress")
+        expect(actor.send(:parse_issues, [ row.call("執行中") ], []).first[:status]).to eq("in_progress")
+        expect(actor.send(:parse_issues, [ row.call("已完成") ], []).first[:status]).to eq("done")
+      end
+
+      it "treats unrecognized status values (blank, stray numbers) as nil, not a valid status" do
+        expect(actor.send(:parse_issues, [ [ "", "P", "T", "A", "1001", "", "", "", "10", "", "" ] ], []).first[:status]).to be_nil
+        expect(actor.send(:parse_issues, [ [ "", "P", "T", "A", "1001", "", "", "3.5", "10", "", "" ] ], []).first[:status]).to be_nil
+      end
+
+      it "when rows disagree, treats the issue as in_progress unless every valid row says 已完成" do
+        rows = [
+          [ "", "P", "T", "A", "1001", "", "", "執行中", "5", "", "" ],
+          [ "", "P", "T", "B", "1001", "", "", "已完成", "5", "", "" ]
+        ]
+
+        expect(actor.send(:parse_issues, rows, []).first[:status]).to eq("in_progress")
+      end
+
+      it "returns done only when every row with a recognized status says 已完成" do
+        rows = [
+          [ "", "P", "T", "A", "1001", "", "", "已完成", "5", "", "" ],
+          [ "", "P", "T", "B", "1001", "", "", "已完成", "5", "", "" ]
+        ]
+
+        expect(actor.send(:parse_issues, rows, []).first[:status]).to eq("done")
+      end
+
+      it "falls back to nil when no row in the group has a recognized status" do
+        rows = [
+          [ "", "P", "T", "A", "1001", "", "", "2", "5", "", "" ],
+          [ "", "P", "T", "B", "1001", "", "", "", "5", "", "" ]
+        ]
+
+        expect(actor.send(:parse_issues, rows, []).first[:status]).to be_nil
+      end
+    end
+
+    context "when multiple rows share the same issue_id (same issue split across assignees)" do
+      let(:header) { fixed_header + [ "08/10", "08/03" ] }
+      let(:week_dates) { actor.send(:parse_week_dates, header) }
+
+      it "merges them into a single issue: sums estimated_hours, reported_remaining_hours and weekly hours, unions assignees" do
+        rows = [
+          [ "-31.5", "立翔 PMS", "v2.0 調整", "黃紹鈞", "5005", "2026/07/09", "2026/08/06", "執行中", "121", "16", "" ],
+          [ "-22.25", "立翔 PMS", "v2.0 調整", "沈舫竹", "5005", "2026/07/09", "2026/08/06", "執行中", "31", "4", "3.75" ]
+        ]
+
+        result = actor.send(:parse_issues, rows, week_dates)
+
+        expect(result.size).to eq(1)
+        issue = result.first
+        expect(issue[:issue_id]).to eq("5005")
+        expect(issue[:assignees]).to eq([ "黃紹鈞", "沈舫竹" ])
+        expect(issue[:estimated_hours]).to eq(152.0)
+        expect(issue[:reported_remaining_hours]).to eq(-53.75)
+        expect(issue[:start_date]).to eq("2026-07-09")
+        expect(issue[:due_date]).to eq("2026-08-06")
+        # actual_series: cumulative weekly hours summed across both rows each week (oldest first)
+        # week 08/03 (index 9): 0 + 3.75 = 3.75 → remaining 152 - 3.75 = 148.25
+        # week 08/10 (index 8): 16 + 4 = 20 → cumulative 23.75 → remaining 152 - 23.75 = 128.25
+        expect(issue[:actual_series]).to eq([
+          { date: "2026-08-03", hours: 148.25 },
+          { date: "2026-08-10", hours: 128.25 }
+        ])
+      end
+
+      it "takes the earliest valid start_date and the latest valid due_date across rows, ignoring rows whose own range is invalid" do
+        rows = [
+          # due_date (07/27) is before start_date (08/06) — this row's own range is invalid
+          [ "4.25", "HRM", "標準版 202608B", "沈舫竹", "5128", "2026/08/06", "2026/07/27", "執行中", "11", "", "" ],
+          [ "23", "HRM", "標準版 202608B", "黃靖益", "5128", "2026/08/06", "2026/08/13", "未開始", "23", "", "" ]
+        ]
+
+        result = actor.send(:parse_issues, rows, week_dates)
+
+        expect(result.first[:start_date]).to eq("2026-08-06")
+        expect(result.first[:due_date]).to eq("2026-08-13")
+      end
+
+      it "returns nil start_date/due_date (and an empty ideal_series) when every row's own range is invalid" do
+        rows = [
+          [ "9.5", "亞炬 Else", "v2.0 公務車調整", "周詩御", "4769", "2026/03/20", "2026/03/20", "已完成", "44", "", "" ]
+        ]
+
+        result = actor.send(:parse_issues, rows, week_dates)
+
+        expect(result.first[:start_date]).to be_nil
+        expect(result.first[:due_date]).to be_nil
+        expect(result.first[:ideal_series]).to eq([])
+      end
+
+      it "keeps reported_remaining_hours nil when every row in the group left it blank" do
+        rows = [
+          [ "", "P", "T", "A", "9001", "", "", "", "5", "", "" ],
+          [ "", "P", "T", "B", "9001", "", "", "", "3", "", "" ]
+        ]
+
+        result = actor.send(:parse_issues, rows, week_dates)
+
+        expect(result.first[:reported_remaining_hours]).to be_nil
+      end
     end
   end
 
@@ -217,7 +325,7 @@ RSpec.describe Sheets::FetchProjectBurndown do
     let(:rows) do
       [
         header,
-        [ "2", "AG 亞炬", "議題A", "王贊勛", "1001", "2026/08/01", "2026/08/15", "10", "3" ]
+        [ "2", "AG 亞炬", "議題A", "王贊勛", "1001", "2026/08/01", "2026/08/15", "執行中", "10", "3" ]
       ]
     end
 
