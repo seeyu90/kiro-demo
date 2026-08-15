@@ -80,21 +80,35 @@
       var first = group[0];
       var estimatedHours = group.reduce(function (sum, r) { return sum + r.estimated_hours; }, 0);
       var weeklyActual = sumWeeklyByDate(group.map(function (r) { return r.weekly_actual; }));
-      var assignees = group.map(function (r) { return r.assignee; });
+
+      // 同一人若拆成多列（例如更正列），先依人員名稱分組合併，堆疊圖才不會把同一人畫成
+      // 兩塊色塊（比照 Ruby Actor 版本 per_assignee_series 的合併邏輯）。
+      var byAssignee = {};
+      var assigneeOrder = [];
+      group.forEach(function (r) {
+        if (!(r.assignee in byAssignee)) {
+          byAssignee[r.assignee] = [];
+          assigneeOrder.push(r.assignee);
+        }
+        byAssignee[r.assignee].push(r);
+      });
 
       var merged = {
         project: first.project,
         issue_id: issueId,
         issue_title: first.issue_title,
-        assignees: assignees,
+        assignees: assigneeOrder,
         start_date: first.start_date,
         due_date: first.due_date,
         status: mergeStatus(group),
         estimated_hours: estimatedHours,
         weekly_actual: weeklyActual
       };
-      merged.per_assignee = group.map(function (r) {
-        return { assignee: r.assignee, estimated_hours: r.estimated_hours, cumulative_series: computeCumulativeSeries(r.weekly_actual) };
+      merged.per_assignee = assigneeOrder.map(function (assignee) {
+        var rows = byAssignee[assignee];
+        var estimated = rows.reduce(function (sum, r) { return sum + r.estimated_hours; }, 0);
+        var weekly = sumWeeklyByDate(rows.map(function (r) { return r.weekly_actual; }));
+        return { assignee: assignee, estimated_hours: estimated, cumulative_series: computeCumulativeSeries(weekly) };
       });
       return merged;
     });

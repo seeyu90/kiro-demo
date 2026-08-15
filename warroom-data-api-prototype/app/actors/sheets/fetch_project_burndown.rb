@@ -125,8 +125,12 @@ module Sheets
     def merge_rows(raw_rows, sorted_week_dates)
       raw_rows.group_by { |r| r[:issue_id] }.map do |issue_id, group|
         first = group.first
+        # 每列的 start_date 只解析一次、重複使用（下面的合法區間判斷、開案週裁切都需要），
+        # 避免對同一個日期字串重複呼叫 Date.parse。
+        parsed_starts = group.index_with { |r| parse_date(r[:start_date]) }
+
         valid_ranges = group.filter_map do |r|
-          start_d = parse_date(r[:start_date])
+          start_d = parsed_starts[r]
           due_d = parse_date(r[:due_date])
           [ start_d, due_d ] if start_d && due_d && due_d > start_d
         end
@@ -145,18 +149,23 @@ module Sheets
         # ——兩者其實屬於同一週。
         # 取捨：若開案日期之前的週欄位仍被填了人時（理論上不該發生），該部分人時會被裁掉、不計入
         # 實際序列的累加。
-        trim_from = group.filter_map { |r| parse_date(r[:start_date]) }.min&.beginning_of_week(:monday)
+        trim_from = parsed_starts.values.compact.min&.beginning_of_week(:monday)
         window_indices = sorted_week_dates.each_index.select do |i|
           trim_from.nil? || sorted_week_dates[i][:date] >= trim_from
         end
         week_window = window_indices.map { |i| sorted_week_dates[i] }
-        weekly_hours = window_indices.map { |i| group.sum { |r| r[:weekly_hours][i] } }
+
+        # 依人員分組一次，同時算出議題整體週人時（各人加總）與每人自己的週人時，
+        # 不用各自完整掃過 group 兩次。
+        by_assignee = group.reject { |r| r[:assignee].to_s.strip.empty? }.group_by { |r| r[:assignee] }
+        per_assignee_weekly = by_assignee.transform_values { |rows| window_indices.map { |i| rows.sum { |r| r[:weekly_hours][i] } } }
+        weekly_hours = window_indices.each_index.map { |idx| per_assignee_weekly.values.sum { |w| w[idx] } }
 
         {
           issue_id: issue_id,
           project: first[:project],
           issue_title: first[:issue_title],
-          assignees: group.map { |r| r[:assignee] }.compact_blank.uniq,
+          assignees: by_assignee.keys,
           start_date: start_date,
           due_date: due_date,
           status: merge_status(group),
@@ -164,7 +173,7 @@ module Sheets
           reported_remaining_hours: remaining_values.empty? ? nil : remaining_values.sum,
           actual_series: compute_actual_series(week_window, weekly_hours, estimated_hours),
           ideal_series: compute_ideal_series(week_window, start_date, due_date, estimated_hours),
-          per_assignee: per_assignee_series(group, window_indices, week_window)
+          per_assignee: per_assignee_series(by_assignee, per_assignee_weekly, week_window)
         }
       end
     end
@@ -172,16 +181,14 @@ module Sheets
     # 每位人員各自「累積消耗人時」序列（由 0 往上累加，不是剩餘人時）：供議題卡片下方的堆疊圖
     # 使用——多人份的累積人時堆疊起來，天生就是同一個基準（疊到頂＝議題整體的累積消耗），
     # 不會像「各自的剩餘人時 vs. 議題整體理想線」那樣因為基準不同（個人份量 vs. 團隊總量）而
-    # 誤導判讀進度落後多少。
-    def per_assignee_series(group, window_indices, week_window)
-      group.filter_map do |r|
-        next if r[:assignee].to_s.strip.empty?
-
-        weekly_hours = window_indices.map { |i| r[:weekly_hours][i] }
+    # 誤導判讀進度落後多少。同一人若拆成多列（例如更正列），merge_rows 已先依人員名稱分組，
+    # 故這裡不會把同一人畫成兩塊色塊。
+    def per_assignee_series(by_assignee, per_assignee_weekly, week_window)
+      by_assignee.map do |assignee, rows|
         {
-          assignee: r[:assignee],
-          estimated_hours: r[:estimated_hours],
-          cumulative_series: compute_cumulative_series(week_window, weekly_hours)
+          assignee: assignee,
+          estimated_hours: rows.sum { |r| r[:estimated_hours] },
+          cumulative_series: compute_cumulative_series(week_window, per_assignee_weekly[assignee])
         }
       end
     end
@@ -241,7 +248,10 @@ module Sheets
         { date: start_d.beginning_of_week(:monday).iso8601, hours: estimated_hours.round(2) },
         { date: due_d.beginning_of_week(:monday).iso8601, hours: 0.0 }
       ]
-      (points + anchors).uniq { |p| p[:date] }.sort_by { |p| p[:date] }
+      # 錨點排在前面：Array#uniq 保留「第一次出現」的元素，若某週欄位剛好落在錨點同一天
+      # （例如 due_date 本身不是週一、但正規化後跟某週欄位同一週），錨點的保證值（滿額／歸零）
+      # 必須贏過該週依比例算出的值，理想線才能真的準時歸零／從滿額開始。
+      (anchors + points).uniq { |p| p[:date] }.sort_by { |p| p[:date] }
     end
 
     def parse_date(date_str)
@@ -267,10 +277,12 @@ module Sheets
       row.nil? || row.all? { |cell| cell.to_s.strip.empty? }
     end
 
+    # FORMATTED_VALUE（見 BurndownSheetsClient）可能把數字格式化成含千分位逗號的字串
+    # （例如 "1,200"），先去除逗號再轉型，避免合法數字被誤判為無法解析而靜默歸零。
     def safe_float(value)
       return nil if value.nil? || value.to_s.strip.empty?
 
-      Float(value)
+      Float(value.to_s.delete(","))
     rescue ArgumentError, TypeError
       nil
     end

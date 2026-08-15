@@ -157,6 +157,17 @@ RSpec.describe Sheets::FetchProjectBurndown do
       expect(result.first[:hours]).to eq(21.0)
     end
 
+    it "lets the due_date anchor win over the ratio-computed value when a week column falls on the same Monday-normalized date but due_date itself isn't a Monday" do
+      # start_date=2026-07-06（週一），due_date=2026-08-19（週三，正規化到週一是 2026-08-17）。
+      # 週欄位剛好也有 2026-08-17：若沒有優先保留錨點，該點會被算成 estimated_hours*(2/44)
+      # ≈ 1.82 而不是保證的 0.0（迴歸測試：修正前 uniq 保留的是 points，不是 anchors）。
+      sorted_with_collision = [ { index: 8, date: Date.new(2026, 8, 17) } ]
+
+      result = actor.send(:compute_ideal_series, sorted_with_collision, "2026-07-06", "2026-08-19", 40.0)
+
+      expect(result.find { |p| p[:date] == "2026-08-17" }[:hours]).to eq(0.0)
+    end
+
     it "returns an empty array when start_date is missing" do
       expect(actor.send(:compute_ideal_series, sorted, nil, "2026-08-31", 10.0)).to eq([])
     end
@@ -228,6 +239,12 @@ RSpec.describe Sheets::FetchProjectBurndown do
       rows = [ [ "", "P", "T", "A", "1001", "", "", "", "", "", "" ] ]
 
       expect(actor.send(:parse_issues, rows, []).first[:estimated_hours]).to eq(0.0)
+    end
+
+    it "parses a thousands-separator formatted number cell (e.g. FORMATTED_VALUE returning \"1,200\") instead of silently zeroing it" do
+      rows = [ [ "", "P", "T", "A", "1001", "", "", "", "1,200", "", "" ] ]
+
+      expect(actor.send(:parse_issues, rows, []).first[:estimated_hours]).to eq(1200.0)
     end
 
     context "status merging (依 issue_id 合併後推斷議題整體狀態)" do
@@ -321,6 +338,31 @@ RSpec.describe Sheets::FetchProjectBurndown do
         expect(per_assignee[1][:cumulative_series]).to eq([
           { date: "2026-08-03", hours: 3.75 },
           { date: "2026-08-10", hours: 7.75 }
+        ])
+      end
+
+      it "merges per_assignee entries for the same person instead of listing one entry per raw row (e.g. a correction row)" do
+        # 迴歸測試：修正前 per_assignee_series 沒有依人員名稱合併，同一人拆成兩列時堆疊圖會
+        # 畫出兩塊同色色塊。
+        rows = [
+          [ "", "P", "T", "黃紹鈞", "9002", "", "", "執行中", "10", "3", "2" ],
+          [ "", "P", "T", "黃紹鈞", "9002", "", "", "執行中", "5", "1", "1" ],
+          [ "", "P", "T", "陳小華", "9002", "", "", "執行中", "8", "2", "1" ]
+        ]
+
+        result = actor.send(:parse_issues, rows, week_dates)
+        issue = result.first
+
+        expect(issue[:assignees]).to eq([ "黃紹鈞", "陳小華" ])
+        per_assignee = issue[:per_assignee]
+        expect(per_assignee.map { |pa| pa[:assignee] }).to eq([ "黃紹鈞", "陳小華" ])
+        expect(per_assignee[0][:estimated_hours]).to eq(15.0) # 10 + 5
+        # header week columns are ["08/10", "08/03"] (index 8, 9); sorted ascending puts 08/03
+        # first. Row1 weekly cells (idx8=08/10:"3", idx9=08/03:"2") → sorted [2, 3].
+        # Row2 weekly cells (idx8=08/10:"1", idx9=08/03:"1") → sorted [1, 1]. Summed: [3, 4].
+        expect(per_assignee[0][:cumulative_series]).to eq([
+          { date: "2026-08-03", hours: 3.0 },
+          { date: "2026-08-10", hours: 7.0 }
         ])
       end
 
