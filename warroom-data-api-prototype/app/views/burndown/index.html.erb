@@ -30,18 +30,6 @@
   <% end %>
 
   <section class="issue-section">
-    <h2>依專案彙總燃盡圖</h2>
-    <% if @project_series.empty? %>
-      <p class="empty-state">無專案彙總資料</p>
-    <% else %>
-      <% @project_series.each do |project_name, series| %>
-        <%= render partial: "burndown_chart",
-                   locals: { title: project_name, actual_series: series[:actual_series], ideal_series: series[:ideal_series] } %>
-      <% end %>
-    <% end %>
-  </section>
-
-  <section class="issue-section">
     <h2>議題燃盡圖</h2>
     <% if @filtered_issues.empty? %>
       <p class="empty-state">目前無符合條件的議題</p>

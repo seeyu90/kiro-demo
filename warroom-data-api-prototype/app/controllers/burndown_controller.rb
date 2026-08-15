@@ -20,14 +20,6 @@ class BurndownController < ApplicationController
 
     @filtered_issues = filter_issues(all_issues)
 
-    # 專案彙總圖僅受專案篩選影響，不受人員篩選影響（需求 4.3）；未選專案時顯示全部專案的彙總圖。
-    @project_series =
-      if @selected_project
-        result.project_series.slice(@selected_project)
-      else
-        result.project_series
-      end
-
     @error = nil
   end
 
@@ -37,7 +29,6 @@ class BurndownController < ApplicationController
     @selected_project = nil
     @selected_assignee = nil
     @filtered_issues = []
-    @project_series = {}
     @error = message
   end
 

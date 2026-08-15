@@ -3,7 +3,6 @@
 module Sheets
   class FetchProjectBurndown < ApplicationActor
     output :issues
-    output :project_series
     output :failure_code
     output :message
 
@@ -18,7 +17,6 @@ module Sheets
       week_dates = parse_week_dates(header)
 
       self.issues = parse_issues(rows.drop(1), week_dates)
-      self.project_series = aggregate_project_series(issues)
     rescue Google::Apis::ClientError => e
       # 錯誤對應邏輯比照 306 Sheets::FetchIssueDashboard（見 rails-standards.md 的
       # failure_code 對應表）。
@@ -141,25 +139,6 @@ module Sheets
         ratio = ((w[:date] - start_d).to_f / total_span).clamp(0.0, 1.0)
         { date: w[:date].iso8601, hours: (estimated_hours * (1 - ratio)).round(2) }
       end
-    end
-
-    # 依專案將所有議題的理想／實際剩餘人時序列，依相同的週欄位日期逐週加總（需求 3.4）。
-    # 议题若無理想序列（起訖日缺失或不合法）則不貢獻該議題的理想線加總，不視為 0。
-    def aggregate_project_series(issues)
-      issues.group_by { |issue| issue[:project] }.transform_values do |group|
-        {
-          actual_series: sum_series(group.map { |issue| issue[:actual_series] }),
-          ideal_series: sum_series(group.map { |issue| issue[:ideal_series] })
-        }
-      end
-    end
-
-    def sum_series(series_list)
-      totals = Hash.new(0.0)
-      series_list.each do |series|
-        series.each { |point| totals[point[:date]] += point[:hours] }
-      end
-      totals.sort.map { |date, hours| { date: date, hours: hours.round(2) } }
     end
 
     def parse_date(date_str)

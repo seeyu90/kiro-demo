@@ -210,39 +210,6 @@ RSpec.describe Sheets::FetchProjectBurndown do
     end
   end
 
-  describe "#aggregate_project_series" do
-    it "sums each project's issues' series by matching date, keyed by project" do
-      issues = [
-        {
-          project: "A",
-          actual_series: [ { date: "2026-08-01", hours: 5.0 } ],
-          ideal_series: [ { date: "2026-08-01", hours: 4.0 } ]
-        },
-        {
-          project: "A",
-          actual_series: [ { date: "2026-08-01", hours: 3.0 } ],
-          ideal_series: [ { date: "2026-08-01", hours: 2.0 } ]
-        },
-        {
-          project: "B",
-          actual_series: [ { date: "2026-08-01", hours: 1.0 } ],
-          ideal_series: []
-        }
-      ]
-
-      result = actor.send(:aggregate_project_series, issues)
-
-      expect(result["A"]).to eq({
-        actual_series: [ { date: "2026-08-01", hours: 8.0 } ],
-        ideal_series: [ { date: "2026-08-01", hours: 6.0 } ]
-      })
-      expect(result["B"]).to eq({
-        actual_series: [ { date: "2026-08-01", hours: 1.0 } ],
-        ideal_series: []
-      })
-    end
-  end
-
   describe "#call" do
     subject(:result) { described_class.result }
 
@@ -256,9 +223,8 @@ RSpec.describe Sheets::FetchProjectBurndown do
 
     before { allow(BurndownSheetsClient).to receive(:fetch_rows).and_return(rows) }
 
-    it "populates issues and project_series from the client's rows" do
+    it "populates issues from the client's rows" do
       expect(result.issues.map { |i| i[:issue_id] }).to eq([ "1001" ])
-      expect(result.project_series.keys).to eq([ "AG 亞炬" ])
     end
 
     context "when BurndownSheetsClient raises Google::Apis::ClientError status 404" do

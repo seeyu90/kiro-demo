@@ -7,10 +7,6 @@ RSpec.describe "Burndown", type: :request do
     travel_to(Date.new(2026, 8, 14)) { example.run }
   end
 
-  def project_series_section(body)
-    body[%r{<h2>依專案彙總燃盡圖</h2>.*?</section>}m]
-  end
-
   def issue_series_section(body)
     body[%r{<h2>議題燃盡圖</h2>.*?</section>}m]
   end
@@ -40,12 +36,6 @@ RSpec.describe "Burndown", type: :request do
       expect(response.body).to include("議題A").and include("議題B").and include("議題C")
     end
 
-    it "shows an aggregate chart for every project" do
-      section = project_series_section(response.body)
-      expect(section).to include("AG 亞炬")
-      expect(section).to include("Virtuous HRM")
-    end
-
     it "lists both projects and both assignees in the filter dropdowns" do
       expect(response.body).to include('value="AG 亞炬"').and include('value="Virtuous HRM"')
       expect(response.body).to include('value="王贊勛"').and include('value="蔡秉逸"')
@@ -61,12 +51,6 @@ RSpec.describe "Burndown", type: :request do
       expect(section).to include("議題B")
       expect(section).not_to include("議題C")
     end
-
-    it "shows only the selected project's aggregate chart" do
-      section = project_series_section(response.body)
-      expect(section).to include("AG 亞炬")
-      expect(section).not_to include("Virtuous HRM")
-    end
   end
 
   describe "GET /burndown?assignee=... (assignee filter only)" do
@@ -77,12 +61,6 @@ RSpec.describe "Burndown", type: :request do
       expect(section).to include("議題A")
       expect(section).to include("議題C")
       expect(section).not_to include("議題B")
-    end
-
-    it "does not affect the project aggregate charts (需求 4.3)" do
-      section = project_series_section(response.body)
-      expect(section).to include("AG 亞炬")
-      expect(section).to include("Virtuous HRM")
     end
   end
 
@@ -103,8 +81,7 @@ RSpec.describe "Burndown", type: :request do
       get "/burndown"
     end
 
-    it "shows the empty state for both the project aggregate and issue sections" do
-      expect(project_series_section(response.body)).to include("無專案彙總資料")
+    it "shows the empty state for the issue section" do
       expect(issue_series_section(response.body)).to include("目前無符合條件的議題")
     end
   end
@@ -124,7 +101,6 @@ RSpec.describe "Burndown", type: :request do
     end
 
     it "does not render any filter dropdown options or charts" do
-      expect(response.body).not_to include("依專案彙總燃盡圖")
       expect(response.body).not_to include("議題燃盡圖")
     end
   end
