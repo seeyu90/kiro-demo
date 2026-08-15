@@ -35,6 +35,12 @@ inclusion: always
 - 須支援桌機、平板、手機
 - 使用 CSS media query 實作
 
+## Git 分支命名
+依 GitHub Flow 慣例，分支名稱使用 `<類型>/<簡短描述>` 格式（類型與描述皆全小寫、以連字號分隔）：
+- `feature/xxx`：新功能（例如 `feature/307-project-burndown-tracking`）
+- `fix/xxx`：修正既有功能的錯誤
+- `chore/xxx`：不影響功能行為的雜項（文件、設定、依賴更新等）
+
 ## 工作流程（依 karpathy-guidelines）
 1. 每項工作開始前，先陳述可驗證的完成標準。
 2. 選擇最簡單可行方案。
