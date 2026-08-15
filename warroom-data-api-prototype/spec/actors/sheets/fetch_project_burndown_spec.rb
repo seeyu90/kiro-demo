@@ -128,6 +128,18 @@ RSpec.describe Sheets::FetchProjectBurndown do
       ])
     end
 
+    it "clamps weeks before start_date to the full estimated hours" do
+      result = actor.send(:compute_ideal_series, sorted, "2026-08-10", "2026-08-31", 21.0)
+
+      expect(result.first).to eq({ date: "2026-08-01", hours: 21.0 })
+    end
+
+    it "clamps weeks after due_date to 0" do
+      result = actor.send(:compute_ideal_series, sorted, "2026-07-01", "2026-08-10", 10.0)
+
+      expect(result.last).to eq({ date: "2026-08-15", hours: 0.0 })
+    end
+
     it "appends start_date/due_date anchor points snapped to that week's Monday, so the diagonal always reaches full/zero even beyond the given week columns" do
       # 2026-08-01 是週六，正規化到週一是 2026-07-27；2026-08-31 已經是週一，維持不變。
       result = actor.send(:compute_ideal_series, sorted, "2026-08-01", "2026-08-31", 30.0)
@@ -143,18 +155,6 @@ RSpec.describe Sheets::FetchProjectBurndown do
 
       expect(result.map { |p| p[:date] }).to eq([ "2026-08-10", "2026-08-31" ])
       expect(result.first[:hours]).to eq(21.0)
-    end
-
-    it "clamps weeks before start_date to the full estimated hours" do
-      result = actor.send(:compute_ideal_series, sorted, "2026-08-10", "2026-08-31", 21.0)
-
-      expect(result.first).to eq({ date: "2026-08-01", hours: 21.0 })
-    end
-
-    it "clamps weeks after due_date to 0" do
-      result = actor.send(:compute_ideal_series, sorted, "2026-07-01", "2026-08-10", 10.0)
-
-      expect(result.last).to eq({ date: "2026-08-15", hours: 0.0 })
     end
 
     it "returns an empty array when start_date is missing" do
@@ -301,6 +301,29 @@ RSpec.describe Sheets::FetchProjectBurndown do
         ])
       end
 
+      it "keeps each assignee's own cumulative consumed hours (running total from 0, not remaining hours)" do
+        # 供堆疊圖使用：多人份的累積人時堆疊起來天生就是同一個基準（疊到頂＝議題整體累積消耗），
+        # 用累積消耗而不是剩餘人時，才不會因為「個人份量 vs. 團隊總量」基準不同而誤導判讀。
+        rows = [
+          [ "-31.5", "立翔 PMS", "v2.0 調整", "黃紹鈞", "5005", "2026/07/09", "2026/08/06", "執行中", "121", "16", "" ],
+          [ "-22.25", "立翔 PMS", "v2.0 調整", "沈舫竹", "5005", "2026/07/09", "2026/08/06", "執行中", "31", "4", "3.75" ]
+        ]
+
+        result = actor.send(:parse_issues, rows, week_dates)
+        per_assignee = result.first[:per_assignee]
+
+        expect(per_assignee.map { |pa| pa[:assignee] }).to eq([ "黃紹鈞", "沈舫竹" ])
+        expect(per_assignee.map { |pa| pa[:estimated_hours] }).to eq([ 121.0, 31.0 ])
+        expect(per_assignee[0][:cumulative_series]).to eq([
+          { date: "2026-08-03", hours: 0.0 },
+          { date: "2026-08-10", hours: 16.0 }
+        ])
+        expect(per_assignee[1][:cumulative_series]).to eq([
+          { date: "2026-08-03", hours: 3.75 },
+          { date: "2026-08-10", hours: 7.75 }
+        ])
+      end
+
       it "trims the issue's own actual_series/ideal_series to weeks on or after start_date, not the full sheet week range" do
         header = fixed_header + [ "08/10", "08/03", "07/27" ]
         week_dates = actor.send(:parse_week_dates, header)
@@ -324,7 +347,7 @@ RSpec.describe Sheets::FetchProjectBurndown do
 
       it "does not trim out a week column that falls in the same Monday-start week as start_date, even if the exact date is later" do
         # 2026-08-10 is a Monday; 2026-08-13 (Thursday) is later in the same week. A naive exact-date
-        # comparison would wrongly exclude the 08/10 column（真實案例：issue_id 5146，開案 08/13、
+        # comparison would wrongly exclude the 08/10 column (真實案例：issue_id 5146，開案 08/13、
         # 週欄位只到 08/10）。
         header = fixed_header + [ "08/10" ]
         week_dates = actor.send(:parse_week_dates, header)

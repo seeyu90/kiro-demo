@@ -163,8 +163,35 @@ module Sheets
           estimated_hours: estimated_hours,
           reported_remaining_hours: remaining_values.empty? ? nil : remaining_values.sum,
           actual_series: compute_actual_series(week_window, weekly_hours, estimated_hours),
-          ideal_series: compute_ideal_series(week_window, start_date, due_date, estimated_hours)
+          ideal_series: compute_ideal_series(week_window, start_date, due_date, estimated_hours),
+          per_assignee: per_assignee_series(group, window_indices, week_window)
         }
+      end
+    end
+
+    # 每位人員各自「累積消耗人時」序列（由 0 往上累加，不是剩餘人時）：供議題卡片下方的堆疊圖
+    # 使用——多人份的累積人時堆疊起來，天生就是同一個基準（疊到頂＝議題整體的累積消耗），
+    # 不會像「各自的剩餘人時 vs. 議題整體理想線」那樣因為基準不同（個人份量 vs. 團隊總量）而
+    # 誤導判讀進度落後多少。
+    def per_assignee_series(group, window_indices, week_window)
+      group.filter_map do |r|
+        next if r[:assignee].to_s.strip.empty?
+
+        weekly_hours = window_indices.map { |i| r[:weekly_hours][i] }
+        {
+          assignee: r[:assignee],
+          estimated_hours: r[:estimated_hours],
+          cumulative_series: compute_cumulative_series(week_window, weekly_hours)
+        }
+      end
+    end
+
+    def compute_cumulative_series(sorted_week_dates, weekly_hours)
+      cumulative = 0.0
+
+      sorted_week_dates.each_with_index.map do |w, i|
+        cumulative += weekly_hours[i]
+        { date: w[:date].iso8601, hours: cumulative.round(2) }
       end
     end
 

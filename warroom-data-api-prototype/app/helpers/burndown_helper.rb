@@ -64,6 +64,53 @@ module BurndownHelper
     end
   end
 
+  # 多人員累積消耗人時堆疊圖（見 Sheets::FetchProjectBurndown#per_assignee_series）：固定色盤依
+  # per_assignee 的順序輪流指派，人數不多（實務上議題很少超過個位數協作者），循環用色即可。
+  BURNDOWN_STACK_COLORS = %w[#60a5fa #f472b6 #34d399 #fbbf24 #a78bfa #fb923c #38bdf8 #f87171].freeze
+
+  # Y 軸最大值取「疊加後某週的最高累積人時」與「總預估人時」兩者較大者：後者是參考線一定要
+  # 落在繪圖範圍內，前者則是實際超支（疊加總量超過預估）時，柱狀／面積不能被裁掉看不到。
+  def burndown_stacked_chart_max(per_assignee, estimated_hours)
+    top = burndown_stacked_totals(per_assignee).max || 0.0
+    [ top, estimated_hours.to_f, 1 ].max
+  end
+
+  # 每一週「所有人員疊加後」的累積人時總和：等同該週的議題整體累積消耗（每人各自累積人時
+  # 加總），用來判斷 Y 軸最大值是否要因超支而放大於總預估人時。
+  def burndown_stacked_totals(per_assignee)
+    return [] if per_assignee.blank?
+
+    dates = burndown_stacked_chart_dates(per_assignee)
+    dates.each_index.map { |i| per_assignee.sum { |pa| pa[:cumulative_series][i][:hours].to_f } }
+  end
+
+  def burndown_stacked_chart_dates(per_assignee)
+    per_assignee.first&.dig(:cumulative_series)&.map { |p| p[:date] } || []
+  end
+
+  # 依 per_assignee 順序，逐人算出一塊堆疊區塊（SVG polygon）：下緣＝前面所有人已疊加的累計，
+  # 上緣＝加上這個人自己的累積人時之後的新高度，兩條邊界依日期前進、再折返，組成封閉多邊形。
+  def burndown_stacked_chart_polygons(per_assignee, dates, max)
+    step_x = burndown_chart_plot_width / [ dates.length - 1, 1 ].max.to_f
+    running = Array.new(dates.length, 0.0)
+
+    per_assignee.each_with_index.map do |pa, idx|
+      values = pa[:cumulative_series].map { |p| p[:hours].to_f }
+      top = running.each_index.map { |i| running[i] + values[i] }
+
+      bottom_edge = dates.each_index.map { |i| [ BURNDOWN_PADDING_LEFT + i * step_x, burndown_chart_y(running[i], 0, max) ] }
+      top_edge = dates.each_index.map { |i| [ BURNDOWN_PADDING_LEFT + i * step_x, burndown_chart_y(top[i], 0, max) ] }
+      polygon = (bottom_edge + top_edge.reverse).map { |x, y| "#{x.round(2)},#{y.round(2)}" }.join(" ")
+
+      running = top
+      { assignee: pa[:assignee], color: BURNDOWN_STACK_COLORS[idx % BURNDOWN_STACK_COLORS.length], points: polygon }
+    end
+  end
+
+  def burndown_stacked_chart_reference_y(estimated_hours, max)
+    burndown_chart_y(estimated_hours, 0, max).round(2)
+  end
+
   private
 
   def burndown_chart_plot_width
