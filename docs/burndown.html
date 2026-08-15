@@ -31,19 +31,16 @@
   <main>
     <section class="issue-section">
       <div class="section-heading-row">
-        <h2>依專案彙總燃盡圖</h2>
+        <h2>議題燃盡圖</h2>
         <div class="control-group">
           <label for="burndown-project">專案：</label>
           <select id="burndown-project" name="burndown-project"></select>
           <label for="burndown-assignee">人員：</label>
           <select id="burndown-assignee" name="burndown-assignee"></select>
+          <label for="burndown-status">狀態：</label>
+          <select id="burndown-status" name="burndown-status"></select>
         </div>
       </div>
-      <div id="project-series" aria-live="polite"></div>
-    </section>
-
-    <section class="issue-section">
-      <h2>議題燃盡圖</h2>
       <div id="issue-series" aria-live="polite"></div>
     </section>
   </main>
