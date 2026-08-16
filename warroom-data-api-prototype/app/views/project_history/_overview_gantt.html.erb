@@ -1,5 +1,18 @@
 <% min_date, max_date = gantt_chart_domain(rows) %>
+<% rows_bottom = gantt_chart_rows_bottom(rows) %>
 <svg viewBox="0 0 <%= ProjectHistoryHelper::GANTT_WIDTH %> <%= gantt_chart_height(rows) %>" class="gantt-svg" role="img" aria-label="專案歷程甘特圖">
+  <%# 月份時間軸：格線貫穿全部列，標籤旋轉呈現在最底部（比照 trend chart 既有的 -45 度做法）。 %>
+  <% gantt_chart_month_ticks(min_date, max_date).each do |tick| %>
+    <line x1="<%= tick[:x] %>" x2="<%= tick[:x] %>" y1="<%= ProjectHistoryHelper::GANTT_PADDING_TOP %>" y2="<%= rows_bottom %>" class="gantt-month-gridline"></line>
+    <text x="<%= tick[:x] %>" y="<%= rows_bottom + 14 %>" text-anchor="end" transform="rotate(-45 <%= tick[:x] %> <%= rows_bottom + 14 %>)" class="trend-axis-label gantt-month-label"><%= tick[:label] %></text>
+  <% end %>
+
+  <%# 今天參考線 %>
+  <% today_x = gantt_chart_today_x(min_date, max_date) %>
+  <% if today_x %>
+    <line x1="<%= today_x %>" x2="<%= today_x %>" y1="<%= ProjectHistoryHelper::GANTT_PADDING_TOP %>" y2="<%= rows_bottom %>" class="gantt-today-line"></line>
+  <% end %>
+
   <% rows.each_with_index do |row, index| %>
     <% row_y = gantt_chart_row_y(index) %>
     <text x="<%= ProjectHistoryHelper::GANTT_PADDING_LEFT - 8 %>" y="<%= row_y + ProjectHistoryHelper::GANTT_ROW_HEIGHT / 2 + 4 %>" text-anchor="end" class="gantt-row-label"><%= row[:project_name] %></text>

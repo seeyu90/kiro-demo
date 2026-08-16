@@ -3,6 +3,7 @@
 module Sheets
   class FetchProjectHistory < ApplicationActor
     input :project, default: nil
+    input :year, default: nil
     output :overview_rows
     output :detail
     output :roster_unavailable
@@ -31,6 +32,12 @@ module Sheets
       progress_result = Sheets::FetchProjectProgress.result(scope: "all", incomplete_only: false)
       return propagate_failure(progress_result) unless progress_result.success?
 
+      # overview_rows（含甘特圖）只需要 305 + Roster；306／307 只有縱向歷程（帶 project 參數）
+      # 才用得到，故只在那時才呼叫。一律呼叫的話，306／307 任一有問題會連只是要看總覽/甘特圖
+      # 都被拖累，但總覽/甘特圖其實跟 306／307 完全無關。
+      self.overview_rows = build_overview_rows(roster, progress_result.grouped_data)
+      return unless project.present?
+
       issue_result = Sheets::FetchIssueDashboard.result
       return propagate_failure(issue_result) unless issue_result.success?
 
@@ -40,13 +47,8 @@ module Sheets
       burndown_result = Sheets::FetchProjectBurndown.result(status: "all")
       return propagate_failure(burndown_result) unless burndown_result.success?
 
-      # overview_rows 一律計算（詳情頁的專案下拉選單需要完整專案清單），detail 僅在帶
-      # project 參數時額外計算。
-      self.overview_rows = build_overview_rows(roster, progress_result.grouped_data)
-      if project.present?
-        roster_row = resolve_roster_row(roster, project)
-        self.detail = build_detail(project, roster_row, burndown_result.issues, issue_result.issues)
-      end
+      roster_row = resolve_roster_row(roster, project)
+      self.detail = build_detail(project, roster_row, burndown_result.issues, issue_result.issues, year)
     end
 
     private
@@ -106,7 +108,7 @@ module Sheets
     #   分隔多個名稱（見 Sheets::FetchProjectRoster 的解析附註）。沒填這欄或 Roster 查無此專案
     #   時，退回直接以 305 傳入的 project 字串精確比對（原本的行為，涵蓋沒有 Roster 資料時仍
     #   可能剛好命名一致的情況）。
-    def build_detail(project, roster_row, burndown_issues, all_issues)
+    def build_detail(project, roster_row, burndown_issues, all_issues, year)
       canonical_name = roster_row[:project_name].presence || project
       project_issues = all_issues.select { |i| i[:project] == canonical_name }
 
@@ -118,13 +120,34 @@ module Sheets
           burndown_issues.select { |i| i[:project] == project }
         end
 
+      work_hours_series = aggregate_work_hours(matched_burndown_issues)
+      ideal_series = aggregate_ideal_series(matched_burndown_issues)
+      actual_series = aggregate_actual_series(matched_burndown_issues)
+      testing_trend = monthly_testing_counts(project_issues)
+
+      # 客訴議題狀態不受年度篩選影響（顯示的是「目前」已解決/未解決幾個，屬於當下狀態，不是
+      # 時間趨勢），比照 306 頁「議題明細不受月份篩選影響」的既有慣例（見 requirements.md）。
       {
-        work_hours_series: aggregate_work_hours(matched_burndown_issues),
-        ideal_series: aggregate_ideal_series(matched_burndown_issues),
-        actual_series: aggregate_actual_series(matched_burndown_issues),
-        testing_trend: weekly_testing_counts(project_issues),
+        available_years: available_years(work_hours_series, ideal_series, actual_series, testing_trend),
+        selected_year: year,
+        work_hours_series: filter_series_by_year(work_hours_series, year),
+        ideal_series: filter_series_by_year(ideal_series, year),
+        actual_series: filter_series_by_year(actual_series, year),
+        testing_trend: filter_series_by_year(testing_trend, year),
         complaint_summary: complaint_status(project_issues)
       }
+    end
+
+    # 年度篩選只影響三個時間序列圖表（花費工時／燃盡圖／測試問題趨勢），下拉選單的可選年度依
+    # 這三者實際涵蓋的日期範圍算出，避免列出該專案根本沒有資料的年份。
+    def available_years(*serieses)
+      serieses.flatten.filter_map { |point| point[:date].to_s[0, 4] }.uniq.sort.reverse
+    end
+
+    def filter_series_by_year(series, year)
+      return series if year.blank?
+
+      series.select { |point| point[:date].to_s.start_with?(year.to_s) }
     end
 
     # 依議題 actual_series（剩餘人時）相鄰兩點的差值反推每週實際花費工時：第一週花費 =
@@ -188,23 +211,23 @@ module Sheets
       end
     end
 
-    def weekly_testing_counts(issues)
+    def monthly_testing_counts(issues)
       testing = issues.select { |i| i[:type] == "TestingBug" }
       counts = Hash.new(0)
       testing.each do |issue|
-        week = week_start(issue[:start_date])
-        next if week.nil?
+        month = month_start(issue[:start_date])
+        next if month.nil?
 
-        counts[week] += 1
+        counts[month] += 1
       end
-      counts.keys.sort.map { |week| { date: week, count: counts[week] } }
+      counts.keys.sort.map { |month| { date: month, count: counts[month] } }
     end
 
-    def week_start(date_str)
+    def month_start(date_str)
       date = parse_date(date_str)
       return nil if date.nil?
 
-      date.beginning_of_week(:monday).iso8601
+      date.beginning_of_month.iso8601
     end
 
     # 依議題明細清單裡每筆客訴議題自己的 status 欄位逐筆判斷，不使用 306 月度彙總欄位

@@ -65,6 +65,21 @@ RSpec.describe "ProjectHistory", type: :request do
       expect(response).to have_http_status(200)
     end
 
+    # 麵包屑（含目前選中的專案名稱）放在 turbo_frame_tag 裡面才能隨切換專案/篩選正確更新；
+    # 但這代表「入口頁」連結必須標記 data-turbo-frame="_top" 才能跳出 frame 做完整頁面導覽
+    # ——沒有這個屬性的話，Turbo 會想在 "/" 首頁的回應裡找同一個 frame id，找不到就顯示
+    # "Content missing"（因為 home#index 沒有這個 frame，之前實測遇過這個問題）。
+    it "marks the entry-page breadcrumb link to break out of the turbo frame" do
+      expect(response.body).to match(%r{<a[^>]*data-turbo-frame="_top"[^>]*>入口頁</a>})
+    end
+
+    it "shows a breadcrumb with a clickable link back to the overview from the detail page" do
+      get "/project_history", params: { project: "AG 亞炬" }
+
+      expect(response.body).to include("專案歷程總覽")
+      expect(response.body).to match(%r{<a[^>]*>專案歷程總覽</a>})
+    end
+
     it "lists both projects joined with roster customer/pm" do
       expect(response.body).to include("AG 亞炬").and include("亞炬").and include("呂俐禎")
       expect(response.body).to include("Virtuous HRM").and include("AMAS").and include("楊欣翰")
@@ -98,6 +113,20 @@ RSpec.describe "ProjectHistory", type: :request do
 
       expect(response.body).to include('class="gantt-svg"')
       expect(response.body).not_to include("<table")
+    end
+
+    it "renders a month timeline axis (gridlines + rotated labels) so bars have a date reference" do
+      get "/project_history", params: { view: "gantt" }
+
+      expect(response.body).to include("gantt-month-gridline")
+      expect(response.body).to include("gantt-month-label")
+      expect(response.body).to match(/\d{4}\/\d{2}/) # 至少一個 YYYY/MM 標籤
+    end
+
+    it "renders a dashed today reference line" do
+      get "/project_history", params: { view: "gantt" }
+
+      expect(response.body).to include("gantt-today-line")
     end
   end
 

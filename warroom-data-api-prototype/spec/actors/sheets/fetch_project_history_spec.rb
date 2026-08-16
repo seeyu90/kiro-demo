@@ -98,20 +98,20 @@ RSpec.describe Sheets::FetchProjectHistory do
     end
   end
 
-  describe "#weekly_testing_counts" do
-    it "groups TestingBug issues by ISO week (Monday) and counts them" do
+  describe "#monthly_testing_counts" do
+    it "groups TestingBug issues by month (first day of month) and counts them" do
       issues = [
-        { type: "TestingBug", start_date: "2026-08-11" }, # Tuesday, week of 2026-08-10
-        { type: "TestingBug", start_date: "2026-08-13" }, # Thursday, same week
-        { type: "TestingBug", start_date: "2026-08-19" }, # next week
+        { type: "TestingBug", start_date: "2026-08-11" },
+        { type: "TestingBug", start_date: "2026-08-13" }, # same month
+        { type: "TestingBug", start_date: "2026-09-02" }, # next month
         { type: "Complaint", start_date: "2026-08-11" }
       ]
 
-      result = actor.send(:weekly_testing_counts, issues)
+      result = actor.send(:monthly_testing_counts, issues)
 
       expect(result).to eq([
-        { date: "2026-08-10", count: 2 },
-        { date: "2026-08-17", count: 1 }
+        { date: "2026-08-01", count: 2 },
+        { date: "2026-09-01", count: 1 }
       ])
     end
   end
@@ -182,7 +182,7 @@ RSpec.describe Sheets::FetchProjectHistory do
     it "matches burndown issues whose project name appears anywhere in the roster's burndown_names_raw text, regardless of delimiter" do
       roster_row = { project_name: "AG 亞炬", customer: "亞炬", burndown_names_raw: "亞炬 PMS\n亞炬 Wms" }
 
-      detail = actor.send(:build_detail, "亞炬 Platform", roster_row, burndown_issues, [])
+      detail = actor.send(:build_detail, "亞炬 Platform", roster_row, burndown_issues, [], nil)
 
       expect(detail[:work_hours_series]).not_to be_empty
       total_hours = detail[:actual_series].sum { |p| p[:hours] }
@@ -192,9 +192,30 @@ RSpec.describe Sheets::FetchProjectHistory do
     it "falls back to exact project match when the roster row has no burndown_names_raw" do
       roster_row = { project_name: "AG 亞炬", customer: "亞炬", burndown_names_raw: "" }
 
-      detail = actor.send(:build_detail, "亞炬 PMS", roster_row, burndown_issues, [])
+      detail = actor.send(:build_detail, "亞炬 PMS", roster_row, burndown_issues, [], nil)
 
       expect(detail[:actual_series].sum { |p| p[:hours] }).to eq(5.0) # 只精確比對到「亞炬 PMS」這一項
+    end
+
+    it "filters the three time-series charts by year but leaves complaint_summary unaffected" do
+      roster_row = { project_name: "AG 亞炬", customer: "亞炬", burndown_names_raw: "" }
+      issues = [
+        { project: "AG 亞炬", type: "Complaint", status: "新建立", start_date: "2025-01-01" }
+      ]
+
+      detail = actor.send(:build_detail, "亞炬 PMS", roster_row, burndown_issues, issues, "2026")
+
+      expect(detail[:selected_year]).to eq("2026")
+      expect(detail[:actual_series]).not_to be_empty # 2026-07-08 屬於 2026
+      expect(detail[:complaint_summary][:unresolved_count]).to eq(1) # 不受年度篩選影響
+    end
+
+    it "excludes points outside the selected year" do
+      roster_row = { project_name: "AG 亞炬", customer: "亞炬", burndown_names_raw: "" }
+
+      detail = actor.send(:build_detail, "亞炬 PMS", roster_row, burndown_issues, [], "2025")
+
+      expect(detail[:actual_series]).to be_empty # 資料都在 2026，2025 篩選後應該是空的
     end
   end
 
@@ -226,11 +247,41 @@ RSpec.describe Sheets::FetchProjectHistory do
       expect(result.overview_rows.first[:customer]).to be_nil
     end
 
-    it "still fails the whole request when a core data source (305/306/307) fails" do
+    it "still fails the whole request when 305 fails" do
       failed = double("Result", success?: false, failure_code: :access_denied, message: "no access")
       allow(Sheets::FetchProjectProgress).to receive(:result).and_return(failed)
 
       result = described_class.result
+
+      expect(result).not_to be_success
+      expect(result.failure_code).to eq(:access_denied)
+    end
+
+    # 甘特圖／橫向總覽只需要 305 + Roster，306/307 只有縱向歷程（帶 project 參數）才用得到；
+    # 一個跟總覽無關的資料源出問題，不該連總覽都看不到。
+    it "does not call 306/307 at all when no project is given (overview only needs 305)" do
+      described_class.result(project: nil)
+
+      expect(Sheets::FetchIssueDashboard).not_to have_received(:result)
+      expect(Sheets::FetchProjectBurndown).not_to have_received(:result)
+    end
+
+    it "overview still succeeds even when 306/307 would fail, as long as no project is selected" do
+      allow(Sheets::FetchIssueDashboard).to receive(:result)
+        .and_return(double("Result", success?: false, failure_code: :access_denied, message: "no access"))
+      allow(Sheets::FetchProjectBurndown).to receive(:result)
+        .and_return(double("Result", success?: false, failure_code: :access_denied, message: "no access"))
+
+      result = described_class.result(project: nil)
+
+      expect(result).to be_success
+    end
+
+    it "fails the detail request when 306 fails (306/307 are required once a project is selected)" do
+      allow(Sheets::FetchIssueDashboard).to receive(:result)
+        .and_return(double("Result", success?: false, failure_code: :access_denied, message: "no access"))
+
+      result = described_class.result(project: "AG 亞炬")
 
       expect(result).not_to be_success
       expect(result.failure_code).to eq(:access_denied)

@@ -3,7 +3,7 @@ class ProjectHistoryController < ApplicationController
   DEFAULT_VIEW = "list".freeze
 
   def index
-    result = Sheets::FetchProjectHistory.result(project: params[:project].presence)
+    result = Sheets::FetchProjectHistory.result(project: params[:project].presence, year: params[:year].presence)
     if result.success?
       build_success(result)
     else
@@ -47,6 +47,8 @@ class ProjectHistoryController < ApplicationController
 
   def build_detail(result)
     detail = result.detail
+    @available_years = detail[:available_years]
+    @selected_year = detail[:selected_year]
     @work_hours_series = detail[:work_hours_series]
     @ideal_series = detail[:ideal_series]
     @actual_series = detail[:actual_series]
@@ -66,6 +68,8 @@ class ProjectHistoryController < ApplicationController
     @selected_customer = nil
     @selected_pm = nil
     @rows = []
+    @available_years = []
+    @selected_year = nil
     @work_hours_series = []
     @ideal_series = []
     @actual_series = []

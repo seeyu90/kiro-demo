@@ -353,13 +353,11 @@
 
   // ── 測試問題趨勢（需求 7.1） ──────────────────────────────
 
-  // 以 ISO 週（週一為起始）分組計數，週別標籤取該週週一日期。
-  function weekStart(dateStr) {
-    var d = new Date(dateStr);
-    var day = d.getDay();
-    var diff = day === 0 ? -6 : 1 - day;
-    d.setDate(d.getDate() + diff);
-    return d.toISOString().slice(0, 10);
+  // 依月份分組計數，月別標籤取該月第一天日期。
+  function monthStart(dateStr) {
+    var parts = String(dateStr).split("-");
+    if (parts.length < 2) return null;
+    return parts[0] + "-" + parts[1] + "-01";
   }
 
   function renderTestingTrend(issues) {
@@ -375,15 +373,16 @@
     var counts = {};
     var order = [];
     testingIssues.forEach(function (issue) {
-      var week = weekStart(issue.start_date);
-      if (!(week in counts)) {
-        counts[week] = 0;
-        order.push(week);
+      var month = monthStart(issue.start_date);
+      if (month === null) return;
+      if (!(month in counts)) {
+        counts[month] = 0;
+        order.push(month);
       }
-      counts[week] += 1;
+      counts[month] += 1;
     });
     order.sort();
-    var series = order.map(function (week) { return { date: week, count: counts[week] }; });
+    var series = order.map(function (month) { return { date: month, count: counts[month] }; });
 
     var max = Math.max.apply(null, series.map(function (p) { return p.count; }).concat([1]));
     var plotWidth = TREND_WIDTH - TREND_PADDING_LEFT - TREND_PADDING_RIGHT;

@@ -94,12 +94,16 @@ body {
 }
 
 /* ── Header ── */
+/* 所有頁面的麵包屑都放在 header 外面（多數在 turbo frame 裡，才能隨篩選/切換專案動態更新），
+   header 因此只剩標題一行，留白縮減到跟麵包屑銜接得剛好（麵包屑本身的 margin 見
+   .breadcrumb／.breadcrumb--standalone）。全部 5 個頁面現在都是這個結構，故直接定為預設值，
+   不再另外用修飾類別區分（曾經有 .dashboard-header--tight，因為全部頁面都套用而收斂進來）。 */
 .dashboard-header {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  margin-bottom: 2rem;
-  padding-bottom: 1.5rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -459,6 +463,12 @@ turbo-frame[busy] {
   color: var(--color-text-faint);
 }
 
+/* 不像 306 頁的 section-note 緊接在標題列下方，這裡是接在篩選表單後面，套用同樣的負
+   margin 會把文字拉進表單裡疊在一起，改用一般正向間距。 */
+.section-note-standalone {
+  margin-top: 0.75rem;
+}
+
 /* ── Tabs（純 CSS，radio + label，無需 JS，Turbo Frame 局部更新後仍可正常運作） ── */
 .tab-radio {
   position: absolute;
@@ -682,10 +692,6 @@ turbo-frame[busy] {
 }
 
 /* ── 入口頁（HomeController） ── */
-.back-link-row {
-  margin-top: 0.5rem;
-}
-
 .back-link {
   color: var(--color-accent);
   text-decoration: none;
@@ -695,6 +701,24 @@ turbo-frame[busy] {
 .back-link:hover,
 .back-link:focus {
   text-decoration: underline;
+}
+
+/* 全部頁面的麵包屑都放在 header 外面（見 .dashboard-header 附註），沒有 header 的
+   padding-bottom/border 可以借，故自己補上跟下方內容的間距（曾經有 .breadcrumb--standalone，
+   因為全部頁面都套用而收斂進來）。 */
+.breadcrumb {
+  margin: 0 0 1.25rem;
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+.breadcrumb-sep {
+  margin: 0 0.4rem;
+  color: var(--color-text-faint);
+}
+
+.breadcrumb-current {
+  color: var(--color-text-muted);
 }
 
 .entry-grid {
@@ -798,4 +822,19 @@ turbo-frame[busy] {
 
 .gantt-task-open {
   fill: var(--overdue-text);
+}
+
+.gantt-month-gridline {
+  stroke: var(--color-border);
+  stroke-width: 1;
+}
+
+.gantt-month-label {
+  font-size: 10px;
+}
+
+.gantt-today-line {
+  stroke: var(--color-accent);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
 }

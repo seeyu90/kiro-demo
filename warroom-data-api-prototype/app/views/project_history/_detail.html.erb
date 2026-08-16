@@ -4,8 +4,14 @@
     <label for="project">專案：</label>
     <%= select_tag :project, options_for_select(@project_names.map { |p| [ p, p ] }, @selected_project) %>
   </div>
-  <%= submit_tag "切換專案", class: "apply-filters-btn" %>
+  <div class="control-group">
+    <label for="year">年度：</label>
+    <%= select_tag :year,
+                   options_for_select([ [ "全部年度", "" ] ] + @available_years.map { |y| [ y, y ] }, @selected_year) %>
+  </div>
+  <%= submit_tag "套用篩選", class: "apply-filters-btn" %>
 <% end %>
+<p class="section-note section-note-standalone">年度篩選只影響花費工時趨勢、每週進度達成率、測試問題趨勢；客訴議題狀態顯示的是目前狀態，不受年度篩選影響</p>
 
 <h2><%= @selected_project %></h2>
 

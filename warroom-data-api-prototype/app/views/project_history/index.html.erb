@@ -5,10 +5,24 @@
     <h1 class="dashboard-title">戰情室 <span>— 專案歷程</span></h1>
     <button type="button" id="theme-toggle" class="theme-toggle" aria-label="切換至淺色模式">🌙 深色</button>
   </div>
-  <p class="back-link-row"><%= link_to "← 返回入口頁", "/", class: "back-link" %></p>
+  <%# 麵包屑（含目前選中的專案名稱）需要隨切換專案/篩選動態更新，放進下方 turbo_frame_tag
+      裡面才能跟著更新（比照 305/306/307 既有慣例，見 CSS 的 .dashboard-header／.breadcrumb
+      附註）。 %>
 </header>
 
 <%= turbo_frame_tag "project-history-content" do %>
+  <p class="breadcrumb">
+    <%= link_to "入口頁", "/", class: "back-link", data: { turbo_frame: "_top" } %>
+    <span class="breadcrumb-sep">›</span>
+    <% if @selected_project.present? %>
+      <%= link_to "專案歷程總覽", { controller: "project_history", action: "index" }, class: "back-link" %>
+      <span class="breadcrumb-sep">›</span>
+      <span class="breadcrumb-current"><%= @selected_project %></span>
+    <% else %>
+      <span class="breadcrumb-current">專案歷程總覽</span>
+    <% end %>
+  </p>
+
   <% if @error.present? %>
     <div class="error-message">
       <strong>錯誤：</strong><%= @error %>

@@ -7,6 +7,8 @@ module ProjectHistoryHelper
   GANTT_PADDING_LEFT = 140
   GANTT_PADDING_RIGHT = 16
   GANTT_PADDING_TOP = 16
+  # 底部留白給月份時間軸標籤（旋轉呈現，比照 trend chart 既有的 -45 度做法）。
+  GANTT_PADDING_BOTTOM = 40
 
   def gantt_chart_domain(rows)
     dates = rows.flat_map { |r| r[:tasks] }
@@ -17,11 +19,33 @@ module ProjectHistoryHelper
   end
 
   def gantt_chart_height(rows)
-    GANTT_PADDING_TOP + rows.length * GANTT_ROW_HEIGHT + 30
+    GANTT_PADDING_TOP + rows.length * GANTT_ROW_HEIGHT + GANTT_PADDING_BOTTOM
   end
 
   def gantt_chart_row_y(index)
     GANTT_PADDING_TOP + index * GANTT_ROW_HEIGHT
+  end
+
+  def gantt_chart_rows_bottom(rows)
+    GANTT_PADDING_TOP + rows.length * GANTT_ROW_HEIGHT
+  end
+
+  # 月份時間軸格線＋標籤：讓甘特圖有座標可以參考現在看的是哪個月份，而不是一排沒有刻度的
+  # 浮動色塊。以月為單位而非週（52 週的標籤會太密擠成一團看不清楚），格線本身仍細到能看出
+  # 每個色塊落在哪個時間點附近。
+  def gantt_chart_month_ticks(min_date, max_date)
+    ticks = []
+    cursor = min_date.beginning_of_month
+    while cursor <= max_date
+      ticks << { x: gantt_chart_x(cursor.iso8601, min_date, max_date).round(2), label: cursor.strftime("%Y/%m") }
+      cursor = cursor.next_month
+    end
+    ticks
+  end
+
+  # 「今天」參考線：一眼看出目前進度落在時間軸的哪個位置。
+  def gantt_chart_today_x(min_date, max_date)
+    gantt_chart_x(Date.current.iso8601, min_date, max_date)&.round(2)
   end
 
   # IssuesHelper 的 trend_chart_* 方法只依賴 record 的 :date／:total 兩個鍵；花費工時／測試問題
