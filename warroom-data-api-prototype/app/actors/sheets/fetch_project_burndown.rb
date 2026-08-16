@@ -193,11 +193,13 @@ module Sheets
         end
         week_window = window_indices.map { |i| sorted_week_dates[i] }
 
-        # 依人員分組一次，同時算出議題整體週人時（各人加總）與每人自己的週人時，
-        # 不用各自完整掃過 group 兩次。
+        # 議題整體週人時對「全部列」加總（不能只對有填人員的列加總——人員欄空白但週人時有填的
+        # 列仍要算進議題整體消耗，只是不會出現在下面的 per_assignee 堆疊圖裡）。
+        weekly_hours = window_indices.map { |i| group.sum { |r| r[:weekly_hours][i] } }
+
+        # 依人員分組（略過人員欄空白的列，堆疊圖無法顯示沒有名字的人），算出每人自己的週人時。
         by_assignee = group.reject { |r| r[:assignee].to_s.strip.empty? }.group_by { |r| r[:assignee] }
         per_assignee_weekly = by_assignee.transform_values { |rows| window_indices.map { |i| rows.sum { |r| r[:weekly_hours][i] } } }
-        weekly_hours = window_indices.each_index.map { |idx| per_assignee_weekly.values.sum { |w| w[idx] } }
 
         {
           issue_id: issue_id,

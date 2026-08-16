@@ -341,6 +341,28 @@ RSpec.describe Sheets::FetchProjectBurndown do
         ])
       end
 
+      it "still counts a row's weekly hours toward the issue's actual_series even when that row's assignee is blank" do
+        # 迴歸測試：議題整體 weekly_hours 一度被改成從「依人員分組後的週人時」加總推導，
+        # 導致人員欄空白（但週人時有填）的列被排除在議題整體消耗之外，estimated_hours 卻仍把
+        # 該列算進去，造成剩餘人時被高估且沒有任何錯誤或警告。
+        rows = [
+          [ "", "P", "T", "黃紹鈞", "9003", "", "", "執行中", "10", "3", "2" ],
+          [ "", "P", "T", "", "9003", "", "", "執行中", "5", "1", "1" ]
+        ]
+
+        result = actor.send(:parse_issues, rows, week_dates)
+        issue = result.first
+
+        expect(issue[:estimated_hours]).to eq(15.0) # 10 + 5
+        # weekly_hours: 08/03: 2(黃紹鈞) + 1(無名) = 3；08/10: 3(黃紹鈞) + 1(無名) = 4
+        expect(issue[:actual_series]).to eq([
+          { date: "2026-08-03", hours: 12.0 }, # 15 - 3
+          { date: "2026-08-10", hours: 8.0 }   # 15 - (3+4)
+        ])
+        # per_assignee 仍然略過人員欄空白的列（堆疊圖無法顯示沒有名字的人）。
+        expect(issue[:per_assignee].map { |pa| pa[:assignee] }).to eq([ "黃紹鈞" ])
+      end
+
       it "merges per_assignee entries for the same person instead of listing one entry per raw row (e.g. a correction row)" do
         # 迴歸測試：修正前 per_assignee_series 沒有依人員名稱合併，同一人拆成兩列時堆疊圖會
         # 畫出兩塊同色色塊。
