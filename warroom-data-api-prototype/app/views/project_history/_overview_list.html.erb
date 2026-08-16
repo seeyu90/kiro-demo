@@ -1,0 +1,28 @@
+<table class="project-tasks">
+  <thead>
+    <tr>
+      <th scope="col">專案</th>
+      <th scope="col">客戶</th>
+      <th scope="col">PM</th>
+      <th scope="col">狀態</th>
+      <th scope="col">預計完成日期</th>
+      <th scope="col">實際完成日期</th>
+    </tr>
+  </thead>
+  <tbody>
+    <% rows.each do |row| %>
+      <tr>
+        <td data-label="專案">
+          <%= link_to row[:project_name],
+                      { controller: "project_history", action: "index", project: row[:project_name] },
+                      class: "project-history-link" %>
+        </td>
+        <td data-label="客戶"><%= row[:customer] || "—" %></td>
+        <td data-label="PM"><%= row[:pm] || "—" %></td>
+        <td data-label="狀態"><%= row[:status] || "—" %></td>
+        <td data-label="預計完成日期"><%= row[:planned_completion_date] || "—" %></td>
+        <td data-label="實際完成日期"><%= row[:actual_completion_date] || "進行中" %></td>
+      </tr>
+    <% end %>
+  </tbody>
+</table>

@@ -1,0 +1,21 @@
+<% content_for :title, "戰情室 — 專案歷程" %>
+
+<header class="dashboard-header">
+  <div class="header-top">
+    <h1 class="dashboard-title">戰情室 <span>— 專案歷程</span></h1>
+    <button type="button" id="theme-toggle" class="theme-toggle" aria-label="切換至淺色模式">🌙 深色</button>
+  </div>
+  <p class="back-link-row"><%= link_to "← 返回入口頁", "/", class: "back-link" %></p>
+</header>
+
+<%= turbo_frame_tag "project-history-content" do %>
+  <% if @error.present? %>
+    <div class="error-message">
+      <strong>錯誤：</strong><%= @error %>
+    </div>
+  <% elsif @selected_project.present? %>
+    <%= render partial: "detail" %>
+  <% else %>
+    <%= render partial: "overview" %>
+  <% end %>
+<% end %>

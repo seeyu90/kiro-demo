@@ -1,0 +1,18 @@
+<% min_date, max_date = gantt_chart_domain(rows) %>
+<svg viewBox="0 0 <%= ProjectHistoryHelper::GANTT_WIDTH %> <%= gantt_chart_height(rows) %>" class="gantt-svg" role="img" aria-label="專案歷程甘特圖">
+  <% rows.each_with_index do |row, index| %>
+    <% row_y = gantt_chart_row_y(index) %>
+    <text x="<%= ProjectHistoryHelper::GANTT_PADDING_LEFT - 8 %>" y="<%= row_y + ProjectHistoryHelper::GANTT_ROW_HEIGHT / 2 + 4 %>" text-anchor="end" class="gantt-row-label"><%= row[:project_name] %></text>
+    <line x1="<%= ProjectHistoryHelper::GANTT_PADDING_LEFT %>" x2="<%= ProjectHistoryHelper::GANTT_WIDTH - ProjectHistoryHelper::GANTT_PADDING_RIGHT %>"
+          y1="<%= row_y + ProjectHistoryHelper::GANTT_ROW_HEIGHT / 2 %>" y2="<%= row_y + ProjectHistoryHelper::GANTT_ROW_HEIGHT / 2 %>" class="gantt-row-baseline"></line>
+
+    <% row[:tasks].each do |task| %>
+      <% rect = gantt_chart_task_rect(task, min_date, max_date) %>
+      <% next if rect.nil? %>
+      <rect x="<%= rect[:x] %>" y="<%= row_y + 8 %>" width="<%= rect[:width] %>" height="<%= ProjectHistoryHelper::GANTT_ROW_HEIGHT - 16 %>" rx="4"
+            class="<%= rect[:done] ? 'gantt-task-done' : 'gantt-task-open' %>">
+        <title><%= rect[:title] %></title>
+      </rect>
+    <% end %>
+  <% end %>
+</svg>

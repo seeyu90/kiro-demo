@@ -1,0 +1,27 @@
+<%# 通用單線趨勢圖，重用 IssuesHelper 的 trend_chart_* 座標計算（僅依賴 record 的 :date／:total
+    兩個鍵），供花費工時趨勢與測試問題趨勢共用；locals: records（[{date:, total:}]）、
+    empty_text、aria_label、tooltip_label。 %>
+<% if records.empty? %>
+  <p class="empty-state"><%= empty_text %></p>
+<% else %>
+  <% points = trend_chart_points(records) %>
+  <svg viewBox="0 0 <%= IssuesHelper::TREND_WIDTH %> <%= IssuesHelper::TREND_HEIGHT %>" class="trend-svg" role="img" aria-label="<%= aria_label %>">
+    <% trend_chart_y_ticks(records).each do |tick| %>
+      <line x1="<%= IssuesHelper::TREND_PADDING_LEFT %>" x2="<%= IssuesHelper::TREND_WIDTH - IssuesHelper::TREND_PADDING_RIGHT %>"
+            y1="<%= tick[:y] %>" y2="<%= tick[:y] %>" class="trend-gridline"></line>
+      <text x="<%= IssuesHelper::TREND_PADDING_LEFT - 8 %>" y="<%= tick[:y] + 3 %>" text-anchor="end" class="trend-axis-label trend-y-label"><%= tick[:value] %></text>
+    <% end %>
+
+    <% trend_chart_x_labels(records).each do |label| %>
+      <% label_y = IssuesHelper::TREND_HEIGHT - IssuesHelper::TREND_PADDING_BOTTOM + 18 %>
+      <text x="<%= label[:x] %>" y="<%= label_y %>" text-anchor="end" transform="rotate(-45 <%= label[:x] %> <%= label_y %>)" class="trend-axis-label trend-x-label"><%= label[:text] %></text>
+    <% end %>
+
+    <polyline points="<%= trend_chart_polyline(points) %>" class="trend-line"></polyline>
+    <% points.each do |point| %>
+      <circle cx="<%= point[:x] %>" cy="<%= point[:y] %>" r="4" class="trend-point" tabindex="0">
+        <title><%= point[:date] %> ｜ <%= tooltip_label %> <%= point[:total] %></title>
+      </circle>
+    <% end %>
+  </svg>
+<% end %>
