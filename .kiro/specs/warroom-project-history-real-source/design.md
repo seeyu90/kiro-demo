@@ -3,7 +3,8 @@
 ## 概述
 
 比照 305/306/307 的四層架構（Controller → Actor → Client → Blueprint），新增第四條平行資料流讀取
-`300_員工專案`「專案清單」，並新增一個彙總型 Actor（`Sheets::FetchProjectHistory`）整合 305/306/307
+`300_員工專案`「專案工程師對照表」分頁，並新增一個彙總型 Actor（`Sheets::FetchProjectHistory`）整合
+305/306/307
 既有 Actor 的輸出，供單一 `ProjectHistoryController#index` 依 `project` 參數呈現橫向總覽或縱向歷程。
 不修改 305/306/307 任何既有檔案；燃盡圖直接重用既有 `_burndown_chart.html.erb` partial 與
 `BurndownHelper`，其餘圖表（甘特圖、花費工時趨勢、測試問題趨勢）新增獨立的 partial／Helper。
@@ -15,48 +16,63 @@
 ### ProjectRosterSheetsClient（`app/clients/project_roster_sheets_client.rb`）
 
 - `SPREADSHEET_ID = "101fF0GlW2iwjC6TNQnNgKjUrxJg-3Ia5nCYox6haTNM"`
-- `SHEET_NAME = ENV.fetch("PROJECT_ROSTER_SHEET_NAME", "專案清單")`：分頁名稱佔位，比照 307
-  `BurndownSheetsClient::SHEET_NAME` 的既有取捨，待實際串接時人工確認分頁名稱是否相符。
+- `SHEET_NAME = ENV.fetch("PROJECT_ROSTER_SHEET_NAME", "專案工程師對照表")`：已用真實 Service
+  Account 憑證對真實試算表確認過的分頁名稱（規劃階段原本猜測是「專案清單」，實測後修正）。
 - 固定讀取 `"#{SHEET_NAME}!A1:J200"`（欄數固定，200 列遠大於目前已知的專案數量，不需要 307
   client 那種動態欄寬探測）。
 - 沿用 `GoogleSheetsCredentials` module 與既有的 UTF-8 重標記慣例，唯讀 scope。
 
 ### Sheets::FetchProjectRoster（`app/actors/sheets/fetch_project_roster.rb`）
 
-`output :roster`（`Array<Hash>`，欄位 `project_name, abbreviation, status, customer, pm`）。
+`output :roster`（`Array<Hash>`，欄位 `project_name, abbreviation, status, customer, pm,
+burndown_names_raw`）。
 
-列解析：A=專案、B=專案縮寫、C=狀態、H=客戶、I=PM（D/E/F/G 為比例／生效月份／失效月份／負責RD，
-與本頁面呈現無關，不解析；J 欄意義不明，不解析，見 requirements.md 不納入範圍）。`專案`（A 欄）為
-空白的列（試算表以空白列分隔不同客戶群組）整列跳過。錯誤處理比照既有三個 Actor 的三段式
-`rescue Google::Apis::ClientError` + `rescue => e`。
+列解析：A=專案、B=專案縮寫、C=狀態、H=客戶、I=PM、J=307對應專案（D/E/F/G 為比例／生效月份／失效
+月份／負責RD，與本頁面呈現無關，不解析）。J 欄是真實串接後人工新增的對照欄（見下方
+`Sheets::FetchProjectHistory` 說明），原樣保留整段文字（不拆解成清單，見 requirements.md 需求
+1.2a）。`專案`（A 欄）為空白的列（試算表以空白列分隔不同客戶群組）整列跳過。錯誤處理比照既有三個
+Actor 的三段式 `rescue Google::Apis::ClientError` + `rescue => e`。
 
 ### Sheets::FetchProjectHistory（`app/actors/sheets/fetch_project_history.rb`）
 
 ```ruby
 input :project, default: nil
-output :overview_rows       # project 為 nil 時使用：Array<Hash>
-output :detail               # project 有值時使用：Hash 或 nil
+output :overview_rows       # 一律計算：Array<Hash>（詳情頁的專案下拉選單也需要）
+output :detail               # project 有值時額外計算：Hash 或 nil
+output :roster_unavailable   # Roster 讀取失敗時 true，見下方「錯誤處理」
 output :failure_code
 output :message
 ```
 
-`call` 依序呼叫四個既有／新增 Actor 的 `.result`：`Sheets::FetchProjectRoster.result`、
-`Sheets::FetchProjectProgress.result(scope: "all", incomplete_only: false)`（取得 `grouped_data`——
-這是該 Actor **未受**任何篩選條件影響的全量任務資料，`scope`／`incomplete_only` 這兩個 input 只影響
-`summary`／`display_data` 兩個衍生輸出，不影響 `grouped_data` 本身，故這裡的 input 值其實不影響
-本 Actor 的結果，明確傳入僅為避免依賴該 Actor 的預設值語意）、`Sheets::FetchIssueDashboard.result`
-（取全量 `issues`，不使用該 Actor 預設按月份／狀態篩選過的 `filtered_issues`）、
-`Sheets::FetchProjectBurndown.result(project: project, status: "all")`（`project` 為 nil 時回傳全部
-議題；`status: "all"` 取得含已完成的完整歷程，而非該 Actor 預設的 `"in_progress"`）。四者任一失敗即
-整體失敗（`fail!`），不做部分成功回傳，錯誤碼直接沿用先失敗的那個 Actor 的 `failure_code`。
+`call` 依序呼叫 Roster 與既有 305/306/307 三個 Actor 的 `.result`：
+- `Sheets::FetchProjectRoster.result`：失敗時**不**整體失敗，改為 `roster = []`、
+  `self.roster_unavailable = true`（見下方「錯誤處理」，真實串接後才發現的設計變更）。
+- `Sheets::FetchProjectProgress.result(scope: "all", incomplete_only: false)`（取得
+  `grouped_data`——這是該 Actor **未受**任何篩選條件影響的全量任務資料，`scope`／`incomplete_only`
+  這兩個 input 只影響 `summary`／`display_data` 兩個衍生輸出，不影響 `grouped_data` 本身，故這裡的
+  input 值其實不影響本 Actor 的結果，明確傳入僅為避免依賴該 Actor 的預設值語意）。
+- `Sheets::FetchIssueDashboard.result`（取全量 `issues`，不使用該 Actor 預設按月份／狀態篩選過的
+  `filtered_issues`）。
+- `Sheets::FetchProjectBurndown.result(status: "all")`——**不帶 `project` 篩選**：307 的專案命名與
+  305/306/Roster 是獨立體系，該 Actor 自己的 `project` 篩選是精確字串比對，用 305 傳入的字串篩選
+  307 資料只會篩出空結果，故一律抓全量，篩選邏輯自己在 `build_detail` 依 Roster 的
+  `burndown_names_raw` 判斷（見下方）。
 
-#### 橫向總覽（`project` 為 nil）
+以上三者（305/306/307）任一失敗即整體失敗（`fail!`），不做部分成功回傳，錯誤碼直接沿用先失敗的
+那個 Actor 的 `failure_code`。
+
+#### 橫向總覽（一律計算）
 
 ```ruby
+def resolve_roster_row(roster, project_name)
+  roster.find { |r| r[:project_name] == project_name } ||
+    roster.find { |r| r[:abbreviation].present? && r[:abbreviation] == project_name } ||
+    {}
+end
+
 def build_overview_rows(roster, progress_grouped)
-  roster_by_name = roster.index_by { |r| r[:project_name] }
   progress_grouped.map do |project_name, tasks|
-    row = roster_by_name[project_name] || {}
+    row = resolve_roster_row(roster, project_name)
     planned = tasks.filter_map { |t| t[:planned_completion_date] }.max
     ongoing = tasks.any? { |t| t[:actual_completion_date].blank? }
     actual = ongoing ? nil : tasks.filter_map { |t| t[:actual_completion_date] }.max
@@ -69,30 +85,50 @@ end
 ```
 
 以 305 的專案名稱為主（`progress_grouped.keys`）而非 Roster 的專案清單，因為橫向總覽的資料主體是
-「有進度可看的專案」；Roster 找不到對應列時 `customer`/`pm`/`status` 為 `nil`，View 顯示 `—`（需求
-2.2）。篩選（狀態／客戶／PM）與甘特圖資料由 Controller／Helper 對 `overview_rows` 直接處理，不在
-Actor 內做（Actor 只負責彙總、不做請求層的篩選判斷，篩選邏輯留在 Controller，比照 `BurndownController`
-的 `@selected_project` 篩選寫在 Controller 而非 Actor 的既有取捨——`FetchProjectBurndown` 是例外，
-因為它的篩選需要在 Sheets 資料還沒轉成 View-ready 格式前先套用；本 Actor 的篩選只是簡單的欄位比對，
-放 Controller 更單純）。
+「有進度可看的專案」。`resolve_roster_row` 依序嘗試 Roster 的「專案」全名、「專案縮寫」兩欄——**真實
+串接後才發現** 305 的專案名稱有時用其中一欄、有時用另一欄，沒有固定規則（規劃階段原本假設「字串
+完全比對」就夠，實測 8 個專案只對到 2 個，加上兩欄查找後才 9/9 全部對上）；兩欄都找不到時
+`customer`/`pm`/`status` 為 `nil`，View 顯示 `—`（需求 2.2）。篩選（狀態／客戶／PM）與甘特圖資料由
+Controller／Helper 對 `overview_rows` 直接處理，不在 Actor 內做。
 
 #### 縱向歷程（`project` 有值）
 
 ```ruby
-def build_detail(project, burndown_issues, all_issues)
-  project_issues = all_issues.select { |i| i[:project] == project }
+def build_detail(project, roster_row, burndown_issues, all_issues)
+  canonical_name = roster_row[:project_name].presence || project
+  project_issues = all_issues.select { |i| i[:project] == canonical_name }
+
+  burndown_names_raw = roster_row[:burndown_names_raw].presence
+  matched_burndown_issues =
+    if burndown_names_raw
+      burndown_issues.select { |i| burndown_names_raw.include?(i[:project].to_s) }
+    else
+      burndown_issues.select { |i| i[:project] == project }
+    end
+
   {
-    work_hours_series: aggregate_work_hours(burndown_issues),
-    ideal_series: aggregate_ideal_series(burndown_issues),
-    actual_series: aggregate_actual_series(burndown_issues),
+    work_hours_series: aggregate_work_hours(matched_burndown_issues),
+    ideal_series: aggregate_ideal_series(matched_burndown_issues),
+    actual_series: aggregate_actual_series(matched_burndown_issues),
     testing_trend: weekly_testing_counts(project_issues),
     complaint_summary: complaint_status(project_issues)
   }
 end
 ```
 
-（`burndown_issues` 已由呼叫 `Sheets::FetchProjectBurndown.result(project: project, ...)` 篩選為
-該專案的議題，不需再篩一次。）
+**真實串接後發現的三套獨立命名系統**（規劃階段的簡化假設與實際狀況不符）：
+- **306** 固定用 Roster「專案」全名（如 `"AG 亞炬"`），故用 `resolve_roster_row` 解析出的
+  `canonical_name` 比對，不是直接拿使用者選的 305 縮寫式名稱去比對（兩者對不上）。
+- **307** 的顆粒度比 305/Roster 細，一個 305/Roster 專案常對應多個 307 項目（例如「AG 亞炬」對應
+  307 的「亞炬 PMS」「亞炬 Else」「亞炬 Flow」「亞炬 Wms」四項），且沒有任何自動規則可推得對應
+  關係——連「客戶名稱前綴」都試過，仍不可靠（例如客戶「立翔機電」對應的 307/305 前綴其實是
+  「立翔」，不是「立翔機電」；「AMAS」客戶底下同時有 4 個專案，前綴規則會抓錯）。最終改為讀取
+  `300_員工專案` 人工新增的「307對應專案」欄（`burndown_names_raw`）：307 議題的 `project` 名稱
+  只要整串是這欄文字的子字串就算屬於本專案。子字串比對而非拆解成清單（`split(",")` 之類）的原因：
+  該欄實務上有時用逗號、有時用空白、甚至用換行分隔，且部分 307 名稱本身含空白（如「亞炬 PMS」），
+  沒有可靠的分隔符可以拆；子字串比對不需要拆解，任何分隔符都能正確判斷。
+  Roster 查不到該專案、或 `burndown_names_raw` 為空時，退回直接以 305 傳入的 `project` 字串精確
+  比對（原本的行為）。
 
 **花費工時彙總**（需求 4.2）：
 
@@ -205,7 +241,7 @@ overview.js` 的 `renderGanttChart` 一致，各自獨立實作。
 
 | 輸出 | 欄位 |
 |---|---|
-| `Sheets::FetchProjectRoster#roster` | `project_name, abbreviation, status, customer, pm` |
+| `Sheets::FetchProjectRoster#roster` | `project_name, abbreviation, status, customer, pm, burndown_names_raw` |
 | `Sheets::FetchProjectHistory#overview_rows` | `project_name, customer, pm, status, planned_completion_date, actual_completion_date, tasks` |
 | `Sheets::FetchProjectHistory#detail` | `work_hours_series, ideal_series, actual_series, testing_trend, complaint_summary`（皆為 `Array<Hash>` 或彙總 Hash，見上方「元件與介面」） |
 
@@ -213,9 +249,14 @@ overview.js` 的 `renderGanttChart` 一致，各自獨立實作。
 
 ## 錯誤處理
 
-- 305/306/307/Roster 四個子 Actor 任一失敗，`Sheets::FetchProjectHistory` 立即 `fail!`，不做部分
-  成功回傳（同 306 `FetchIssueDashboard` 的既有慣例）。
-- Roster 找不到對應專案：不算錯誤，客戶/PM/狀態顯示 `—`（需求 2.2）。
+- 305/306/307 三個子 Actor 任一失敗，`Sheets::FetchProjectHistory` 立即 `fail!`，不做部分成功回傳
+  （同 306 `FetchIssueDashboard` 的既有慣例）。
+- **Roster 失敗時降級顯示，不算整頁錯誤**（真實串接後才改的設計，見 requirements.md 需求 6.2 的
+  設計變更紀錄）：`roster = []`、`roster_unavailable = true`，`overview_rows` 正常依 305 資料計算，
+  只是每個專案的 `customer`/`pm`/`status` 都是 `nil`；Controller 把 `roster_unavailable` 傳給 View，
+  可選擇顯示提示文字告知客戶／PM 資料目前無法讀取（非必要，本 spec 未強制要求呈現此提示）。
+- Roster 查得到但找不到對應專案：跟 Roster 整體失敗呈現效果相同，都是客戶/PM/狀態顯示 `—`（需求
+  2.2），對畫面而言是同一種狀態。
 - 花費工時／燃盡彙總、測試趨勢、客訴統計於資料為空時皆顯示對應提示文字，不留白、不拋例外。
 
 ---
@@ -224,11 +265,23 @@ overview.js` 的 `renderGanttChart` 一致，各自獨立實作。
 
 - `spec/clients/project_roster_sheets_client_spec.rb`：stub `Google::Apis::SheetsV4::SheetsService`，
   驗證讀取範圍字串正確、UTF-8 重標記正確。
-- `spec/actors/sheets/fetch_project_roster_spec.rb`：欄位對應正確、空白「專案」列跳過、三種
-  failure_code。
-- `spec/actors/sheets/fetch_project_history_spec.rb`：stub 四個子 Actor 的 `.result`，直接測試
-  `.send` 私有方法 `aggregate_ideal_series`／`aggregate_work_hours`／`complaint_status` 等（比照
-  `fetch_project_burndown_spec.rb` 既有慣例）；**必須**包含「兩個議題起訖錨點日期不同時，理想線彙總
-  無凹陷」的迴歸測試（對照 `warroom-project-history-static-prototype` 發現過的 bug）。
+- `spec/actors/sheets/fetch_project_roster_spec.rb`：欄位對應正確（含 `burndown_names_raw` 原樣保留
+  不拆解）、空白「專案」列跳過、三種 failure_code。
+- `spec/actors/sheets/fetch_project_history_spec.rb`：直接測試 `.send` 私有方法
+  `aggregate_ideal_series`／`aggregate_work_hours`／`complaint_status`／`build_overview_rows`／
+  `build_detail` 等（比照 `fetch_project_burndown_spec.rb` 既有慣例）；**必須**包含「兩個議題起訖
+  錨點日期不同時，理想線彙總無凹陷」的迴歸測試（對照 `warroom-project-history-static-prototype`
+  發現過的 bug），以及「307 燃盡議題依 `burndown_names_raw` 子字串比對、不管分隔符為何都正確判斷」
+  的測試；`#call` 需涵蓋「Roster 失敗時降級顯示（`roster_unavailable: true` 但整體仍成功）」與
+  「305/306/307 任一失敗時整體失敗」兩種情境。
 - `spec/requests/project_history_spec.rb`：stub 四個 Sheets Client 的 `.fetch_*`，驗證總覽篩選、
-  甘特圖切換、縱向歷程各區塊渲染、任一子 Actor 失敗時的錯誤頁面。
+  甘特圖切換、縱向歷程各區塊渲染、305/306/307 任一失敗時的錯誤頁面、Roster 單獨失敗時的降級顯示。
+
+## 已用真實資料驗證（非僅 RSpec stub）
+
+本 sandbox 取得真實 Google Service Account 憑證後，曾直接對真實試算表執行過
+`Sheets::FetchProjectHistory.result` 與各子 Actor，確認：305（558 筆任務）、306（412 筆議題）、307
+（88 筆燃盡議題）、Roster（29 筆專案）皆可正常讀取；9 個目前在 305 有進度資料的專案，客戶/PM 皆
+9/9 對應成功，縱向歷程四個區塊（花費工時／燃盡圖／測試趨勢／客訴狀態）皆有非空資料。這是本 spec
+規劃階段完全沒有的驗證管道（規劃時 sandbox 尚無真實憑證），也是發現「三套獨立命名系統」「Roster
+共用權限獨立於 305/306/307」等問題的方式。

@@ -148,6 +148,54 @@ RSpec.describe Sheets::FetchProjectHistory do
       expect(unknown[:pm]).to be_nil
       expect(unknown[:actual_completion_date]).to eq("2026-07-02")
     end
+
+    # 實測發現真實資料中 305 有時用 Roster 的「專案」全名、有時用「專案縮寫」，兩種都要能對上
+    # （見 fetch_project_history.rb 的附註）。
+    it "also joins when 305 uses the roster's abbreviation column instead of its full project name" do
+      roster_with_abbreviation = [
+        { project_name: "AG 亞炬", abbreviation: "亞炬 Platform", customer: "亞炬", pm: "呂俐禎", status: "維護" }
+      ]
+      grouped = { "亞炬 Platform" => [ { planned_completion_date: "2026-07-01", actual_completion_date: "2026-07-02" } ] }
+
+      rows = actor.send(:build_overview_rows, roster_with_abbreviation, grouped)
+
+      expect(rows.first[:customer]).to eq("亞炬")
+      expect(rows.first[:pm]).to eq("呂俐禎")
+    end
+  end
+
+  describe "#build_detail" do
+    let(:burndown_issues) do
+      [
+        { project: "亞炬 PMS", estimated_hours: 10, start_date: "2026-07-08", due_date: "2026-08-01",
+          actual_series: [ { date: "2026-07-08", hours: 5 } ] },
+        { project: "亞炬 Wms", estimated_hours: 8, start_date: "2026-07-08", due_date: "2026-08-01",
+          actual_series: [ { date: "2026-07-08", hours: 4 } ] },
+        { project: "AMAS Cloud", estimated_hours: 20, start_date: "2026-07-08", due_date: "2026-08-01",
+          actual_series: [ { date: "2026-07-08", hours: 15 } ] }
+      ]
+    end
+
+    # 307 的一個專案在人工維護的 Roster「307對應專案」欄裡，實務資料證實有時用空白分隔、有時
+    # 用逗號、甚至換行分隔，且每個 307 名稱本身也含空白（如「亞炬 PMS」）無法用分隔符可靠拆開，
+    # 故比對邏輯改用「307 真實名稱是否為這欄文字的子字串」，不管分隔符是什麼都能正確判斷。
+    it "matches burndown issues whose project name appears anywhere in the roster's burndown_names_raw text, regardless of delimiter" do
+      roster_row = { project_name: "AG 亞炬", customer: "亞炬", burndown_names_raw: "亞炬 PMS\n亞炬 Wms" }
+
+      detail = actor.send(:build_detail, "亞炬 Platform", roster_row, burndown_issues, [])
+
+      expect(detail[:work_hours_series]).not_to be_empty
+      total_hours = detail[:actual_series].sum { |p| p[:hours] }
+      expect(total_hours).to eq(9.0) # 只有亞炬 PMS(5) + 亞炬 Wms(4)，AMAS Cloud 不該被算進來
+    end
+
+    it "falls back to exact project match when the roster row has no burndown_names_raw" do
+      roster_row = { project_name: "AG 亞炬", customer: "亞炬", burndown_names_raw: "" }
+
+      detail = actor.send(:build_detail, "亞炬 PMS", roster_row, burndown_issues, [])
+
+      expect(detail[:actual_series].sum { |p| p[:hours] }).to eq(5.0) # 只精確比對到「亞炬 PMS」這一項
+    end
   end
 
   describe "#call" do
@@ -163,9 +211,24 @@ RSpec.describe Sheets::FetchProjectHistory do
       allow(Sheets::FetchProjectBurndown).to receive(:result).and_return(burndown_result)
     end
 
-    it "fails the whole request when the roster actor fails, without calling the other actors' data" do
+    it "degrades gracefully when only the roster actor fails: page still succeeds, customer/pm blank" do
       failed = double("Result", success?: false, failure_code: :access_denied, message: "no access")
       allow(Sheets::FetchProjectRoster).to receive(:result).and_return(failed)
+      allow(Sheets::FetchProjectProgress).to receive(:result)
+        .and_return(double("Result", success?: true, grouped_data: { "AG 亞炬" => [
+          { planned_completion_date: "2026-07-01", actual_completion_date: "2026-07-02" }
+        ] }))
+
+      result = described_class.result
+
+      expect(result).to be_success
+      expect(result.roster_unavailable).to be true
+      expect(result.overview_rows.first[:customer]).to be_nil
+    end
+
+    it "still fails the whole request when a core data source (305/306/307) fails" do
+      failed = double("Result", success?: false, failure_code: :access_denied, message: "no access")
+      allow(Sheets::FetchProjectProgress).to receive(:result).and_return(failed)
 
       result = described_class.result
 

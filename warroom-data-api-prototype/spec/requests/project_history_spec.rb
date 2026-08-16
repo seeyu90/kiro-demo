@@ -128,11 +128,11 @@ RSpec.describe "ProjectHistory", type: :request do
     end
   end
 
-  describe "GET /project_history when any underlying actor fails" do
+  describe "GET /project_history when a core data source (305) fails" do
     before do
       error = Google::Apis::ClientError.new("Forbidden")
       allow(error).to receive(:status_code).and_return(403)
-      allow(ProjectRosterSheetsClient).to receive(:fetch_rows).and_raise(error)
+      allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_raise(error)
       get "/project_history"
     end
 
@@ -146,6 +146,28 @@ RSpec.describe "ProjectHistory", type: :request do
       frame = response.body[%r{<turbo-frame id="project-history-content">.*?</turbo-frame>}m]
       expect(frame).not_to include("apply-filters-btn")
       expect(frame).not_to include("<form")
+    end
+  end
+
+  describe "GET /project_history when only the roster (300_員工專案) source fails" do
+    before do
+      error = Google::Apis::ClientError.new("Forbidden")
+      allow(error).to receive(:status_code).and_return(403)
+      allow(ProjectRosterSheetsClient).to receive(:fetch_rows).and_raise(error)
+      get "/project_history"
+    end
+
+    # Roster 只是客戶/PM 的補充資料，不是本頁面的核心資料（305/306/307 才是），失敗時不應該
+    # 擋住整頁——這是實測發現 300_員工專案跟 305/306/307 是不同試算表、不同擁有者、共用權限
+    # 各自獨立設定後才改的設計（見 fetch_project_history.rb#call 的附註）。
+    it "still renders the overview successfully (degrades gracefully) instead of showing an error page" do
+      expect(response).to have_http_status(200)
+      expect(response.body).not_to include("錯誤：")
+      expect(response.body).to include("AG 亞炬").or include("Virtuous HRM")
+    end
+
+    it "shows customer/pm as — for every project since the roster couldn't be read" do
+      expect(response.body).to include("—")
     end
   end
 end

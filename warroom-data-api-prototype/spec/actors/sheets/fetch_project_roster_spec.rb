@@ -3,13 +3,14 @@
 require "rails_helper"
 
 RSpec.describe Sheets::FetchProjectRoster do
-  let(:header) { %w[專案 專案縮寫 狀態 比例 生效月份 失效月份 負責RD 客戶 PM] }
+  let(:header) { %w[專案 專案縮寫 狀態 比例 生效月份 失效月份 負責RD 客戶 PM 307對應專案] }
 
   describe "#call" do
-    it "parses project_name/status/customer/pm and skips columns unrelated to this page" do
+    it "parses project_name/status/customer/pm/burndown_names_raw and skips columns unrelated to this page" do
       rows = [
         header,
-        [ "AG 亞炬", "亞炬 Platform", "維護", "40%", "2026/01", "", "王贊勛", "亞炬", "呂俐禎" ]
+        [ "AG 亞炬", "亞炬 Platform", "維護", "40%", "2026/01", "", "王贊勛", "亞炬", "呂俐禎",
+          "亞炬 PMS 亞炬 Else 亞炬 Flow 亞炬 Wms" ]
       ]
       allow(ProjectRosterSheetsClient).to receive(:fetch_rows).and_return(rows)
 
@@ -17,8 +18,17 @@ RSpec.describe Sheets::FetchProjectRoster do
 
       expect(result).to be_success
       expect(result.roster).to eq([
-        { project_name: "AG 亞炬", abbreviation: "亞炬 Platform", status: "維護", customer: "亞炬", pm: "呂俐禎" }
+        { project_name: "AG 亞炬", abbreviation: "亞炬 Platform", status: "維護", customer: "亞炬", pm: "呂俐禎",
+          burndown_names_raw: "亞炬 PMS 亞炬 Else 亞炬 Flow 亞炬 Wms" }
       ])
+    end
+
+    it "defaults burndown_names_raw to an empty string when the 307對應專案 column is missing entirely (older sheet layout)" do
+      short_header = %w[專案 專案縮寫 狀態 比例 生效月份 失效月份 負責RD 客戶 PM]
+      rows = [ short_header, [ "AG 亞炬", "亞炬 Platform", "維護", "40%", "2026/01", "", "王贊勛", "亞炬", "呂俐禎" ] ]
+      allow(ProjectRosterSheetsClient).to receive(:fetch_rows).and_return(rows)
+
+      expect(described_class.result.roster.first[:burndown_names_raw]).to eq("")
     end
 
     it "skips blank rows used to separate customer groups in the real sheet" do

@@ -23,12 +23,13 @@ class ProjectHistoryController < ApplicationController
     if @selected_project.present?
       build_detail(result)
     else
-      build_overview(all_rows)
+      build_overview(all_rows, result.roster_unavailable)
     end
     @error = nil
   end
 
-  def build_overview(all_rows)
+  def build_overview(all_rows, roster_unavailable)
+    @roster_unavailable = roster_unavailable
     @statuses = all_rows.map { |r| r[:status] }.compact.uniq
     @customers = all_rows.map { |r| r[:customer] }.compact.uniq
     @pms = all_rows.map { |r| r[:pm] }.compact.uniq
@@ -57,6 +58,7 @@ class ProjectHistoryController < ApplicationController
     @project_names = []
     @selected_project = nil
     @view = DEFAULT_VIEW
+    @roster_unavailable = false
     @statuses = []
     @customers = []
     @pms = []

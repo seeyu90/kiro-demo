@@ -5,13 +5,24 @@
 在 `warroom-data-api-prototype` 新增 `Sheets::FetchProjectRoster`（300_員工專案）與整合型
 `Sheets::FetchProjectHistory`，新增 `ProjectHistoryController` 與 `/project_history` 頁面，改讀真實
 Google Sheets 資料。不修改 305/306/307 既有檔案，燃盡圖直接重用既有 `_burndown_chart.html.erb`。
-本 sandbox 無 Google Service Account 憑證，全部以 RSpec stub Client 驗證，不做真實 API 呼叫。
 
-**狀態**：已完成實作。`bundle exec rspec` 全專案 337/337 通過（含本 spec 新增的 30 項：Client 2、
-Actor 單元測試 15、request 整合測試 13），無既有 305/306/307 測試被破壞；`bundle exec rubocop` 對
-全部新檔案無違規。撰寫測試過程中發現並修正一個真實邏輯錯誤：`ProjectHistoryRowBlueprint` 一開始沒
-宣告 `:tasks` 欄位，導致甘特圖檢視渲染時 `r[:tasks]` 為 nil 而噴例外（Blueprint 濾掉了 Controller
-準備好的資料）；已補上該欄位並在 request spec 加了甘特圖渲染的迴歸測試。
+**狀態**：已完成實作，且已用真實 Google Service Account 憑證對真實試算表驗證過（不只 RSpec stub）。
+`bundle exec rspec` 全專案 344/344 通過，`bundle exec rubocop` 全部新檔案無違規。
+
+實作過程中依序發現並修正了 4 個規劃階段沒預料到的真實資料問題：
+1. `ProjectHistoryRowBlueprint` 漏了 `:tasks` 欄位，甘特圖渲染時噴例外（RSpec 階段發現）。
+2. `300_員工專案`「專案清單」實際存放在分頁「專案工程師對照表」，不是規劃時猜測的「專案清單」。
+3. 305 與 Roster 的專案名稱字串完全比對只對得上 2/8（後改用 9 個活躍專案驗證），加上「兩欄都查找
+   （專案全名／專案縮寫）」後才 9/9 全部對上。
+4. 307 是跟 305/306/Roster 完全獨立的第三套命名系統，且顆粒度更細（一對多），無法用任何自動規則
+   （字串比對、客戶名稱前綴）安全對應，最終請使用者在 `300_員工專案` 人工新增「307對應專案」欄，
+   改用子字串比對（不拆解分隔符）讀取這份人工對照。
+5.（追加）Roster 試算表與 305/306/307 是不同擁有者、不同共用權限設定，實測遇過「Roster 存取被拒、
+   其餘三者正常」的狀況，故把 Roster 失敗的處理方式從「整頁報錯」改為「降級顯示，客戶/PM 顯示
+   `—`」，避免非核心資料來源拖累核心功能。
+
+以真實資料驗證的最終結果：9 個目前在 305 有進度資料的專案，客戶/PM 9/9 對應成功，縱向歷程四個區塊
+（花費工時／燃盡圖／測試趨勢／客訴狀態）皆有非空資料。
 
 ---
 

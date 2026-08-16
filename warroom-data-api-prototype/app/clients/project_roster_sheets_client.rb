@@ -5,9 +5,11 @@ class ProjectRosterSheetsClient
 
   SPREADSHEET_ID = "101fF0GlW2iwjC6TNQnNgKjUrxJg-3Ia5nCYox6haTNM"
 
-  # 分頁名稱佔位，比照 BurndownSheetsClient::SHEET_NAME 的既有取捨：待實際串接時人工確認
-  # 是否與真實分頁名稱相符，環境變數可在不改程式碼的情況下調整。
-  SHEET_NAME = ENV.fetch("PROJECT_ROSTER_SHEET_NAME", "專案清單")
+  # 實際分頁名稱（已用真實 Service Account 憑證對真實試算表確認過，非佔位假設）：試算表內
+  # 這份「專案清單」資料實際存放在名為「專案工程師對照表」的分頁，與規劃階段依欄位內容猜測的
+  # 「專案清單」不同。環境變數可在不改程式碼的情況下調整（比照既有 BurndownSheetsClient::
+  # SHEET_NAME 的取捨），供日後分頁改名時使用。
+  SHEET_NAME = ENV.fetch("PROJECT_ROSTER_SHEET_NAME", "專案工程師對照表")
 
   # 專案數量遠小於 200 列，不需要 BurndownSheetsClient 那種動態欄寬探測。
   RANGE_SUFFIX = "!A1:J200"
