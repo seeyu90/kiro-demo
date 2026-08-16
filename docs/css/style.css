@@ -618,6 +618,79 @@ table.project-tasks tbody tr:hover td {
   font-size: 10px;
 }
 
+/* ── 307 燃盡圖（理想線／實際線疊圖，與 Rails 端 application.css 同名類別維持視覺一致） ── */
+
+.burndown-chart-block {
+  margin-bottom: 1.5rem;
+}
+
+.burndown-chart-block h3 {
+  font-size: 0.95rem;
+  margin: 0 0 0.5rem;
+  color: var(--color-text-strong);
+}
+
+.burndown-ideal-line {
+  fill: none;
+  stroke: var(--color-text-muted);
+  stroke-width: 2;
+  stroke-dasharray: 6, 4;
+}
+
+.burndown-actual-line {
+  fill: none;
+  stroke: var(--color-accent);
+  stroke-width: 2;
+}
+
+.burndown-actual-point {
+  fill: var(--color-surface);
+  stroke: var(--color-accent);
+  stroke-width: 2;
+  cursor: pointer;
+}
+
+.burndown-actual-point:hover,
+.burndown-actual-point:focus {
+  fill: var(--color-accent);
+}
+
+.burndown-estimate-reference-line {
+  stroke: var(--color-text-muted);
+  stroke-width: 2;
+  stroke-dasharray: 6, 4;
+}
+
+.burndown-stack-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.burndown-stack-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.burndown-stack-swatch {
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 2px;
+}
+
+.burndown-stack-swatch-reference {
+  background: none;
+  border-top: 2px dashed var(--color-text-muted);
+  height: 0;
+}
+
 /* ── Tablet ── */
 @media (max-width: 768px) {
   .dashboard-header,

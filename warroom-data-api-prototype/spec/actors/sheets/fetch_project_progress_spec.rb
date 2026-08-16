@@ -461,5 +461,32 @@ RSpec.describe Sheets::FetchProjectProgress do
         described_class.result(force: true)
       end
     end
+
+    # 回應 code review：ProjectProgressSheetsClient 只快取「原始列」，Actor 本身（overdue？
+    # 判斷、摘要統計等時間相對邏輯）每次呼叫都重新執行，不會被快取凍結在舊的時間點。這裡用
+    # 同一份（模擬「快取命中」情境的）原始列，只改變「今天」，驗證 overdue 相關輸出會跟著變動，
+    # 而不是停留在第一次呼叫時的判斷結果。
+    context "time-relative filtering is not frozen by ProjectProgressSheetsClient's row-level cache" do
+      include ActiveSupport::Testing::TimeHelpers
+
+      let(:rows_with_one_task) do
+        [
+          ["專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延遲天數", "類型"],
+          ["Project A", "Task 1", "未完成", "Alice", "2026-06-15", "", "", "功能"]
+        ]
+      end
+
+      before { allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_return(rows_with_one_task) }
+
+      it "treats identical cached rows as not-yet-overdue before the deadline and overdue after it" do
+        travel_to(Date.new(2026, 6, 10)) do
+          expect(described_class.result.summary[:overdue]).to eq(0)
+        end
+
+        travel_to(Date.new(2026, 6, 20)) do
+          expect(described_class.result.summary[:overdue]).to eq(1)
+        end
+      end
+    end
   end
 end

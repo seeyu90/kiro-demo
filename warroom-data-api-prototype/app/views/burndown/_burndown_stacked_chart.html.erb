@@ -1,0 +1,39 @@
+<div class="burndown-chart-block">
+  <h3>各人員累積消耗人時（<%= per_assignee.size %> 人）</h3>
+  <% dates = burndown_stacked_chart_dates(per_assignee) %>
+  <% if dates.blank? %>
+    <p class="empty-state">無燃盡資料</p>
+  <% else %>
+    <% max = burndown_stacked_chart_max(per_assignee, estimated_hours) %>
+    <% polygons = burndown_stacked_chart_polygons(per_assignee, dates, max) %>
+    <svg viewBox="0 0 <%= BurndownHelper::BURNDOWN_WIDTH %> <%= BurndownHelper::BURNDOWN_HEIGHT %>" class="trend-svg" role="img" aria-label="各人員累積消耗人時堆疊圖">
+      <% burndown_chart_y_ticks(0, max).each do |tick| %>
+        <line x1="<%= BurndownHelper::BURNDOWN_PADDING_LEFT %>" x2="<%= BurndownHelper::BURNDOWN_WIDTH - BurndownHelper::BURNDOWN_PADDING_RIGHT %>"
+              y1="<%= tick[:y] %>" y2="<%= tick[:y] %>" class="trend-gridline"></line>
+        <text x="<%= BurndownHelper::BURNDOWN_PADDING_LEFT - 8 %>" y="<%= tick[:y] + 3 %>" text-anchor="end" class="trend-axis-label trend-y-label"><%= tick[:value] %></text>
+      <% end %>
+
+      <% burndown_chart_x_labels(dates).each do |label| %>
+        <% label_y = BurndownHelper::BURNDOWN_HEIGHT - BurndownHelper::BURNDOWN_PADDING_BOTTOM + 18 %>
+        <text x="<%= label[:x] %>" y="<%= label_y %>" text-anchor="end" transform="rotate(-45 <%= label[:x] %> <%= label_y %>)" class="trend-axis-label trend-x-label"><%= label[:text] %></text>
+      <% end %>
+
+      <% polygons.each do |poly| %>
+        <polygon points="<%= poly[:points] %>" fill="<%= poly[:color] %>" fill-opacity="0.75" stroke="<%= poly[:color] %>" stroke-width="1">
+          <title><%= poly[:assignee] %></title>
+        </polygon>
+      <% end %>
+
+      <% ref_y = burndown_stacked_chart_reference_y(estimated_hours, max) %>
+      <line x1="<%= BurndownHelper::BURNDOWN_PADDING_LEFT %>" x2="<%= BurndownHelper::BURNDOWN_WIDTH - BurndownHelper::BURNDOWN_PADDING_RIGHT %>"
+            y1="<%= ref_y %>" y2="<%= ref_y %>" class="burndown-estimate-reference-line"></line>
+    </svg>
+
+    <ul class="burndown-stack-legend">
+      <% polygons.each do |poly| %>
+        <li><span class="burndown-stack-swatch" style="background-color: <%= poly[:color] %>"></span><%= poly[:assignee] %></li>
+      <% end %>
+      <li><span class="burndown-stack-swatch burndown-stack-swatch-reference"></span>總預估人時（<%= estimated_hours %>）</li>
+    </ul>
+  <% end %>
+</div>
