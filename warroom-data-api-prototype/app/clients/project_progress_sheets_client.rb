@@ -3,7 +3,11 @@
 class ProjectProgressSheetsClient
   include GoogleSheetsCredentials
 
-  SPREADSHEET_ID = "11gwDnOqEiGqj_VF2XF7AzxiJTiOW_k2knF6-4yQCej8"
+  # 305 每年會換成一份新試算表（跨年當天不保證新試算表已建好），故不依 Date.current.year
+  # 自動判斷，改用環境變數 PROJECT_PROGRESS_SPREADSHEET_ID，讓新試算表建好後只要調整環境
+  # 變數並重啟服務即可切換；沒有設定環境變數時退回這裡寫死的預設值（同 BurndownSheetsClient
+  # 的 SHEET_NAME 做法）。
+  SPREADSHEET_ID = ENV.fetch("PROJECT_PROGRESS_SPREADSHEET_ID", "11gwDnOqEiGqj_VF2XF7AzxiJTiOW_k2knF6-4yQCej8")
   SHEET_NAMES    = ["功能", "PR", "調整", "遺漏", "臭蟲"].freeze
   RANGE_SUFFIX   = "!A:G"
   SCOPES         = ["https://www.googleapis.com/auth/spreadsheets.readonly"].freeze

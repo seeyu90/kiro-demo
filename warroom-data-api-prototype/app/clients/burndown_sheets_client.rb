@@ -5,10 +5,12 @@ class BurndownSheetsClient
 
   SPREADSHEET_ID = "1A8L0a-5xZSkRpxeN7Gk2Z4O7ZOv4FIy9o2RjQ5odI8k"
 
-  # 分頁名稱先以 Google Sheets 新試算表預設分頁名稱佔位，串接時若與實際分頁名稱不符需修正
-  # （同 306 real-source spec Task 1 的做法，本 spec 未走「解析 xlsx workbook.xml 確認官方
-  # 分頁清單」流程，留待實際串接／人工開啟試算表時修正）。
-  SHEET_NAME = "工作表1"
+  # 實際分頁名稱：試算表每年會新建一個以年度命名的分頁（例如 "2026"），但新分頁不保證在
+  # 跨年當天就已建好，因此不依 Date.current.year 自動判斷（那樣會在新分頁還沒建好前，跨年
+  # 當天直接打不到資料、整頁壞掉）。改用環境變數 BURNDOWN_SHEET_NAME，新分頁建好後只要調整
+  # 環境變數並重啟服務即可切換，不需要改程式碼；沒有設定環境變數時，退回這裡寫死的預設值
+  # （目前已確認的分頁名稱），是唯一需要調整的地方。
+  SHEET_NAME = ENV.fetch("BURNDOWN_SHEET_NAME", "2026")
 
   HEADER_RANGE_SUFFIX = "!A1:ZZ1"
   # 遠大於現有 307 試算表的實際列數；取捨：不做「每次呼叫都精準抓取實際列數」的第二次探測，
