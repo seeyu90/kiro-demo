@@ -2,6 +2,12 @@
 
 module Sheets
   class FetchIssueDashboard < ApplicationActor
+    input :month, default: nil
+    input :project, default: nil
+    input :status, default: "新建立"
+    input :breakdown_sort, default: nil
+    input :breakdown_dir, default: "desc"
+
     output :month_kpi
     output :daily_kpi
     output :issues
@@ -9,11 +15,45 @@ module Sheets
     output :failure_code
     output :message
 
+    # 以下皆為「議題資料」HTML 頁面專用的衍生輸出，供 IssuesController 直接使用、不影響
+    # 上面 4 個既有輸出（Api::IssueDashboardController 仍讀取全量、未篩選的版本）。
+    output :available_months
+    output :selected_month
+    output :selected_month_record
+    output :selected_month_pending
+    output :daily_kpi_for_month
+    output :month_project_breakdown
+    output :projects
+    output :statuses
+    output :filtered_issues
+
+    BREAKDOWN_SORT_KEYS = %w[complaint testing other total].freeze
+    BREAKDOWN_SORT_DIRS = %w[asc desc].freeze
+
     def call
-      self.month_kpi         = parse_month_kpi(IssueSheetsClient.fetch_month_kpi_rows)
+      self.month_kpi          = parse_month_kpi(IssueSheetsClient.fetch_month_kpi_rows)
       self.daily_kpi          = parse_daily_kpi(IssueSheetsClient.fetch_daily_kpi_rows)
       self.issues              = parse_issues(IssueSheetsClient.fetch_issue_rows)
       self.project_breakdown = compute_project_breakdown(issues)
+
+      # 月份選單納入進行中的當月（即使 month_kpi 尚無該月列，因為月結數字要等月底才產生），
+      # 但預設選中仍是最新「已結算」月份，確保頁面載入時直接看到有意義的月結數字。
+      current_year_month = Date.current.strftime("%Y-%m")
+      self.available_months = (month_kpi.map { |m| m[:year_month] } + [ current_year_month ]).uniq.sort
+      self.selected_month = month.presence || month_kpi.map { |m| m[:year_month] }.max
+      self.selected_month_record = month_kpi.find { |m| m[:year_month] == selected_month }
+      self.selected_month_pending = selected_month_record.nil? && selected_month == current_year_month
+
+      # 每日趨勢與依專案分類統計皆依所選月份呈現（兩者與月度 KPI 同屬「統計摘要」分頁籤，
+      # 理應一起隨月份切換）；依專案分類以議題的 start_date（建立日）判斷所屬月份，
+      # 議題明細本身則不受月份篩選（見需求 8）。
+      self.daily_kpi_for_month = daily_kpi.select { |d| same_month?(d[:date], selected_month) }
+      month_issues = issues.select { |i| same_month?(i[:start_date], selected_month) }
+      self.month_project_breakdown = sort_project_breakdown(compute_project_breakdown(month_issues))
+
+      self.projects = issues.map { |i| i[:project] }.compact.uniq
+      self.statuses = issues.map { |i| i[:status] }.compact.uniq
+      self.filtered_issues = filter_issues(issues)
     rescue Google::Apis::ClientError => e
       # 錯誤對應邏輯與 305 Sheets::FetchProjectProgress 相同（見 rails-standards.md 的
       # failure_code 對應表）：三個讀取類別（月度 KPI／每日趨勢／議題明細）中任一失敗，
@@ -94,7 +134,7 @@ module Sheets
 
         issue_id, subject, type, tracker, status, assigned_to,
           start_date, due_date, work_days, _sheet_name, project = row.values_at(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
-        next if [issue_id, subject, status].any? { |value| value.to_s.strip.empty? }
+        next if [ issue_id, subject, status ].any? { |value| value.to_s.strip.empty? }
         next if tracker.to_s.strip == "測試"
 
         {
@@ -127,6 +167,28 @@ module Sheets
       end
 
       grouped.values.map { |row| row.merge(total: row[:complaint] + row[:testing] + row[:other]) }
+    end
+
+    # @breakdown_sort 為 nil 時維持原始（依專案分組）順序，不排序。
+    # 以 project 名稱作為次要排序鍵（tie-breaker）：Ruby 的 sort_by 不保證穩定排序，若僅依主要
+    # 排序欄位排序，同分的列在不同請求間相對順序可能不一致，畫面上會不穩定地跳動。
+    def sort_project_breakdown(rows)
+      return rows unless BREAKDOWN_SORT_KEYS.include?(breakdown_sort)
+
+      sorted = rows.sort_by { |row| [ row[breakdown_sort.to_sym], row[:project] ] }
+      effective_dir = BREAKDOWN_SORT_DIRS.include?(breakdown_dir) ? breakdown_dir : "desc"
+      effective_dir == "desc" ? sorted.reverse : sorted
+    end
+
+    def filter_issues(issues)
+      issues
+        .select { |i| project.blank? || i[:project] == project }
+        .select { |i| status.blank? || i[:status] == status }
+    end
+
+    # 以日期欄位前 7 碼（YYYY-MM）判斷是否屬於指定月份，與 prototype 的 sameMonth() 邏輯一致。
+    def same_month?(date_str, year_month)
+      date_str.is_a?(String) && date_str[0, 7] == year_month
     end
 
     # 與 305 Sheets::FetchProjectProgress#normalize_date 邏輯相同；維持獨立實作而非抽共用

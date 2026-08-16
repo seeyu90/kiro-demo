@@ -2,7 +2,12 @@
 
 module Sheets
   class FetchProjectBurndown < ApplicationActor
+    input :project, default: nil
+    input :assignee, default: nil
+    input :status, default: "in_progress"
     output :issues
+    output :projects
+    output :assignees
     output :failure_code
     output :message
 
@@ -20,7 +25,10 @@ module Sheets
       header = rows.first || []
       week_dates = parse_week_dates(header)
 
-      self.issues = parse_issues(rows.drop(1), week_dates)
+      all_issues = parse_issues(rows.drop(1), week_dates)
+      self.projects = all_issues.map { |i| i[:project] }.compact.uniq
+      self.assignees = all_issues.flat_map { |i| i[:assignees] }.compact.uniq
+      self.issues = filter_issues(all_issues)
     rescue Google::Apis::ClientError => e
       # 錯誤對應邏輯比照 306 Sheets::FetchIssueDashboard（見 rails-standards.md 的
       # failure_code 對應表）。
@@ -80,6 +88,36 @@ module Sheets
       Date.new(year, month, day)
     rescue ArgumentError
       nil
+    end
+
+    # 專案／人員／狀態篩選同時存在時取交集（AND），僅同時符合三者的議題會出現在議題燃盡圖清單中
+    # （需求 4.4）。
+    def filter_issues(issues)
+      issues
+        .select { |i| project.blank? || i[:project] == project }
+        .select { |i| assignee.blank? || i[:assignees].include?(assignee) }
+        .select { |i| status_matches?(i) }
+    end
+
+    def status_matches?(issue)
+      return true if status == "all"
+
+      in_progress = issue_in_progress?(issue)
+      status == "done" ? !in_progress : in_progress
+    end
+
+    # 優先採用試算表「狀態」欄位（已篩掉無法辨識的髒值，只會是 "in_progress"／"done"／nil）；
+    # 狀態無法辨識（nil）時，退回以 due_date 與今天比較推斷：due_date 晚於今天視為進行中，
+    # 缺漏或無法解析時無法確認已完成，一律視為進行中（避免資料不全的議題被誤藏）。
+    def issue_in_progress?(issue)
+      return issue[:status] == "in_progress" if issue[:status].present?
+
+      due_date = issue[:due_date]
+      return true if due_date.blank?
+
+      Date.parse(due_date) > Date.current
+    rescue ArgumentError
+      true
     end
 
     # 列解析與合併：固定欄位 A~I → reported_remaining_hours, project, issue_title, assignee,
