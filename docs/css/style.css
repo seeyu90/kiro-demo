@@ -691,6 +691,74 @@ table.project-tasks tbody tr:hover td {
   height: 0;
 }
 
+/* ── 專案歷程：檢視切換按鈕 ── */
+.view-toggle {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.view-toggle-btn {
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  padding: 0.4rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.view-toggle-btn:hover,
+.view-toggle-btn:focus-visible {
+  border-color: var(--color-accent);
+  outline: none;
+}
+
+.view-toggle-btn.active {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.project-history-link {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.project-history-link:hover,
+.project-history-link:focus {
+  text-decoration: underline;
+}
+
+/* ── 專案歷程：甘特圖 ── */
+.gantt-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.gantt-row-label {
+  fill: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.gantt-row-baseline {
+  stroke: var(--color-border);
+  stroke-width: 1;
+}
+
+.gantt-task-done {
+  fill: var(--color-accent);
+}
+
+.gantt-task-open {
+  fill: var(--overdue-text);
+}
+
 /* ── Tablet ── */
 @media (max-width: 768px) {
   .dashboard-header,

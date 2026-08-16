@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem("warroom-theme");
+        if (saved === "light") {
+          document.documentElement.setAttribute("data-theme", "light");
+        }
+      } catch (e) {
+        // localStorage 不可用：靜默忽略，維持預設深色
+      }
+    })();
+  </script>
+  <title>戰情室 — 專案歷程總覽（靜態展示版）</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="戰情室專案歷程橫向總覽，使用模擬資料呈現多專案清單與甘特圖，可依狀態、客戶、PM 篩選。">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="dashboard-header">
+    <div class="header-titles">
+      <h1 class="dashboard-title">戰情室 <span>— 專案歷程總覽</span></h1>
+      <p class="subtitle">靜態展示版（模擬資料） · <a class="back-link" href="index.html">返回入口頁</a></p>
+    </div>
+    <button type="button" id="theme-toggle" class="theme-toggle" aria-label="切換至淺色模式">🌙 深色</button>
+  </header>
+
+  <main>
+    <section class="issue-section">
+      <div class="section-heading-row">
+        <h2>多專案總覽</h2>
+        <div class="control-group">
+          <label for="filter-status">狀態：</label>
+          <select id="filter-status" name="filter-status"></select>
+          <label for="filter-customer">客戶：</label>
+          <select id="filter-customer" name="filter-customer"></select>
+          <label for="filter-pm">PM：</label>
+          <select id="filter-pm" name="filter-pm"></select>
+        </div>
+      </div>
+
+      <div class="view-toggle" role="group" aria-label="檢視模式切換">
+        <button type="button" id="view-list-btn" class="view-toggle-btn" aria-pressed="true">清單</button>
+        <button type="button" id="view-gantt-btn" class="view-toggle-btn" aria-pressed="false">甘特圖</button>
+      </div>
+
+      <div id="history-overview-content" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <script src="js/project-history-data.js"></script>
+  <script src="js/project-history-overview.js"></script>
+</body>
+</html>
