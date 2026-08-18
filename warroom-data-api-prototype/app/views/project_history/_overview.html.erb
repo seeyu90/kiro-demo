@@ -2,6 +2,11 @@
               data: { turbo_frame: "project-history-content" } do %>
   <%= hidden_field_tag :view, @view %>
   <div class="control-group">
+    <label for="year">年度：</label>
+    <%= select_tag :year,
+                   options_for_select([ [ "全部年度", "" ] ] + @available_years.map { |y| [ y, y ] }, @selected_year) %>
+  </div>
+  <div class="control-group">
     <label for="status">狀態：</label>
     <%= select_tag :status,
                    options_for_select([ [ "全部狀態", "" ] ] + @statuses.map { |s| [ s, s ] }, @selected_status) %>
@@ -10,6 +15,11 @@
     <label for="customer">客戶：</label>
     <%= select_tag :customer,
                    options_for_select([ [ "全部客戶", "" ] ] + @customers.map { |c| [ c, c ] }, @selected_customer) %>
+  </div>
+  <div class="control-group">
+    <label for="project_name">專案：</label>
+    <%= select_tag :project_name,
+                   options_for_select([ [ "全部專案", "" ] ] + @project_names.map { |p| [ p, p ] }, @selected_project_name) %>
   </div>
   <div class="control-group">
     <label for="pm">PM：</label>
@@ -31,6 +41,7 @@
   <% if @rows.empty? %>
     <p class="empty-state">目前無符合條件的專案</p>
   <% elsif @view == "gantt" %>
+    <%= render partial: "gantt_legend" %>
     <%= render partial: "overview_gantt", locals: { rows: @rows } %>
   <% else %>
     <%= render partial: "overview_list", locals: { rows: @rows } %>

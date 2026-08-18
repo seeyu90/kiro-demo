@@ -23,6 +23,8 @@ require 'rspec/rails'
 # Rails.root.glob('spec/support/**/*.rb').sort_by(&:to_s).each { |f| require f }
 
 RSpec.configure do |config|
+  config.include ActiveSupport::Testing::TimeHelpers
+
   # Remove this line to enable support for ActiveRecord
   config.use_active_record = false
 

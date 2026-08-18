@@ -5,8 +5,10 @@ module Sheets
     input :project, default: nil
     input :year, default: nil
     output :overview_rows
+    output :overview_years
     output :detail
     output :roster_unavailable
+    output :gantt_duration_unavailable
     output :failure_code
     output :message
 
@@ -32,23 +34,42 @@ module Sheets
       progress_result = Sheets::FetchProjectProgress.result(scope: "all", incomplete_only: false)
       return propagate_failure(progress_result) unless progress_result.success?
 
-      # overview_rows（含甘特圖）只需要 305 + Roster；306／307 只有縱向歷程（帶 project 參數）
-      # 才用得到，故只在那時才呼叫。一律呼叫的話，306／307 任一有問題會連只是要看總覽/甘特圖
-      # 都被拖累，但總覽/甘特圖其實跟 306／307 完全無關。
-      self.overview_rows = build_overview_rows(roster, progress_result.grouped_data)
+      # 307 的專案命名跟 305/roster 是兩套完全獨立的體系（見 build_detail／matched_burndown_
+      # issues 附註），無法靠 Sheets::FetchProjectBurndown 自己的 project 篩選對上，故一律抓
+      # 全量（project: nil），篩選邏輯自己做。橫向總覽的甘特圖也需要這份資料才能畫出真正的
+      # 開發區間（307 才有 start_date～due_date；305 只有檢查點，見需求 1），故不論是否選定
+      # project 都呼叫一次，橫向總覽與縱向歷程共用同一份 burndown_issues，避免重複打 API。
+      #
+      # 【設計變更】307 過去只在縱向歷程呼叫，理由是「不讓非核心資料來源的問題拖累總覽頁」；
+      # 現在總覽甘特圖需要它，但沿用同一個精神：307 失敗時甘特圖降級為全部專案皆無色塊
+      # （gantt_duration_unavailable，畫面顯示提示文字），不擋總覽頁（需求 1.3）。只有在使用者
+      # 已選定 project、縱向歷程本來就必須依賴 307 時，307 失敗才會讓整體請求失敗（需求 1.3a，
+      # 行為不變）。
+      burndown_overview_result = Sheets::FetchProjectBurndown.result(status: "all")
+      duration_data_available = burndown_overview_result.success?
+      if duration_data_available
+        burndown_issues = burndown_overview_result.issues
+        self.gantt_duration_unavailable = false
+      elsif project.blank?
+        burndown_issues = []
+        self.gantt_duration_unavailable = true
+      else
+        return propagate_failure(burndown_overview_result)
+      end
+
+      # 年度下拉選單的選項固定依「全部」燃盡議題算出（不受目前篩選影響），選單本身不會因為使用者
+      # 選了某個年度就少了其他年度可選。
+      self.overview_years = burndown_issues.filter_map { |i| i[:start_date].to_s[0, 4].presence }.uniq.sort.reverse
+
+      self.overview_rows =
+        build_overview_rows(roster, progress_result.grouped_data, burndown_issues, year, duration_data_available)
       return unless project.present?
 
       issue_result = Sheets::FetchIssueDashboard.result
       return propagate_failure(issue_result) unless issue_result.success?
 
-      # 307 的專案命名跟 305/roster 是兩套完全獨立的體系（見下方 build_detail 附註），無法靠
-      # Sheets::FetchProjectBurndown 自己的 project 篩選對上，故一律抓全量（project: nil），
-      # 篩選邏輯自己在 build_detail 做。
-      burndown_result = Sheets::FetchProjectBurndown.result(status: "all")
-      return propagate_failure(burndown_result) unless burndown_result.success?
-
       roster_row = resolve_roster_row(roster, project)
-      self.detail = build_detail(project, roster_row, burndown_result.issues, issue_result.issues, year)
+      self.detail = build_detail(project, roster_row, burndown_issues, issue_result.issues, year)
     end
 
     private
@@ -74,23 +95,131 @@ module Sheets
 
     # 以 305 的專案名稱為主體（有進度可看的專案），Roster 找不到對應列時客戶/PM/狀態為 nil，
     # 不視為錯誤（需求 2.1、2.2）。
-    def build_overview_rows(roster, progress_grouped)
-      progress_grouped.map do |project_name, tasks|
+    #
+    # 每列的議題清單（:tasks）一律用該專案對應到的 307 議題（依 year 篩選開案年度，預設今年，
+    # 由 controller 決定，見 ProjectHistoryController#index），同一份清單同時供甘特圖畫時程條、
+    # 清單頁展開後的議題明細表格使用，避免兩處各自維護一份轉換邏輯。
+    #
+    # IF 已指定年度（year 有值）AND 307 資料本身可用（duration_data_available），
+    # THEN 該年度沒有任何對應議題的專案直接不列入總覽（不顯示空白列/空白展開內容，使用者要求
+    # 「今年沒有任何議題的專案就不列出來」）；307 整批讀取失敗時（duration_data_available 為
+    # false）不套用這條排除規則，維持既有降級慣例——全部專案照常列出、只是議題清單是空的，
+    # 不讓一個非核心資料源的問題把整個專案清單清空。
+    def build_overview_rows(roster, progress_grouped, burndown_issues, year, duration_data_available)
+      progress_grouped.filter_map do |project_name, _progress_tasks|
         roster_row = resolve_roster_row(roster, project_name)
-        planned = tasks.filter_map { |t| t[:planned_completion_date] }.max
-        ongoing = tasks.any? { |t| t[:actual_completion_date].blank? }
-        actual = ongoing ? nil : tasks.filter_map { |t| t[:actual_completion_date] }.max
+        matched = matched_burndown_issues(roster_row, project_name, burndown_issues)
+        matched_in_year = filter_issues_by_year(matched, year)
+
+        next if duration_data_available && year.present? && matched_in_year.empty?
+
+        tasks = duration_tasks_from_burndown(matched_in_year)
 
         {
           project_name: project_name,
           customer: roster_row[:customer],
           pm: roster_row[:pm],
           status: roster_row[:status],
-          planned_completion_date: planned,
-          actual_completion_date: actual,
-          tasks: tasks
+          tasks: tasks,
+          progress_percent: progress_percent_for(tasks),
+          hours_estimated: sum_estimated_hours(tasks),
+          hours_consumed: sum_consumed_hours(tasks),
+          has_overdue: tasks.any? { |t| duration_task_overdue?(t) }
         }
       end
+    end
+
+    def filter_issues_by_year(issues, year)
+      return issues if year.blank?
+
+      issues.select { |i| i[:start_date].to_s.start_with?(year.to_s) }
+    end
+
+    # 307↔Roster 對應規則：Roster 該專案列的 burndown_names_raw 有值時，307 議題的 project 名稱
+    # 只要整串出現在該欄文字裡即算對應；為空時退回以 project_name（呼叫端傳入的分組鍵／使用者
+    # 選定的專案名稱）與 307 議題的 project 精確比對。橫向總覽（build_overview_rows）與縱向歷程
+    # （build_detail）共用同一份規則，確保兩處對同一個專案給出一致的 307 對應結果（需求 1a）。
+    def matched_burndown_issues(roster_row, project_name, burndown_issues)
+      burndown_names_raw = roster_row[:burndown_names_raw].presence
+      if burndown_names_raw
+        burndown_issues.select { |i| burndown_names_raw.include?(i[:project].to_s) }
+      else
+        burndown_issues.select { |i| i[:project] == project_name }
+      end
+    end
+
+    # 307 議題沒有「實際完成日」欄位，只有 status／due_date（見 design.md 決策）。:assignees／
+    # :progress_percent／:overdue 是甘特圖 helper 不會讀取、只給清單頁展開後的議題明細表格用的
+    # 欄位；同一份 hash 兩處共用，不為了「甘特圖只需要幾個欄位」另外拆一份精簡版本。
+    def duration_tasks_from_burndown(issues)
+      issues.map do |issue|
+        consumed = consumed_hours_for(issue)
+        {
+          task_name: issue[:issue_title],
+          assignees: issue[:assignees],
+          status: issue[:status],
+          start_date: issue[:start_date],
+          due_date: issue[:due_date],
+          done: issue[:status] == "done",
+          estimated_hours: issue[:estimated_hours],
+          consumed_hours: consumed,
+          progress_percent: task_progress_percent(issue[:estimated_hours], consumed)
+        }.then { |task| task.merge(overdue: duration_task_overdue?(task)) }
+      end
+    end
+
+    def task_progress_percent(estimated_hours, consumed_hours)
+      return nil if consumed_hours.nil?
+
+      estimated = estimated_hours.to_f
+      return nil if estimated.zero?
+
+      ((consumed_hours.to_f / estimated) * 100).round.clamp(0, 100)
+    end
+
+    # 已消耗人時 = 預估人時 − actual_series 最後一筆剩餘人時；沒有任何 actual_series 資料點
+    # （例如剛開案、燃盡表還沒填）時回傳 nil，不得顯示成 0（需求 2.2）。
+    def consumed_hours_for(issue)
+      last_point = issue[:actual_series]&.last
+      return nil if last_point.nil?
+
+      (issue[:estimated_hours].to_f - last_point[:hours].to_f).round(2)
+    end
+
+    # 只加總「有工時資料」的議題（consumed_hours 不為 nil），避免燃盡表還沒填的議題把比例拉低
+    # 成看起來像 0% 進度（需求 3.1）；沒有任何議題有工時資料時回傳 nil，顯示為「—」，不得顯示
+    # 0%（需求 3.3）。
+    def progress_percent_for(tasks)
+      pairs = tasks.filter_map { |t| [ t[:estimated_hours].to_f, t[:consumed_hours] ] unless t[:consumed_hours].nil? }
+      return nil if pairs.empty?
+
+      total_estimated = pairs.sum { |estimated, _| estimated }
+      return nil if total_estimated.zero?
+
+      total_consumed = pairs.sum { |_, consumed| consumed }
+      ((total_consumed / total_estimated) * 100).round.clamp(0, 100)
+    end
+
+    def sum_estimated_hours(tasks)
+      values = tasks.filter_map { |t| t[:estimated_hours] unless t[:consumed_hours].nil? }
+      return nil if values.empty?
+
+      values.sum(&:to_f).round(1)
+    end
+
+    def sum_consumed_hours(tasks)
+      values = tasks.filter_map { |t| t[:consumed_hours] }
+      return nil if values.empty?
+
+      values.sum.round(1)
+    end
+
+    # 未完成且 due_date 已過今天。
+    def duration_task_overdue?(task)
+      return false if task[:done]
+
+      due_date = parse_date(task[:due_date])
+      due_date && due_date < Date.current
     end
 
     # ── 縱向歷程 ──────────────────────────────────────────────
@@ -103,26 +232,17 @@ module Sheets
     # - 307 用比 305/roster 更細的顆粒度追蹤（例如「亞炬 Platform」底下實際拆成「亞炬 Else／
     #   Wms／Flow／PMS」四個 307 議題），且客戶名稱與各系統的專案前綴不一定一致（例如「立翔
     #   機電」客戶對應的專案前綴其實是「立翔」，不是「立翔機電」），無法用客戶名稱或任何自動
-    #   規則安全推得。改為讀取 Roster 人工維護的「307對應專案」欄（`burndown_names_raw`）：
-    #   307 議題只要其 project 名稱整串出現在這欄文字裡就算屬於該專案，不管欄位裡用逗號或空白
-    #   分隔多個名稱（見 Sheets::FetchProjectRoster 的解析附註）。沒填這欄或 Roster 查無此專案
-    #   時，退回直接以 305 傳入的 project 字串精確比對（原本的行為，涵蓋沒有 Roster 資料時仍
-    #   可能剛好命名一致的情況）。
+    #   規則安全推得。改為讀取 Roster 人工維護的「307對應專案」欄（`burndown_names_raw`），
+    #   比對規則見 matched_burndown_issues（橫向總覽的甘特圖也共用同一份規則，需求 1a）。
     def build_detail(project, roster_row, burndown_issues, all_issues, year)
       canonical_name = roster_row[:project_name].presence || project
       project_issues = all_issues.select { |i| i[:project] == canonical_name }
 
-      burndown_names_raw = roster_row[:burndown_names_raw].presence
-      matched_burndown_issues =
-        if burndown_names_raw
-          burndown_issues.select { |i| burndown_names_raw.include?(i[:project].to_s) }
-        else
-          burndown_issues.select { |i| i[:project] == project }
-        end
+      matched = matched_burndown_issues(roster_row, project, burndown_issues)
 
-      work_hours_series = aggregate_work_hours(matched_burndown_issues)
-      ideal_series = aggregate_ideal_series(matched_burndown_issues)
-      actual_series = aggregate_actual_series(matched_burndown_issues)
+      work_hours_series = aggregate_work_hours(matched)
+      ideal_series = aggregate_ideal_series(matched)
+      actual_series = aggregate_actual_series(matched)
       testing_trend = monthly_testing_counts(project_issues)
 
       # 客訴議題狀態不受年度篩選影響（顯示的是「目前」已解決/未解決幾個，屬於當下狀態，不是

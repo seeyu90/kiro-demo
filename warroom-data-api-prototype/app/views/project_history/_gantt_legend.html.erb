@@ -1,0 +1,8 @@
+<div class="gantt-legend" role="note" aria-label="甘特圖圖例">
+  <% if @gantt_duration_unavailable %>
+    <p class="section-note section-note-standalone">工時區間資料（307）暫時無法取得，甘特圖目前無法顯示時程</p>
+  <% end %>
+  <span class="legend-item"><span class="legend-swatch legend-swatch-planned"></span>預計時程</span>
+  <span class="legend-item"><span class="legend-swatch legend-swatch-ontime"></span>實際（準時，依工時消耗比例填色）</span>
+  <span class="legend-item"><span class="legend-swatch legend-swatch-delayed"></span>實際（逾期未完成）</span>
+</div>

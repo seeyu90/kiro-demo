@@ -457,9 +457,25 @@ RSpec.describe Sheets::FetchProjectBurndown do
         expect(result.first[:due_date]).to eq("2026-08-13")
       end
 
-      it "returns nil start_date/due_date (and an empty ideal_series) when every row's own range is invalid" do
+      # 「當天開當天關」是真實存在的快速調整型任務（真實資料常見，例如「調整」「公務車調整」
+      # 這類同日完成的小工序），不是資料錯誤，故 start_date/due_date 視為合法（相等）；但零長度
+      # 區間仍然沒有斜率可畫，ideal_series 依 compute_ideal_series 自己的 `due_d <= start_d`
+      # 判斷維持空陣列，兩者互不衝突。
+      it "keeps start_date == due_date (not nil) for a same-day issue, with an empty ideal_series" do
         rows = [
           [ "9.5", "亞炬 Else", "v2.0 公務車調整", "周詩御", "4769", "2026/03/20", "2026/03/20", "已完成", "44", "", "" ]
+        ]
+
+        result = actor.send(:parse_issues, rows, week_dates)
+
+        expect(result.first[:start_date]).to eq("2026-03-20")
+        expect(result.first[:due_date]).to eq("2026-03-20")
+        expect(result.first[:ideal_series]).to eq([])
+      end
+
+      it "returns nil start_date/due_date when every row's own range is a genuine data error (due_date before start_date)" do
+        rows = [
+          [ "9.5", "亞炬 Else", "v2.0 公務車調整", "周詩御", "4769", "2026/03/20", "2026/03/10", "已完成", "44", "", "" ]
         ]
 
         result = actor.send(:parse_issues, rows, week_dates)

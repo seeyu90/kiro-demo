@@ -1,28 +1,50 @@
-<table class="project-tasks">
-  <thead>
-    <tr>
-      <th scope="col">專案</th>
-      <th scope="col">客戶</th>
-      <th scope="col">PM</th>
-      <th scope="col">狀態</th>
-      <th scope="col">預計完成日期</th>
-      <th scope="col">實際完成日期</th>
-    </tr>
-  </thead>
-  <tbody>
-    <% rows.each do |row| %>
-      <tr>
-        <td data-label="專案">
-          <%= link_to row[:project_name],
-                      { controller: "project_history", action: "index", project: row[:project_name] },
-                      class: "project-history-link" %>
-        </td>
-        <td data-label="客戶"><%= row[:customer] || "—" %></td>
-        <td data-label="PM"><%= row[:pm] || "—" %></td>
-        <td data-label="狀態"><%= row[:status] || "—" %></td>
-        <td data-label="預計完成日期"><%= row[:planned_completion_date] || "—" %></td>
-        <td data-label="實際完成日期"><%= row[:actual_completion_date] || "進行中" %></td>
-      </tr>
-    <% end %>
-  </tbody>
-</table>
+<div class="project-card-list">
+  <% rows.each do |row| %>
+    <details class="project-card<%= " project-card-overdue" if row[:has_overdue] %>">
+      <summary class="project-card-summary">
+        <span class="project-card-name"><%= row[:project_name] %></span>
+        <span class="project-card-tags">
+          <span class="tag"><%= row[:customer] || "—" %></span>
+          <span class="tag"><%= row[:pm] || "—" %></span>
+          <span class="tag tag-status"><%= row[:status] || "—" %></span>
+          <span class="tag tag-hours">
+            <%= row[:hours_estimated].present? ? "#{row[:hours_consumed] || 0}h / #{row[:hours_estimated]}h" : "—" %>
+          </span>
+        </span>
+      </summary>
+
+      <div class="project-card-body">
+        <% if row[:tasks].empty? %>
+          <p class="empty-state">所選年度無議題資料</p>
+        <% else %>
+          <table class="project-tasks">
+            <thead>
+              <tr>
+                <th scope="col">議題</th>
+                <th scope="col">負責人</th>
+                <th scope="col">開案日期</th>
+                <th scope="col">預計完成日期</th>
+                <th scope="col">狀態</th>
+                <th scope="col">進度</th>
+                <th scope="col">工時</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% row[:tasks].each do |task| %>
+                <tr class="<%= "row-overdue" if task[:overdue] %>">
+                  <td data-label="議題"><%= task[:task_name] %></td>
+                  <td data-label="負責人"><%= Array(task[:assignees]).join("、").presence || "—" %></td>
+                  <td data-label="開案日期"><%= task[:start_date] || "—" %></td>
+                  <td data-label="預計完成日期"><%= task[:due_date] || "—" %></td>
+                  <td data-label="狀態"><%= task[:done] ? "已完成" : (task[:overdue] ? "逾期未完成" : "進行中") %></td>
+                  <td data-label="進度"><%= task[:progress_percent].present? ? "#{task[:progress_percent]}%" : "—" %></td>
+                  <td data-label="工時"><%= task[:consumed_hours] ? "#{task[:consumed_hours]}h / #{task[:estimated_hours]}h" : "—" %></td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        <% end %>
+      </div>
+    </details>
+  <% end %>
+</div>

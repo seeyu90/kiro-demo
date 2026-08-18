@@ -1,10 +1,15 @@
 <% min_date, max_date = gantt_chart_domain(rows) %>
 <% rows_bottom = gantt_chart_rows_bottom(rows) %>
-<svg viewBox="0 0 <%= ProjectHistoryHelper::GANTT_WIDTH %> <%= gantt_chart_height(rows) %>" class="gantt-svg" role="img" aria-label="專案歷程甘特圖">
-  <%# 月份時間軸：格線貫穿全部列，標籤旋轉呈現在最底部（比照 trend chart 既有的 -45 度做法）。 %>
+<% gantt_width = gantt_chart_svg_width(min_date, max_date) %>
+<% gantt_height = gantt_chart_height(rows) %>
+<%# 寬度依月份數量計算（見 gantt_chart_svg_width），月份多時比容器寬，靠外層捲動查看，
+    不是把所有月份硬塞縮進固定寬度。 %>
+<div class="gantt-scroll">
+<svg viewBox="0 0 <%= gantt_width %> <%= gantt_height %>" width="<%= gantt_width %>" height="<%= gantt_height %>" class="gantt-svg" role="img" aria-label="專案歷程甘特圖">
+  <%# 月份時間軸：格線貫穿全部列，標籤水平放在最上方（使用者要求時間軸放在上方，比照參考圖版面）。 %>
   <% gantt_chart_month_ticks(min_date, max_date).each do |tick| %>
     <line x1="<%= tick[:x] %>" x2="<%= tick[:x] %>" y1="<%= ProjectHistoryHelper::GANTT_PADDING_TOP %>" y2="<%= rows_bottom %>" class="gantt-month-gridline"></line>
-    <text x="<%= tick[:x] %>" y="<%= rows_bottom + 14 %>" text-anchor="end" transform="rotate(-45 <%= tick[:x] %> <%= rows_bottom + 14 %>)" class="trend-axis-label gantt-month-label"><%= tick[:label] %></text>
+    <text x="<%= tick[:x] %>" y="16" text-anchor="start" class="trend-axis-label gantt-month-label"><%= tick[:label] %></text>
   <% end %>
 
   <%# 今天參考線 %>
@@ -16,16 +21,29 @@
   <% rows.each_with_index do |row, index| %>
     <% row_y = gantt_chart_row_y(index) %>
     <text x="<%= ProjectHistoryHelper::GANTT_PADDING_LEFT - 8 %>" y="<%= row_y + ProjectHistoryHelper::GANTT_ROW_HEIGHT / 2 + 4 %>" text-anchor="end" class="gantt-row-label"><%= row[:project_name] %></text>
-    <line x1="<%= ProjectHistoryHelper::GANTT_PADDING_LEFT %>" x2="<%= ProjectHistoryHelper::GANTT_WIDTH - ProjectHistoryHelper::GANTT_PADDING_RIGHT %>"
+    <line x1="<%= ProjectHistoryHelper::GANTT_PADDING_LEFT %>" x2="<%= gantt_width - ProjectHistoryHelper::GANTT_PADDING_RIGHT %>"
           y1="<%= row_y + ProjectHistoryHelper::GANTT_ROW_HEIGHT / 2 %>" y2="<%= row_y + ProjectHistoryHelper::GANTT_ROW_HEIGHT / 2 %>" class="gantt-row-baseline"></line>
 
     <% row[:tasks].each do |task| %>
       <% rect = gantt_chart_task_rect(task, min_date, max_date) %>
       <% next if rect.nil? %>
-      <rect x="<%= rect[:x] %>" y="<%= row_y + 8 %>" width="<%= rect[:width] %>" height="<%= ProjectHistoryHelper::GANTT_ROW_HEIGHT - 16 %>" rx="4"
-            class="<%= rect[:done] ? 'gantt-task-done' : 'gantt-task-open' %>">
+      <% status_class = rect[:overdue] ? "delayed" : "ontime" %>
+      <% actual_y = row_y + 8 + ProjectHistoryHelper::GANTT_PLANNED_BAR_HEIGHT + ProjectHistoryHelper::GANTT_BAR_GAP %>
+      <rect x="<%= rect[:x] %>" y="<%= row_y + 8 %>" width="<%= rect[:planned_width] %>" height="<%= ProjectHistoryHelper::GANTT_PLANNED_BAR_HEIGHT %>" rx="2"
+            class="gantt-task-planned">
         <title><%= rect[:title] %></title>
       </rect>
+      <rect x="<%= rect[:x] %>" y="<%= actual_y %>" width="<%= rect[:actual_width] %>" height="<%= ProjectHistoryHelper::GANTT_ACTUAL_BAR_HEIGHT %>" rx="2"
+            class="gantt-task-actual-track gantt-task-actual-<%= status_class %><%= ' gantt-task-overdue' if rect[:overdue] %>">
+        <title><%= rect[:title] %></title>
+      </rect>
+      <% if rect[:fill_width].to_f > 0 %>
+        <rect x="<%= rect[:x] %>" y="<%= actual_y %>" width="<%= rect[:fill_width] %>" height="<%= ProjectHistoryHelper::GANTT_ACTUAL_BAR_HEIGHT %>" rx="2"
+              class="gantt-task-actual-fill-<%= status_class %>">
+          <title><%= rect[:title] %></title>
+        </rect>
+      <% end %>
     <% end %>
   <% end %>
 </svg>
+</div>

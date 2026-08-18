@@ -157,9 +157,13 @@ module Sheets
     # - assignees：該議題所有人員清單（保留原始順序、去重）
     # - estimated_hours／reported_remaining_hours：加總（後者若各列皆空白則維持 nil）
     # - 週人時：同一週的各列人時加總
-    # - start_date／due_date：僅在「該列 due_date 晚於 start_date」時視為合法列，取合法列中最早
-    #   的 start_date、最晚的 due_date；全部列皆不合法（含空白）時回傳 nil（進而讓 ideal_series
-    #   算出空陣列，而非讓單一列的髒資料拖累或誤植整個議題的區間）。
+    # - start_date／due_date：僅在「該列 due_date 不早於 start_date」時視為合法列（含「當天開
+    #   當天關」的同日議題——這是真實存在的快速調整型任務，不是資料錯誤，只有 due_date 早於
+    #   start_date 才是真正的資料錯誤），取合法列中最早的 start_date、最晚的 due_date；全部列
+    #   皆不合法（含空白）時回傳 nil（進而讓 ideal_series 算出空陣列，而非讓單一列的髒資料拖累
+    #   或誤植整個議題的區間）。零長度（同日）區間本身仍會被 compute_ideal_series 自己的
+    #   `due_d <= start_d` 判斷排除，不會畫出沒有意義的理想線斜率；本欄位只影響 start_date／
+    #   due_date 這兩個「顯示用」欄位是否為 nil，不影響理想線計算。
     def merge_rows(raw_rows, sorted_week_dates)
       raw_rows.group_by { |r| r[:issue_id] }.map do |issue_id, group|
         first = group.first
@@ -170,7 +174,7 @@ module Sheets
         valid_ranges = group.filter_map do |r|
           start_d = parsed_starts[r]
           due_d = parse_date(r[:due_date])
-          [ start_d, due_d ] if start_d && due_d && due_d > start_d
+          [ start_d, due_d ] if start_d && due_d && due_d >= start_d
         end
         start_date = valid_ranges.map(&:first).min&.iso8601
         due_date = valid_ranges.map(&:last).max&.iso8601

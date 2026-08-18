@@ -228,6 +228,10 @@ body {
   color: var(--overdue-text);
 }
 
+.row-overdue td:first-child {
+  border-left: 3px solid var(--overdue-text);
+}
+
 .overdue-tag {
   display: inline-block;
   margin-left: 0.5rem;
@@ -797,18 +801,24 @@ turbo-frame[busy] {
 }
 
 /* ── 專案歷程：甘特圖 ── */
-.gantt-svg {
-  width: 100%;
-  height: auto;
-  display: block;
-  background: var(--color-surface);
+/* 寬度不再用 width:100% 硬塞縮放——月份多時 SVG 本身比容器寬，交給 .gantt-scroll 左右捲動，
+   讓每個月維持一致的可讀寬度（見 ProjectHistoryHelper::GANTT_MONTH_PX）。 */
+.gantt-scroll {
+  overflow-x: auto;
   border: 1px solid var(--color-border);
   border-radius: 8px;
+  background: var(--color-surface);
+}
+
+.gantt-svg {
+  display: block;
 }
 
 .gantt-row-label {
   fill: var(--color-text-muted);
-  font-size: 11px;
+  /* 拿掉 .gantt-svg 的 width:100% 改用真實像素捲動後（見 .gantt-scroll），SVG 不再被瀏覽器
+     等比例放大，這裡的 px 就是螢幕上實際看到的大小，所以比原本 11px（曾經被放大顯示）調大。 */
+  font-size: 13px;
 }
 
 .gantt-row-baseline {
@@ -830,11 +840,145 @@ turbo-frame[busy] {
 }
 
 .gantt-month-label {
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .gantt-today-line {
-  stroke: var(--color-accent);
+  stroke: var(--overdue-text);
+  stroke-width: 2;
+  stroke-dasharray: 5 3;
+}
+
+/* DurationTask（307）：每個任務畫成「預計」「實際」上下兩條窄條（比照使用者提供的參考圖）。
+   預計＝規劃時程，固定用中性色；實際＝依準時／逾期上色（綠／紅），疊上的 fill 代表依工時消耗
+   比例算出的完成度（同色但飽和度更高，兩者疊在一起仍讀得出「準時/逾期」與「做了多少」）。 */
+.gantt-task-planned {
+  fill: var(--color-border);
+}
+
+.gantt-task-actual-track {
+  fill-opacity: 0.35;
+}
+
+.gantt-task-actual-ontime {
+  fill: var(--delay-negative);
+}
+
+.gantt-task-actual-delayed {
+  fill: var(--overdue-text);
+}
+
+.gantt-task-actual-fill-ontime {
+  fill: var(--delay-negative);
+}
+
+.gantt-task-actual-fill-delayed {
+  fill: var(--overdue-text);
+}
+
+.gantt-task-overdue {
+  stroke: var(--overdue-text);
   stroke-width: 1.5;
-  stroke-dasharray: 4 3;
+  stroke-dasharray: none;
+}
+
+.gantt-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+
+.legend-swatch-planned {
+  background: var(--color-border);
+}
+
+.legend-swatch-ontime {
+  background: var(--delay-negative);
+}
+
+.legend-swatch-delayed {
+  background: var(--overdue-text);
+}
+
+/* 專案總覽清單：卡片原地展開（<details>/<summary>，不需要 JS），點卡片標題展開該專案本年度
+   （或篩選年度）的議題明細，不再跳頁到獨立的縱向歷程頁面。 */
+.project-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.project-card {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+}
+
+.project-card-overdue {
+  border-left: 3px solid var(--overdue-text);
+}
+
+.project-card-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  list-style: revert;
+}
+
+.project-card-summary:hover {
+  background: var(--table-row-hover-bg);
+}
+
+.project-card-name {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.project-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.tag-status {
+  color: var(--color-accent);
+}
+
+.tag-hours {
+  font-variant-numeric: tabular-nums;
+}
+
+.project-card-body {
+  border-top: 1px solid var(--color-border);
+  padding: 0.5rem 1rem 1rem;
 }

@@ -2,17 +2,33 @@ module ProjectHistoryHelper
   # 邏輯移植自 docs/js/project-history-overview.js 的 renderGanttChart：X 軸依全部任務的
   # planned_completion_date／actual_completion_date（或今日）等比例縮放，每個專案一列，
   # 每個任務一個色塊；各自獨立實作，不與 JS 版共用程式碼（同既有 305/306/307 慣例）。
-  GANTT_WIDTH = 720
+  # 最小寬度：時間跨度短（月份少）時的下限，避免圖太窄。實際寬度依月份數量計算（見
+  # gantt_chart_svg_width），月份一多就變寬、靠外層 .gantt-scroll 容器左右捲動查看，不再靠
+  # CSS width:100% 把所有月份硬擠進固定寬度（那樣會讓色塊被壓到看不出寬度差異，也導致「明明
+  # 內容比較寬卻滑不動」——CSS 把 SVG 強制縮放去塞滿容器，沒有東西溢出，自然沒有捲動的必要）。
+  GANTT_MIN_WIDTH = 720
+  GANTT_MONTH_PX = 90
   GANTT_ROW_HEIGHT = 42
-  GANTT_PADDING_LEFT = 140
+  # 專案列標籤欄寬度：字級加大後（見 CSS .gantt-row-label）留寬一點，避免「亞炬 Platform」這種
+  # 較長的專案名稱被壓到跟時間軸格線重疊。
+  GANTT_PADDING_LEFT = 152
   GANTT_PADDING_RIGHT = 16
-  GANTT_PADDING_TOP = 16
-  # 底部留白給月份時間軸標籤（旋轉呈現，比照 trend chart 既有的 -45 度做法）。
-  GANTT_PADDING_BOTTOM = 40
+  # 頂部留白給月份時間軸標籤（水平呈現在第一列的正上方，使用者要求時間軸放在上方，比照參考圖
+  # 的版面配置，而不是既有 trend chart 那種畫在底部、旋轉 -45 度的做法）。
+  GANTT_PADDING_TOP = 28
+  GANTT_PADDING_BOTTOM = 8
+
+  # 每個任務畫成「預計」「實際」上下兩條窄條（比照使用者提供的參考圖：預計＝規劃時程，
+  # 實際＝依準時／逾期上色，並疊加工時消耗比例的填色）。兩條窄條中間留小間距，合計仍在單一
+  # GANTT_ROW_HEIGHT 列高的可畫區域內（列高 42、扣掉上下 8px 留白＝26px 可用，兩條窄條各 10px
+  # ＋ 3px 間距＝23px，足夠）。
+  GANTT_PLANNED_BAR_HEIGHT = 10
+  GANTT_BAR_GAP = 3
+  GANTT_ACTUAL_BAR_HEIGHT = 10
 
   def gantt_chart_domain(rows)
     dates = rows.flat_map { |r| r[:tasks] }
-                .flat_map { |t| [ t[:planned_completion_date], t[:actual_completion_date] ] }
+                .flat_map { |t| [ t[:start_date], t[:due_date] ] }
                 .filter_map { |d| parse_gantt_date(d) }
     all = dates + [ Date.current ]
     [ all.min, all.max ]
@@ -30,14 +46,44 @@ module ProjectHistoryHelper
     GANTT_PADDING_TOP + rows.length * GANTT_ROW_HEIGHT
   end
 
+  # 每個月至少留 GANTT_MONTH_PX 寬度，月份數愈多、圖愈寬（不是硬塞進固定寬度）；
+  # 至少維持 GANTT_MIN_WIDTH，避免時間跨度很短時圖太窄。只算月份數、不呼叫
+  # gantt_chart_month_ticks（那個方法要靠 gantt_chart_x 算座標，而 gantt_chart_x 又要靠這個
+  # 方法算出的寬度才能算座標——避免循環呼叫）。
+  def gantt_chart_svg_width(min_date, max_date)
+    needed = GANTT_PADDING_LEFT + GANTT_PADDING_RIGHT + gantt_chart_month_count(min_date, max_date) * GANTT_MONTH_PX
+    [ GANTT_MIN_WIDTH, needed ].max
+  end
+
+  def gantt_chart_month_count(min_date, max_date)
+    count = 0
+    cursor = min_date.beginning_of_month
+    while cursor <= max_date
+      count += 1
+      cursor = cursor.next_month
+    end
+    count
+  end
+
   # 月份時間軸格線＋標籤：讓甘特圖有座標可以參考現在看的是哪個月份，而不是一排沒有刻度的
   # 浮動色塊。以月為單位而非週（52 週的標籤會太密擠成一團看不清楚），格線本身仍細到能看出
   # 每個色塊落在哪個時間點附近。
+  #
+  # min_date 通常不是當月 1 號（例如某議題 3/15 開案，min_date 就是 3/15），但這裡刻意從
+  # 「min_date 所在月份的 1 號」開始畫格線，讓月份標籤對齊完整月份、不是從資料剛好開始的那天
+  # 算起的畸零日期。這代表第一個刻度（該月 1 號）本身可能早於 min_date，算出來的 x 座標會
+  # 小於 GANTT_PADDING_LEFT（畫布上專案列標籤欄的右邊界），沒有 clamp 的話格線與標籤會畫到
+  # 標籤欄裡面、蓋住專案名稱。故 clamp 在 [GANTT_PADDING_LEFT, 右邊界] 之間，格線視覺上對齊
+  # 繪圖區左緣，標籤文字內容仍是正確的月份，只是不會畫出繪圖區以外。
   def gantt_chart_month_ticks(min_date, max_date)
+    left = GANTT_PADDING_LEFT
+    right = gantt_chart_svg_width(min_date, max_date) - GANTT_PADDING_RIGHT
+
     ticks = []
     cursor = min_date.beginning_of_month
     while cursor <= max_date
-      ticks << { x: gantt_chart_x(cursor.iso8601, min_date, max_date).round(2), label: cursor.strftime("%Y/%m") }
+      x = gantt_chart_x(cursor.iso8601, min_date, max_date).clamp(left, right)
+      ticks << { x: x.round(2), label: cursor.strftime("%Y/%m") }
       cursor = cursor.next_month
     end
     ticks
@@ -54,20 +100,54 @@ module ProjectHistoryHelper
     series.map { |point| { date: point[:date], total: point[value_key] } }
   end
 
+  # 「預計」條＝ start_date～due_date（規劃時程，不受完成狀態影響）。「實際」條右界：已完成用
+  # due_date（307 無「實際完成日」欄位，見 design.md 決策）；未完成時取 due_date 與今日兩者較晚
+  # 者——尚未到期維持顯示到 due_date，已逾期則延伸到今日呈現「拖了多久」。「實際」條依是否逾期
+  # 上色（準時＝綠、逾期未完成＝紅），並疊加工時消耗比例的填色（需求 2）。
   def gantt_chart_task_rect(task, min_date, max_date)
-    x1 = gantt_chart_x(task[:planned_completion_date], min_date, max_date)
+    x1 = gantt_chart_x(task[:start_date], min_date, max_date)
     return nil if x1.nil?
 
-    end_date = task[:actual_completion_date].presence || Date.current.iso8601
-    x2 = gantt_chart_x(end_date, min_date, max_date) || x1
-    x2 = [ x2, x1 + 4 ].max
+    due_d = parse_gantt_date(task[:due_date])
+
+    planned_end = task[:due_date].presence || Date.current.iso8601
+    planned_x2 = [ gantt_chart_x(planned_end, min_date, max_date) || x1, x1 + 4 ].max
+
+    overdue = !task[:done] && due_d.present? && due_d < Date.current
+    actual_end =
+      if task[:done] || due_d.nil?
+        task[:due_date].presence || Date.current.iso8601
+      else
+        [ due_d, Date.current ].max.iso8601
+      end
+    actual_x2 = [ gantt_chart_x(actual_end, min_date, max_date) || x1, x1 + 4 ].max
+    actual_width = actual_x2 - x1
 
     {
-      x: x1.round(2), width: (x2 - x1).round(2),
-      done: task[:actual_completion_date].present?,
-      title: "#{task[:task_name]}（#{task[:status]}）#{gantt_chart_short_date(task[:planned_completion_date])} ～ " \
-             "#{task[:actual_completion_date].present? ? gantt_chart_short_date(task[:actual_completion_date]) : '進行中'}"
+      x: x1.round(2),
+      planned_width: (planned_x2 - x1).round(2),
+      actual_width: actual_width.round(2),
+      fill_width: (actual_width * duration_fill_ratio(task)).round(2),
+      done: !!task[:done],
+      overdue: overdue,
+      title: duration_task_title(task)
     }
+  end
+
+  # 已消耗人時／預估人時 clamp 至 0~1；consumed_hours 為 nil（該議題無 actual_series 資料）或
+  # estimated_hours 為 0 時回傳 0，不填色（需求 2.2）。
+  def duration_fill_ratio(task)
+    estimated = task[:estimated_hours].to_f
+    consumed = task[:consumed_hours]
+    return 0.0 if consumed.nil? || estimated <= 0
+
+    (consumed.to_f / estimated).clamp(0.0, 1.0)
+  end
+
+  def duration_task_title(task)
+    hours_note = task[:consumed_hours] ? "#{task[:consumed_hours]}h／#{task[:estimated_hours]}h" : "工時資料不足"
+    "#{task[:task_name]}（#{task[:done] ? '已完成' : '進行中'}）" \
+      "#{gantt_chart_short_date(task[:start_date])} ～ #{gantt_chart_short_date(task[:due_date])}｜#{hours_note}"
   end
 
   private
@@ -77,11 +157,11 @@ module ProjectHistoryHelper
     return nil if date.nil?
 
     span = [ (max_date - min_date).to_f, 1.0 ].max
-    GANTT_PADDING_LEFT + ((date - min_date).to_f / span) * gantt_chart_plot_width
+    GANTT_PADDING_LEFT + ((date - min_date).to_f / span) * gantt_chart_plot_width(min_date, max_date)
   end
 
-  def gantt_chart_plot_width
-    GANTT_WIDTH - GANTT_PADDING_LEFT - GANTT_PADDING_RIGHT
+  def gantt_chart_plot_width(min_date, max_date)
+    gantt_chart_svg_width(min_date, max_date) - GANTT_PADDING_LEFT - GANTT_PADDING_RIGHT
   end
 
   def parse_gantt_date(date_str)
