@@ -52,50 +52,44 @@
       <% if @filtered_issues.empty? %>
         <p class="empty-state">目前無符合條件的議題</p>
       <% else %>
-        <table class="project-tasks burndown-status-table">
-          <thead>
-            <tr>
-              <th>議題</th>
-              <th>負責人</th>
-              <th>預估人時</th>
-              <th>已消耗</th>
-              <th>剩餘</th>
-              <th>狀態</th>
-            </tr>
-          </thead>
-          <tbody>
-            <% @filtered_issues.each_with_index do |issue, index| %>
-              <% status = burndown_status(issue) %>
-              <tr>
-                <td><%= "#{issue[:project]}／#{issue[:issue_title]}" %></td>
-                <td><%= issue[:assignees].join("、") %></td>
-                <td><%= issue[:estimated_hours] %></td>
-                <td><%= burndown_consumed_hours(issue) || "—" %></td>
-                <td><%= burndown_remaining_hours(issue) || "—" %></td>
-                <td>
-                  <span class="status-badge status-<%= status[:key] %>"><%= status[:label] %></span>
-                  <a href="#burndown-issue-<%= index %>" class="back-link">查看趨勢圖 ↓</a>
-                </td>
-              </tr>
-            <% end %>
-          </tbody>
-        </table>
+        <div class="burndown-status-table">
+          <div class="burndown-status-row burndown-status-header" role="row">
+            <span>議題</span>
+            <span>負責人</span>
+            <span>預估人時</span>
+            <span>已消耗</span>
+            <span>剩餘</span>
+            <span>狀態</span>
+          </div>
 
-        <% @filtered_issues.each_with_index do |issue, index| %>
-          <details class="burndown-chart-details" id="burndown-issue-<%= index %>">
-            <summary><%= "#{issue[:project]}／#{issue[:issue_title]}（#{issue[:assignees].join('、')}）趨勢圖" %></summary>
-            <%= render partial: "burndown_chart",
-                       locals: {
-                         title: "#{issue[:project]}／#{issue[:issue_title]}（#{issue[:assignees].join('、')}）",
-                         actual_series: issue[:actual_series],
-                         ideal_series: issue[:ideal_series]
-                       } %>
-            <% if issue[:assignees].size > 1 %>
-              <%= render partial: "burndown_stacked_chart",
-                         locals: { per_assignee: issue[:per_assignee], estimated_hours: issue[:estimated_hours] } %>
-            <% end %>
-          </details>
-        <% end %>
+          <% @filtered_issues.each do |issue| %>
+            <% status = burndown_status(issue) %>
+            <details class="burndown-status-details">
+              <summary class="burndown-status-summary">
+                <span class="burndown-status-row">
+                  <span><%= "#{issue[:project]}／#{issue[:issue_title]}" %></span>
+                  <span><%= issue[:assignees].join("、") %></span>
+                  <span><%= issue[:estimated_hours] %></span>
+                  <span><%= burndown_consumed_hours(issue) || "—" %></span>
+                  <span><%= burndown_remaining_hours(issue) || "—" %></span>
+                  <span><span class="status-badge status-<%= status[:key] %>"><%= status[:label] %></span></span>
+                </span>
+              </summary>
+              <div class="burndown-status-detail">
+                <%= render partial: "burndown_chart",
+                           locals: {
+                             title: "#{issue[:project]}／#{issue[:issue_title]}（#{issue[:assignees].join('、')}）",
+                             actual_series: issue[:actual_series],
+                             ideal_series: issue[:ideal_series]
+                           } %>
+                <% if issue[:assignees].size > 1 %>
+                  <%= render partial: "burndown_stacked_chart",
+                             locals: { per_assignee: issue[:per_assignee], estimated_hours: issue[:estimated_hours] } %>
+                <% end %>
+              </div>
+            </details>
+          <% end %>
+        </div>
       <% end %>
     </section>
   <% end %>

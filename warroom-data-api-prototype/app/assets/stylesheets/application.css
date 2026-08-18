@@ -647,37 +647,78 @@ turbo-frame[busy]::after {
 .status-over       { background: var(--overdue-bg); color: var(--overdue-text); }
 .status-unknown   { background: var(--badge-pending-bg); color: var(--badge-pending-text); }
 
-/* 表格中「查看趨勢圖」摺疊區塊：預設收合，避免資料點稀疏的議題也佔滿版面高度 */
-.burndown-chart-details {
-  margin-bottom: 1.5rem;
+/* 每一列本身就是 <details>，summary 是可點擊整列展開的表頭列，點列即可在原地展開該議題的
+   趨勢圖，不需要另外的「查看趨勢圖」連結跳到頁面下方另一個區塊。 */
+.burndown-status-table {
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 0.75rem;
-  padding: 0 1rem;
+  overflow: hidden;
 }
 
-.burndown-chart-details[open] {
-  padding-bottom: 1rem;
+.burndown-status-row {
+  display: grid;
+  grid-template-columns: 2fr 1.2fr 0.8fr 0.8fr 0.8fr 1fr;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
 }
 
-.burndown-chart-details summary {
-  padding: 0.85rem 0;
-  cursor: pointer;
-  color: var(--color-text-strong);
+.burndown-status-header {
+  color: var(--color-text-faint);
   font-weight: 500;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.burndown-status-details {
+  border-bottom: 1px solid var(--table-row-border);
+}
+
+.burndown-status-details:last-child {
+  border-bottom: none;
+}
+
+/* summary 本身用 flex 排「展開箭頭」+「內層 grid 列」兩塊，箭頭不能放進 grid 內層
+   （.burndown-status-row 的 ::before 會被當成一個 grid item，把 6 欄位擠位移、跟表頭對不齊）。 */
+.burndown-status-details > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  color: var(--color-text);
   list-style: none;
 }
 
-.burndown-chart-details summary::-webkit-details-marker {
+.burndown-status-details > summary .burndown-status-row {
+  flex: 1;
+  padding: 0;
+}
+
+.burndown-status-details > summary::-webkit-details-marker {
   display: none;
 }
 
-.burndown-chart-details summary::before {
-  content: "▸ ";
+.burndown-status-details > summary::before {
+  content: "▸";
   color: var(--color-accent);
+  flex-shrink: 0;
 }
 
-.burndown-chart-details[open] summary::before {
-  content: "▾ ";
+.burndown-status-details[open] > summary::before {
+  content: "▾";
+}
+
+.burndown-status-details > summary:hover {
+  background: var(--table-row-hover-bg);
+}
+
+.burndown-status-detail {
+  padding: 0 1rem 1.25rem;
 }
 
 .burndown-actual-point {
