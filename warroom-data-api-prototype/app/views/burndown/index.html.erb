@@ -76,16 +76,7 @@
                 </span>
               </summary>
               <div class="burndown-status-detail">
-                <%= render partial: "burndown_chart",
-                           locals: {
-                             title: "#{issue[:project]}／#{issue[:issue_title]}（#{issue[:assignees].join('、')}）",
-                             actual_series: issue[:actual_series],
-                             ideal_series: issue[:ideal_series]
-                           } %>
-                <% if issue[:assignees].size > 1 %>
-                  <%= render partial: "burndown_stacked_chart",
-                             locals: { per_assignee: issue[:per_assignee], estimated_hours: issue[:estimated_hours] } %>
-                <% end %>
+                <%= render partial: "burndown_combo_chart", locals: { issue: issue } %>
               </div>
             </details>
           <% end %>

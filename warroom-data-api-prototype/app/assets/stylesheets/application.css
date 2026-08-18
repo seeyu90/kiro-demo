@@ -628,6 +628,13 @@ turbo-frame[busy]::after {
   color: var(--color-text-strong);
 }
 
+.chart-caption {
+  font-size: 0.8rem;
+  color: var(--color-text-faint);
+  margin: 0 0 0.75rem;
+  max-width: 60ch;
+}
+
 .burndown-ideal-line {
   fill: none;
   stroke: var(--color-text-muted);

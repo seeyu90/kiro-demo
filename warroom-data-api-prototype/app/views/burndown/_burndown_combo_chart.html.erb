@@ -1,0 +1,69 @@
+<div class="burndown-chart-block">
+  <% title = "#{issue[:project]}／#{issue[:issue_title]}（#{issue[:assignees].join('、')}）" %>
+  <h3><%= title %></h3>
+  <p class="chart-caption">長條是每人「當週實際消耗人時」；兩條線是議題累積消耗人時，虛線是照計畫應該累積到多少，藍色實線是實際累積到多少——實線落在虛線下方代表進度比計畫慢。</p>
+
+  <% dates = burndown_combo_dates(issue) %>
+  <% if dates.blank? %>
+    <p class="empty-state">無燃盡資料</p>
+  <% else %>
+    <% weekly_by_assignee = burndown_weekly_by_assignee(issue[:per_assignee]) %>
+    <% left_max = burndown_combo_bar_max(weekly_by_assignee, dates) %>
+    <% bars = burndown_combo_bars(weekly_by_assignee, dates, left_max) %>
+
+    <% cumulative_actual = burndown_cumulative_consumed(issue[:actual_series], issue[:estimated_hours]) %>
+    <% cumulative_ideal = issue[:ideal_series].present? ? burndown_cumulative_consumed(issue[:ideal_series], issue[:estimated_hours]) : [] %>
+    <% right_max = burndown_combo_line_max(cumulative_actual, cumulative_ideal, issue[:estimated_hours]) %>
+    <% actual_points = burndown_chart_points(cumulative_actual, dates, 0, right_max) %>
+    <% ideal_points = cumulative_ideal.present? ? burndown_chart_points(cumulative_ideal, dates, 0, right_max) : [] %>
+
+    <svg viewBox="0 0 <%= BurndownHelper::BURNDOWN_WIDTH %> <%= BurndownHelper::BURNDOWN_HEIGHT %>" class="trend-svg" role="img" aria-label="<%= title %> 週別人時與累積進度">
+      <% burndown_chart_y_ticks(0, left_max).each do |tick| %>
+        <line x1="<%= BurndownHelper::BURNDOWN_PADDING_LEFT %>" x2="<%= BurndownHelper::BURNDOWN_WIDTH - BurndownHelper::BURNDOWN_PADDING_RIGHT %>"
+              y1="<%= tick[:y] %>" y2="<%= tick[:y] %>" class="trend-gridline"></line>
+        <text x="<%= BurndownHelper::BURNDOWN_PADDING_LEFT - 8 %>" y="<%= tick[:y] + 3 %>" text-anchor="end" class="trend-axis-label trend-y-label"><%= tick[:value] %></text>
+      <% end %>
+
+      <% burndown_combo_right_ticks(right_max).each do |tick| %>
+        <text x="<%= BurndownHelper::BURNDOWN_WIDTH - BurndownHelper::BURNDOWN_PADDING_RIGHT + 8 %>" y="<%= tick[:y] + 3 %>" text-anchor="start" class="trend-axis-label trend-y-label trend-y-label-right"><%= tick[:value] %></text>
+      <% end %>
+
+      <% burndown_chart_x_labels(dates).each do |label| %>
+        <% label_y = BurndownHelper::BURNDOWN_HEIGHT - BurndownHelper::BURNDOWN_PADDING_BOTTOM + 18 %>
+        <text x="<%= label[:x] %>" y="<%= label_y %>" text-anchor="end" transform="rotate(-45 <%= label[:x] %> <%= label_y %>)" class="trend-axis-label trend-x-label"><%= label[:text] %></text>
+      <% end %>
+
+      <% bars.each do |bar| %>
+        <rect x="<%= bar[:x] %>" y="<%= bar[:y] %>" width="<%= bar[:width] %>" height="<%= bar[:height] %>"
+              fill="<%= bar[:color] %>" fill-opacity="0.85">
+          <title><%= bar[:assignee] %>｜<%= bar[:date] %>｜當週 <%= bar[:hours] %> 小時</title>
+        </rect>
+      <% end %>
+
+      <% if ideal_points.any? %>
+        <polyline points="<%= burndown_chart_polyline(ideal_points) %>" class="burndown-ideal-line"></polyline>
+      <% end %>
+      <polyline points="<%= burndown_chart_polyline(actual_points) %>" class="burndown-actual-line"></polyline>
+
+      <% actual_points.each do |point| %>
+        <circle cx="<%= point[:x] %>" cy="<%= point[:y] %>" r="3.5" class="burndown-actual-point" tabindex="0">
+          <title><%= point[:date] %> ｜ 實際累積消耗 <%= point[:hours] %> 小時</title>
+        </circle>
+      <% end %>
+    </svg>
+
+    <ul class="burndown-stack-legend">
+      <% weekly_by_assignee.each_with_index do |w, idx| %>
+        <% pa = issue[:per_assignee].find { |entry| entry[:assignee] == w[:assignee] } %>
+        <% pa_status = burndown_per_assignee_status(pa, issue) %>
+        <% pa_consumed = pa[:cumulative_series].max_by { |p| p[:date] }&.dig(:hours) %>
+        <li>
+          <span class="burndown-stack-swatch" style="background-color: <%= BurndownHelper::BURNDOWN_STACK_COLORS[idx % BurndownHelper::BURNDOWN_STACK_COLORS.length] %>"></span>
+          <%= w[:assignee] %>（<%= pa_consumed %> ／ <%= pa[:estimated_hours] %>）
+          <span class="status-badge status-<%= pa_status[:key] %>"><%= pa_status[:label] %></span>
+        </li>
+      <% end %>
+      <li><span class="burndown-stack-swatch burndown-stack-swatch-reference"></span>總預估人時（<%= issue[:estimated_hours] %>）</li>
+    </ul>
+  <% end %>
+</div>

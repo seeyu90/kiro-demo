@@ -80,6 +80,56 @@ RSpec.describe BurndownHelper, type: :helper do
     end
   end
 
+  describe "#burndown_per_assignee_status" do
+    let(:issue_dates) { { start_date: "2026-08-01", due_date: "2026-08-15" } }
+
+    def per_assignee_entry(estimated_hours:, cumulative_series:)
+      { estimated_hours: estimated_hours, cumulative_series: cumulative_series }
+    end
+
+    it "does not flag someone who simply has a bigger share of the work" do
+      # 兩人同一天進度都是「剛好符合自己份量的時間進度」，即使花的絕對人時差很多
+      # （20 vs 4），兩人都不該被標記——份量本來就不一樣。
+      today = issue_dates.merge(estimated_hours: 999) # estimated_hours 不影響這個方法本身
+      big_share = per_assignee_entry(estimated_hours: 40.0, cumulative_series: [ { date: "2026-08-08", hours: 20.0 } ])
+      small_share = per_assignee_entry(estimated_hours: 8.0, cumulative_series: [ { date: "2026-08-08", hours: 4.0 } ])
+
+      expect(helper.burndown_per_assignee_status(big_share, today)[:key]).to eq(:on_track)
+      expect(helper.burndown_per_assignee_status(small_share, today)[:key]).to eq(:on_track)
+    end
+
+    it "flags the person who is behind relative to their own allocation, not the one with more raw hours" do
+      i = issue_dates.merge(estimated_hours: 999)
+      # 8/8 是開案（8/1）到完成（8/15）中間，時間進度 50%。
+      behind = per_assignee_entry(estimated_hours: 40.0, cumulative_series: [ { date: "2026-08-08", hours: 5.0 } ])
+      on_track_with_fewer_hours = per_assignee_entry(estimated_hours: 8.0, cumulative_series: [ { date: "2026-08-08", hours: 4.0 } ])
+
+      expect(helper.burndown_per_assignee_status(behind, i)[:key]).to eq(:over)
+      expect(helper.burndown_per_assignee_status(on_track_with_fewer_hours, i)[:key]).to eq(:on_track)
+    end
+
+    it "returns :over when someone has already consumed more than their own estimate" do
+      i = issue_dates.merge(estimated_hours: 999)
+      pa = per_assignee_entry(estimated_hours: 8.0, cumulative_series: [ { date: "2026-08-08", hours: 9.0 } ])
+
+      expect(helper.burndown_per_assignee_status(pa, i)).to eq(key: :over, label: "超支")
+    end
+
+    it "returns :unknown when the person's own estimated_hours is zero" do
+      i = issue_dates.merge(estimated_hours: 999)
+      pa = per_assignee_entry(estimated_hours: 0, cumulative_series: [ { date: "2026-08-08", hours: 1.0 } ])
+
+      expect(helper.burndown_per_assignee_status(pa, i)[:key]).to eq(:unknown)
+    end
+
+    it "returns :unknown when the issue has no valid start/due date to compute time progress" do
+      i = { start_date: nil, due_date: nil, estimated_hours: 999 }
+      pa = per_assignee_entry(estimated_hours: 8.0, cumulative_series: [ { date: "2026-08-08", hours: 4.0 } ])
+
+      expect(helper.burndown_per_assignee_status(pa, i)[:key]).to eq(:unknown)
+    end
+  end
+
   describe "#burndown_remaining_hours" do
     it "prefers reported_remaining_hours when present" do
       i = issue(estimated_hours: 10.0, actual_series: [ { date: "2026-08-10", hours: 5.0 } ],
