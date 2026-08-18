@@ -18,10 +18,20 @@ class BurndownSheetsClient
   MAX_DATA_ROWS = 500
 
   SCOPES = [ "https://www.googleapis.com/auth/spreadsheets.readonly" ].freeze
+  CACHE_EXPIRY = 5.minutes
 
+  # 比照 ProjectProgressSheetsClient／IssueSheetsClient 的快取作法：快取鍵含分頁名稱，
+  # 避免年度切換分頁（SHEET_NAME）改變時誤用到舊分頁的快取值。
   def self.fetch_rows
-    new.fetch_rows
+    Rails.cache.fetch(cache_key, expires_in: CACHE_EXPIRY) do
+      new.fetch_rows
+    end
   end
+
+  def self.cache_key
+    "burndown_sheets_client/fetch_rows/#{SPREADSHEET_ID}/#{SHEET_NAME}"
+  end
+  private_class_method :cache_key
 
   def fetch_rows
     service = build_service
