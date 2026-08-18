@@ -156,6 +156,16 @@ body {
   flex-wrap: wrap;
 }
 
+/* 版面較窄、篩選項目換行時，這兩個按鈕常自己獨立換到下一行；margin-left:auto 把它們推到
+   所在那一行的最右側（flex-wrap 底下 auto margin 是逐行生效），比靠左黏在篩選項目下面
+   更符合一般「篩選在左、動作按鈕在右」的慣例。 */
+.filter-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-left: auto;
+}
+
 .control-group {
   display: flex;
   align-items: center;
@@ -174,10 +184,30 @@ body {
   margin: 0;
 }
 
+/* <legend> 即使 fieldset 設 display:flex，瀏覽器仍會把 legend 渲染成獨立一行、疊在
+   checkbox／radio 那一列「上面」（撐高整個 fieldset），跟同一排的 .control-group／
+   .apply-filters-btn 等純 div／button 元素比，會讓 fieldset 明顯變高，即使外層
+   .project-selector 的 align-items:center 有把每個 item 的「外框」置中，fieldset 裡面
+   真正的 checkbox 那一列仍會因為上方多出 legend 的高度而看起來偏低、跟其他控制項對不齊
+   （見 warroom-dashboard-optimization spec 的截圖回報）。改成 legend 本身視覺隱藏（保留
+   給螢幕閱讀器用），另外用一個 <span> 當作看得到的標籤、跟 checkbox／radio 同一列排列，
+   fieldset 才會跟其他控制項一樣只有單行高度。 */
 .type-filter legend,
 .scope-filter legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.filter-group-label {
   font-weight: 600;
-  padding: 0 0.25rem;
+  padding: 0 0.25rem 0 0;
   color: var(--color-text-muted);
   font-size: 0.875rem;
 }
@@ -476,8 +506,11 @@ turbo-frame[busy]::after {
   font-size: 0.875rem;
 }
 
-/* ── 306 議題頁面（IssuesController） ── */
+/* ── 306 議題頁面（IssuesController，306/307/專案歷程共用） ── */
 .issue-section {
+  /* 篩選表單（.project-selector）本身沒有 margin-bottom，緊接著的標題（h2）也只有
+     margin-bottom，兩者中間完全沒有間距，篩選列跟下方標題會黏在一起（見截圖回報）。 */
+  margin-top: 1.5rem;
   margin-bottom: 2.5rem;
 }
 

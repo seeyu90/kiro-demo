@@ -27,7 +27,11 @@
     </div>
 
     <fieldset class="type-filter">
+      <%# legend 視覺上隱藏（見 application.css 的 .type-filter legend 註解），只留給螢幕
+          閱讀器；看得到的標籤是下面的 .filter-group-label span，跟 checkbox 同一列排列，
+          fieldset 才不會因為 legend 佔掉獨立一行而比其他篩選控制項高一截、對不齊。 %>
       <legend>任務類型</legend>
+      <span class="filter-group-label" aria-hidden="true">任務類型</span>
       <%# 隱藏欄位：確保「全部取消勾選」時 params[:task_type] 仍會被送出（值為 [""]），
           與「完全沒有 task_type 參數」（首次載入，套用預設值）明確區分開來 %>
       <input type="hidden" name="task_type[]" value="">
@@ -41,6 +45,7 @@
 
     <fieldset class="scope-filter">
       <legend>範圍</legend>
+      <span class="filter-group-label" aria-hidden="true">範圍</span>
       <label><%= radio_button_tag :scope, "all", @scope == "all" %> 全部</label>
       <label><%= radio_button_tag :scope, "due_this_week", @scope == "due_this_week" %> 本週到期（含已逾期）</label>
       <label><%= radio_button_tag :scope, "overdue", @scope == "overdue" %> 已逾期</label>
@@ -54,13 +59,17 @@
       只顯示未完成
     </label>
 
-    <%= submit_tag "套用篩選", class: "apply-filters-btn" %>
-    <%# name="refresh" 讓瀏覽器只在這個按鈕被點擊時才送出 refresh 參數（一般表單只送出被點擊的
-        submit 按鈕的 name/value），藉此重用同一個表單、同一套 Turbo Frame／載入狀態行為，
-        不需要另外一個獨立表單。注意：submit_tag 的第一個參數同時是按鈕顯示文字「和」送出的
-        value，所以這裡不能額外傳 value: 選項覆蓋顯示文字，Controller 改用「有沒有這個參數」
-        判斷，不比對特定字串值。 %>
-    <%= submit_tag "重新整理資料", name: "refresh", class: "apply-filters-btn refresh-btn" %>
+    <%# margin-left:auto 把兩個按鈕推到同一行的最右側（filter row 用 flex-wrap，這兩個按鈕
+        常常會自己獨立換到下一行，靠左黏在篩選項目下面不好看，置右比較符合一般慣例）。 %>
+    <div class="filter-actions">
+      <%= submit_tag "套用篩選", class: "apply-filters-btn" %>
+      <%# name="refresh" 讓瀏覽器只在這個按鈕被點擊時才送出 refresh 參數（一般表單只送出被點擊的
+          submit 按鈕的 name/value），藉此重用同一個表單、同一套 Turbo Frame／載入狀態行為，
+          不需要另外一個獨立表單。注意：submit_tag 的第一個參數同時是按鈕顯示文字「和」送出的
+          value，所以這裡不能額外傳 value: 選項覆蓋顯示文字，Controller 改用「有沒有這個參數」
+          判斷，不比對特定字串值。 %>
+      <%= submit_tag "重新整理資料", name: "refresh", class: "apply-filters-btn refresh-btn" %>
+    </div>
   <% end %>
 
   <% if @error.present? %>
