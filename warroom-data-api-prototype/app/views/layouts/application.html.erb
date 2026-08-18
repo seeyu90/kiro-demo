@@ -119,6 +119,49 @@
             if (btn.dataset.defaultLabel) btn.textContent = btn.dataset.defaultLabel;
           });
         });
+
+        // 快取命中或本機測試時，篩選請求常常快到 turbo-frame[busy] 的轉圈圈只閃一下就消失，
+        // 看起來像畫面故障而不是「有在載入」。強制轉圈圈至少顯示 MIN_LOADING_MS。
+        //
+        // 讀 Turbo 原始碼確認過兩種做法都行不通：
+        // 1. turbo:before-frame-render 的 preventDefault()+resume() 只會延後「換上新內容」，
+        //    busy 屬性是在表單送出完成時（FormSubmission#requestFinished 呼叫
+        //    delegate.formSubmissionFinished）就移除，跟 render/resume 是兩條獨立路徑。
+        // 2. 在 turbo:submit-end 監聽器裡 setAttribute("busy") 也沒用：Turbo 是先
+        //    dispatch "turbo:submit-end"，接著在「同一個呼叫堆疊」馬上呼叫
+        //    formSubmissionFinished 移除 busy——我們在監聽器裡補上的 busy 屬性會被這個
+        //    緊接在後的內部呼叫立刻蓋掉，肉眼看不出效果。
+        // 解法：把「補回 busy」這件事丟到下一個 tick（setTimeout 0），確保排在 Turbo 自己
+        // 的 formSubmissionFinished 之後才執行，這樣補上去的 busy 才不會被蓋掉。
+        var MIN_LOADING_MS = 1000;
+
+        document.addEventListener("turbo:submit-start", function (event) {
+          var form = event.target.closest(".project-selector");
+          if (!form) return;
+          var frame = document.getElementById(form.dataset.turboFrame);
+          if (frame) frame.dataset.loadingStartedAt = String(Date.now());
+        });
+
+        document.addEventListener("turbo:submit-end", function (event) {
+          var form = event.target.closest(".project-selector");
+          if (!form) return;
+          var frame = document.getElementById(form.dataset.turboFrame);
+          if (!frame) return;
+
+          var startedAt = Number(frame.dataset.loadingStartedAt);
+          delete frame.dataset.loadingStartedAt;
+          if (!startedAt) return;
+
+          var remaining = MIN_LOADING_MS - (Date.now() - startedAt);
+          if (remaining <= 0) return;
+
+          setTimeout(function () {
+            frame.setAttribute("busy", "");
+            setTimeout(function () {
+              frame.removeAttribute("busy");
+            }, remaining);
+          }, 0);
+        });
       })();
     </script>
   </body>
