@@ -1,4 +1,29 @@
 module ProjectHistoryHelper
+  # 「已消耗 / 預估」工時顯示：整數值不顯示多餘的 .0（34.0h → 34h，43.75h 這種有意義的小數
+  # 維持原樣）；用固定寬度讓數字兩端對齊、"/" 固定在同一欄，不會因為每列位數不同而東倒西歪。
+  #
+  # 已消耗超過預估（超支）時整組數字變成警示色——「進度」欄的百分比 clamp 在 100%，議題早已
+  # 完成時看不出「其實花了預估的 3 倍工時」這種真正該被注意的資訊，只有工時欄的原始數字才藏得
+  # 住這個落差，故在這裡額外標示，不同花費比例的議題不會長得一樣。
+  def hours_pair(consumed, estimated)
+    return "—".html_safe if consumed.nil? || estimated.nil?
+
+    overspent = estimated.to_f.positive? && consumed.to_f > estimated.to_f
+    classes = [ "hours-pair" ]
+    classes << "hours-pair-overspent" if overspent
+
+    content_tag(:span, class: classes.join(" ")) do
+      content_tag(:span, "#{format_hours(consumed)}h", class: "hours-num") +
+        content_tag(:span, "/", class: "hours-sep") +
+        content_tag(:span, "#{format_hours(estimated)}h", class: "hours-num")
+    end
+  end
+
+  def format_hours(value)
+    f = value.to_f
+    (f == f.to_i ? f.to_i : f).to_s
+  end
+
   # 邏輯移植自 docs/js/project-history-overview.js 的 renderGanttChart：X 軸依全部任務的
   # planned_completion_date／actual_completion_date（或今日）等比例縮放，每個專案一列，
   # 每個任務一個色塊；各自獨立實作，不與 JS 版共用程式碼（同既有 305/306/307 慣例）。

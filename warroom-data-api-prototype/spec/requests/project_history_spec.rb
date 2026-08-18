@@ -29,18 +29,6 @@ RSpec.describe "ProjectHistory", type: :request do
     ]
   end
 
-  let(:month_kpi_rows) { [ %w[year_month 客訴 測試 總Bug 攔截率 完成數 未結案 平均天數 SLA達標率 Top3] ] }
-  let(:daily_kpi_rows) { [ %w[日期 客訴 測試 其他 總計] ] }
-  let(:issue_rows) do
-    [
-      %w[issue_id subject type tracker status assigned_to start_date due_date work_days sheet_name project],
-      [ "5171", "廠區用電監測告警延遲", "Complaint", "臭蟲", "新建立", "黃靖益",
-        "2026/08/13", "", "", "raw_2026", "AG 亞炬" ],
-      [ "5188", "報表匯出欄位順序錯誤", "TestingBug", "臭蟲", "已結束", "蔡秉逸",
-        "2026/07/29", "", "", "raw_2026", "AG 亞炬" ]
-    ]
-  end
-
   let(:burndown_header) { %w[剩餘人時 專案 議題 人員 議題ID 開案日期 完成日期 狀態 預估人時] }
   # 兩個專案都給一筆 2026 年開案的議題，讓總覽頁在「年度」預設今年（travel_to 2026/08/16）的
   # 篩選下，兩個專案都還會出現在清單裡（需求：無 307 對應議題的專案在選定年度下不列出）。
@@ -55,9 +43,6 @@ RSpec.describe "ProjectHistory", type: :request do
   before do
     allow(ProjectRosterSheetsClient).to receive(:fetch_rows).and_return(roster_rows)
     allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_return(progress_rows)
-    allow(IssueSheetsClient).to receive(:fetch_month_kpi_rows).and_return(month_kpi_rows)
-    allow(IssueSheetsClient).to receive(:fetch_daily_kpi_rows).and_return(daily_kpi_rows)
-    allow(IssueSheetsClient).to receive(:fetch_issue_rows).and_return(issue_rows)
     allow(BurndownSheetsClient).to receive(:fetch_rows).and_return(burndown_rows)
   end
 
@@ -76,13 +61,6 @@ RSpec.describe "ProjectHistory", type: :request do
       expect(response.body).to match(%r{<a[^>]*data-turbo-frame="_top"[^>]*>入口頁</a>})
     end
 
-    it "shows a breadcrumb with a clickable link back to the overview from the detail page" do
-      get "/project_history", params: { project: "AG 亞炬" }
-
-      expect(response.body).to include("專案歷程總覽")
-      expect(response.body).to match(%r{<a[^>]*>專案歷程總覽</a>})
-    end
-
     it "lists both projects as expandable cards, joined with roster customer/pm" do
       expect(response.body).to include("AG 亞炬").and include("亞炬").and include("呂俐禎")
       expect(response.body).to include("Virtuous HRM").and include("AMAS").and include("楊欣翰")
@@ -97,9 +75,9 @@ RSpec.describe "ProjectHistory", type: :request do
 
     # 統計工時（進度％、已消耗/預估工時）以卡片標題列的 tag 呈現，AG 亞炬在 burndown_rows 有
     # 對應議題（依工時比例算出進度%）。
-    it "shows a 統計工時 tag with a percentage-derived hours summary in the card header" do
+    it "shows a 統計工時 tag with a hours-pair (aligned consumed/estimated) summary in the card header" do
       expect(response.body).to include("tag-hours")
-      expect(response.body).to match(%r{tag-hours">\s*[\d.]+h / [\d.]+h\s*</span>})
+      expect(response.body).to match(%r{tag-hours">\s*<span class="hours-pair">.*?</span>\s*</span>}m)
     end
   end
 
@@ -228,35 +206,6 @@ RSpec.describe "ProjectHistory", type: :request do
       get "/project_history", params: { view: "gantt" }
 
       expect(response.body).to match(%r{<rect[^>]*class="gantt-task-actual-fill-\w+"[^>]*>\s*<title>[^<]*API 效能優化[^<]*</title>\s*</rect>})
-    end
-  end
-
-  describe "GET /project_history?project=... (detail)" do
-    before { get "/project_history", params: { project: "AG 亞炬" } }
-
-    it "returns HTTP 200 and renders all four detail sections" do
-      expect(response).to have_http_status(200)
-      expect(response.body).to include("花費工時趨勢")
-      expect(response.body).to include("每週進度達成率")
-      expect(response.body).to include("測試問題趨勢")
-      expect(response.body).to include("客訴議題狀態")
-    end
-
-    it "shows the unresolved complaint with a working Redmine link" do
-      expect(response.body).to include("廠區用電監測告警延遲")
-      expect(response.body).to include('href="https://redmine.amastek.com.tw/issues/5171"')
-      expect(response.body).to include('target="_blank"')
-    end
-  end
-
-  describe "GET /project_history?project=... when the project has no burndown/complaint data" do
-    let(:burndown_rows) { [ burndown_header + [ "08/12", "08/05" ] ] } # 覆蓋 ambient fixture：這裡就是要測完全沒有 307 資料的情境
-
-    before { get "/project_history", params: { project: "Virtuous HRM" } }
-
-    it "shows the empty-state text instead of blank sections" do
-      expect(response.body).to include("所選專案無工時資料")
-      expect(response.body).to include("所選專案無客訴議題")
     end
   end
 

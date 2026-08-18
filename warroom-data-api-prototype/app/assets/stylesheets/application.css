@@ -978,6 +978,45 @@ turbo-frame[busy] {
   font-variant-numeric: tabular-nums;
 }
 
+/* 「已消耗 / 預估」工時：每個 .hours-pair 是獨立元素（不同專案卡片／不同表格列各自一個），
+   彼此不共用同一個 grid，用 minmax(...,auto) 只會讓每一列各自依自己的內容寬度縮放，列跟列
+   之間還是對不齊。改用固定寬度（不是 auto）欄位，不管這一列的數字實際幾位數，每個 .hours-pair
+   的總寬度、"/" 的位置都一樣，才能真的讓所有列的 "/" 對在同一條垂直線上。 */
+.hours-pair {
+  display: inline-flex;
+  align-items: baseline;
+  font-variant-numeric: tabular-nums;
+}
+
+.hours-pair .hours-num {
+  display: inline-block;
+  width: 5.5ch;
+  text-align: right;
+}
+
+.hours-pair .hours-num:last-child {
+  width: 4.5ch;
+  text-align: left;
+}
+
+.hours-pair .hours-sep {
+  display: inline-block;
+  width: 1.5ch;
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+/* 已消耗超過預估（超支）：整組數字變警示色，跟逾期用同一個紅色 token，維持同一套「需要注意」
+   的視覺語言，不新增顏色。 */
+.hours-pair-overspent .hours-num {
+  color: var(--overdue-text);
+  font-weight: 600;
+}
+
+.hours-pair-overspent .hours-sep {
+  color: var(--overdue-text);
+}
+
 .project-card-body {
   border-top: 1px solid var(--color-border);
   padding: 0.5rem 1rem 1rem;

@@ -8,7 +8,7 @@
           <span class="tag"><%= row[:pm] || "—" %></span>
           <span class="tag tag-status"><%= row[:status] || "—" %></span>
           <span class="tag tag-hours">
-            <%= row[:hours_estimated].present? ? "#{row[:hours_consumed] || 0}h / #{row[:hours_estimated]}h" : "—" %>
+            <%= row[:hours_estimated].present? ? hours_pair(row[:hours_consumed] || 0, row[:hours_estimated]) : "—" %>
           </span>
         </span>
       </summary>
@@ -38,7 +38,7 @@
                   <td data-label="預計完成日期"><%= task[:due_date] || "—" %></td>
                   <td data-label="狀態"><%= task[:done] ? "已完成" : (task[:overdue] ? "逾期未完成" : "進行中") %></td>
                   <td data-label="進度"><%= task[:progress_percent].present? ? "#{task[:progress_percent]}%" : "—" %></td>
-                  <td data-label="工時"><%= task[:consumed_hours] ? "#{task[:consumed_hours]}h / #{task[:estimated_hours]}h" : "—" %></td>
+                  <td data-label="工時"><%= task[:consumed_hours] ? hours_pair(task[:consumed_hours], task[:estimated_hours]) : "—" %></td>
                 </tr>
               <% end %>
             </tbody>

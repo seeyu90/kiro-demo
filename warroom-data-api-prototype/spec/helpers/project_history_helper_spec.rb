@@ -106,4 +106,31 @@ RSpec.describe ProjectHistoryHelper, type: :helper do
       expect(rect[:fill_width]).to eq(0.0)
     end
   end
+
+  # 「進度」欄的百分比 clamp 在 100%，議題早完成時看不出「其實花了預估的好幾倍工時」，
+  # 只有工時欄的原始數字看得出來，故超支時額外用警示色標示（需求：不同花費比例要有不同顯示）。
+  describe "#hours_pair" do
+    it "marks the pair as overspent when consumed hours exceed estimated hours" do
+      html = helper.hours_pair(22, 18)
+
+      expect(html).to include("hours-pair-overspent")
+    end
+
+    it "does not mark as overspent when consumed hours are within the estimate" do
+      html = helper.hours_pair(13.5, 34)
+
+      expect(html).not_to include("hours-pair-overspent")
+    end
+
+    it "does not mark as overspent when consumed exactly equals estimated" do
+      html = helper.hours_pair(10, 10)
+
+      expect(html).not_to include("hours-pair-overspent")
+    end
+
+    it "returns — without crashing when either value is nil" do
+      expect(helper.hours_pair(nil, 10)).to eq("—")
+      expect(helper.hours_pair(10, nil)).to eq("—")
+    end
+  end
 end

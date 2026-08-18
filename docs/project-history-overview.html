@@ -16,7 +16,7 @@
   </script>
   <title>戰情室 — 專案歷程總覽（靜態展示版）</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="戰情室專案歷程橫向總覽，使用模擬資料呈現多專案清單與甘特圖，可依狀態、客戶、PM 篩選。">
+  <meta name="description" content="戰情室專案歷程橫向總覽，使用模擬資料呈現多專案清單與甘特圖，可依年度、狀態、客戶、專案、PM 篩選。">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -33,10 +33,14 @@
       <div class="section-heading-row">
         <h2>多專案總覽</h2>
         <div class="control-group">
+          <label for="filter-year">年度：</label>
+          <select id="filter-year" name="filter-year"></select>
           <label for="filter-status">狀態：</label>
           <select id="filter-status" name="filter-status"></select>
           <label for="filter-customer">客戶：</label>
           <select id="filter-customer" name="filter-customer"></select>
+          <label for="filter-project">專案：</label>
+          <select id="filter-project" name="filter-project"></select>
           <label for="filter-pm">PM：</label>
           <select id="filter-pm" name="filter-pm"></select>
         </div>
