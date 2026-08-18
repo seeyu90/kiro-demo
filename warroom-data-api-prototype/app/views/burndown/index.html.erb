@@ -48,21 +48,53 @@
     <% end %>
 
     <section class="issue-section">
-      <h2>議題燃盡圖</h2>
+      <h2>議題燃盡狀態</h2>
       <% if @filtered_issues.empty? %>
         <p class="empty-state">目前無符合條件的議題</p>
       <% else %>
-        <% @filtered_issues.each do |issue| %>
-          <%= render partial: "burndown_chart",
-                     locals: {
-                       title: "#{issue[:project]}／#{issue[:issue_title]}（#{issue[:assignees].join('、')}）",
-                       actual_series: issue[:actual_series],
-                       ideal_series: issue[:ideal_series]
-                     } %>
-          <% if issue[:assignees].size > 1 %>
-            <%= render partial: "burndown_stacked_chart",
-                       locals: { per_assignee: issue[:per_assignee], estimated_hours: issue[:estimated_hours] } %>
-          <% end %>
+        <table class="project-tasks burndown-status-table">
+          <thead>
+            <tr>
+              <th>議題</th>
+              <th>負責人</th>
+              <th>預估人時</th>
+              <th>已消耗</th>
+              <th>剩餘</th>
+              <th>狀態</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% @filtered_issues.each_with_index do |issue, index| %>
+              <% status = burndown_status(issue) %>
+              <tr>
+                <td><%= "#{issue[:project]}／#{issue[:issue_title]}" %></td>
+                <td><%= issue[:assignees].join("、") %></td>
+                <td><%= issue[:estimated_hours] %></td>
+                <td><%= burndown_consumed_hours(issue) || "—" %></td>
+                <td><%= burndown_remaining_hours(issue) || "—" %></td>
+                <td>
+                  <span class="status-badge status-<%= status[:key] %>"><%= status[:label] %></span>
+                  <a href="#burndown-issue-<%= index %>" class="back-link">查看趨勢圖 ↓</a>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+
+        <% @filtered_issues.each_with_index do |issue, index| %>
+          <details class="burndown-chart-details" id="burndown-issue-<%= index %>">
+            <summary><%= "#{issue[:project]}／#{issue[:issue_title]}（#{issue[:assignees].join('、')}）趨勢圖" %></summary>
+            <%= render partial: "burndown_chart",
+                       locals: {
+                         title: "#{issue[:project]}／#{issue[:issue_title]}（#{issue[:assignees].join('、')}）",
+                         actual_series: issue[:actual_series],
+                         ideal_series: issue[:ideal_series]
+                       } %>
+            <% if issue[:assignees].size > 1 %>
+              <%= render partial: "burndown_stacked_chart",
+                         locals: { per_assignee: issue[:per_assignee], estimated_hours: issue[:estimated_hours] } %>
+            <% end %>
+          </details>
         <% end %>
       <% end %>
     </section>

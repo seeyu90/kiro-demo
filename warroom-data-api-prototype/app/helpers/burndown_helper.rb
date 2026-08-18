@@ -111,6 +111,56 @@ module BurndownHelper
     burndown_chart_y(estimated_hours, 0, max).round(2)
   end
 
+  # 議題狀態摘要表用的燈號：比較「最新一週實際剩餘人時」與「同一天理想線應剩餘人時」的落差，
+  # 換算成佔預估人時的比例，門檻抓相對值而非絕對小時數（議題大小差異很大，絕對門檻會對小
+  # 議題太嚴格、對大議題太寬鬆）。estimated_hours 為 0（未填預估）或任一序列缺資料時，落差
+  # 無法計算，回傳 :unknown 交由畫面顯示「資料不足」。
+  BURNDOWN_STATUS_AT_RISK_RATIO = 0.05
+  BURNDOWN_STATUS_OVER_RATIO = 0.25
+
+  def burndown_status(issue)
+    actual_series = issue[:actual_series]
+    ideal_series = issue[:ideal_series]
+    estimated_hours = issue[:estimated_hours].to_f
+    return { key: :unknown, label: "資料不足" } if actual_series.blank? || ideal_series.blank? || estimated_hours.zero?
+
+    latest_actual = actual_series.max_by { |p| p[:date] }
+    # 剩餘人時已經是負值，代表已花掉的人時超過「整份」預估人時，這本身就是超支，不論理想線
+    # 落在哪裡都一樣（理想線在完成日之後固定為 0，若只比較兩者落差，負值剩餘反而會被算成
+    # 「領先進度」而誤判為正常，見 spec/helpers/burndown_helper_spec.rb 的迴歸測試）。
+    return { key: :over, label: "超支" } if latest_actual[:hours].to_f.negative?
+
+    ideal_at_date = ideal_series.find { |p| p[:date] == latest_actual[:date] } ||
+      ideal_series.min_by { |p| (Date.parse(p[:date]) - Date.parse(latest_actual[:date])).abs }
+
+    delta_ratio = (latest_actual[:hours].to_f - ideal_at_date[:hours].to_f) / estimated_hours
+
+    if delta_ratio <= BURNDOWN_STATUS_AT_RISK_RATIO
+      { key: :on_track, label: "正常" }
+    elsif delta_ratio <= BURNDOWN_STATUS_OVER_RATIO
+      { key: :at_risk, label: "略慢" }
+    else
+      { key: :over, label: "超支" }
+    end
+  end
+
+  # 摘要表「剩餘人時」欄位：優先採用試算表 PM 手動填寫的 reported_remaining_hours（最貼近
+  # 真實現況），沒有填寫時退回 actual_series 最新一筆算出來的剩餘人時（同 burndown_status
+  # 的資料來源，兩者不一定完全一致，僅供畫面顯示參考，比照 BurndownIssueBlueprint 註解的
+  # 既有取捨：reported_remaining_hours 不參與正式計算）。
+  def burndown_remaining_hours(issue)
+    return issue[:reported_remaining_hours] if issue[:reported_remaining_hours].present?
+
+    issue[:actual_series].max_by { |p| p[:date] }&.dig(:hours)
+  end
+
+  def burndown_consumed_hours(issue)
+    remaining = burndown_remaining_hours(issue)
+    return nil if remaining.nil?
+
+    (issue[:estimated_hours].to_f - remaining.to_f).round(1)
+  end
+
   private
 
   def burndown_chart_plot_width

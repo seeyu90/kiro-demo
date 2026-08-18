@@ -25,6 +25,8 @@
   --badge-pending-text: #a0aec0;
   --overdue-bg: #4a1c1c;
   --overdue-text: #fc8181;
+  --at-risk-bg: #4a3c1c;
+  --at-risk-text: #f6d365;
 
   --delay-negative: #68d391;
   --delay-positive: #fc8181;
@@ -62,6 +64,8 @@ html[data-theme="light"] {
   --badge-pending-text: #4a5568;
   --overdue-bg: #fed7d7;
   --overdue-text: #9b2c2c;
+  --at-risk-bg: #fefcbf;
+  --at-risk-text: #975a16;
 
   --delay-negative: #2f855a;
   --delay-positive: #c53030;
@@ -635,6 +639,45 @@ turbo-frame[busy]::after {
   fill: none;
   stroke: var(--color-accent);
   stroke-width: 2;
+}
+
+/* ── 307 議題狀態摘要表（燈號：實際剩餘 vs 理想剩餘的落差） ── */
+.status-on_track { background: var(--badge-completed-bg); color: var(--badge-completed-text); }
+.status-at_risk   { background: var(--at-risk-bg); color: var(--at-risk-text); }
+.status-over       { background: var(--overdue-bg); color: var(--overdue-text); }
+.status-unknown   { background: var(--badge-pending-bg); color: var(--badge-pending-text); }
+
+/* 表格中「查看趨勢圖」摺疊區塊：預設收合，避免資料點稀疏的議題也佔滿版面高度 */
+.burndown-chart-details {
+  margin-bottom: 1.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.75rem;
+  padding: 0 1rem;
+}
+
+.burndown-chart-details[open] {
+  padding-bottom: 1rem;
+}
+
+.burndown-chart-details summary {
+  padding: 0.85rem 0;
+  cursor: pointer;
+  color: var(--color-text-strong);
+  font-weight: 500;
+  list-style: none;
+}
+
+.burndown-chart-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.burndown-chart-details summary::before {
+  content: "▸ ";
+  color: var(--color-accent);
+}
+
+.burndown-chart-details[open] summary::before {
+  content: "▾ ";
 }
 
 .burndown-actual-point {
