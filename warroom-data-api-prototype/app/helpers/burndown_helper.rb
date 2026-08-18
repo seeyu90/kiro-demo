@@ -90,54 +90,71 @@ module BurndownHelper
     end
   end
 
-  # 長條（左軸）Y 軸最大值：取「某一週所有人員疊加後」的最高單週人時。
-  def burndown_combo_bar_max(weekly_by_assignee, dates)
-    totals = dates.map do |date|
-      weekly_by_assignee.sum { |w| w[:weekly].find { |p| p[:date] == date }&.dig(:hours).to_f }
+  # 每人自己的理想累積人時軌跡：起點 0 落在開案日、終點是「這個人自己的預估人時」落在完成日，
+  # 跟 burndown_per_assignee_status 用同一套時間比例公式，只是這裡算出整條線（每個 X 軸日期
+  # 一個點）而不是只算最新一週那一個點。三個人就有三條理想線，各自跟自己的實際累積線比較，
+  # 而不是像原本一樣所有人共用同一條「議題整體」理想線——份量不同，共用一條線沒有意義。
+  def burndown_per_assignee_ideal_series(per_assignee_entry, issue, dates)
+    start_d = safe_parse_date(issue[:start_date])
+    due_d = safe_parse_date(issue[:due_date])
+    return [] if start_d.nil? || due_d.nil? || due_d <= start_d
+
+    estimated = per_assignee_entry[:estimated_hours].to_f
+
+    dates.filter_map do |date_str|
+      d = safe_parse_date(date_str)
+      next if d.nil?
+
+      ratio = ((d - start_d).to_f / (due_d - start_d)).clamp(0.0, 1.0)
+      { date: date_str, hours: (estimated * ratio).round(2) }
     end
-    [ totals.max || 0.0, 1 ].max
   end
 
-  # 線（右軸）Y 軸最大值：取兩條累積線的最高點與總預估人時三者較大者，後者是參考線／終點
-  # 一定要落在繪圖範圍內，前者是實際超支（累積消耗超過預估）時線不能被裁掉看不到。
-  def burndown_combo_line_max(cumulative_actual, cumulative_ideal, estimated_hours)
-    values = (cumulative_actual + cumulative_ideal).map { |p| p[:hours].to_f }
-    values << estimated_hours.to_f
+  # 長條（左軸）Y 軸最大值：長條改成「每人各自一根、並排」而不是疊加，故取單一根長條的最高
+  # 單週人時即可（不用像堆疊時取加總）。
+  def burndown_combo_bar_max(weekly_by_assignee, dates)
+    values = dates.flat_map do |date|
+      weekly_by_assignee.map { |w| w[:weekly].find { |p| p[:date] == date }&.dig(:hours).to_f || 0.0 }
+    end
     [ values.max || 0.0, 1 ].max
   end
 
-  # 依 per_assignee 順序，每週疊出各自的長條（下緣＝前面所有人已疊加的高度，上緣＝加上這個人
-  # 自己這週的人時）；單週人時理論上不會是負值，但保留 clamp 避免試算表資料修正（例如更正列）
-  # 讓某週累積值倒退，導致 SVG rect 出現負的 height。
+  # 線（右軸）Y 軸最大值：series_list 是多條序列（每人自己的實際／理想累積線），extra_values
+  # 通常是每人自己的預估人時（理想線終點雖然理論上等於預估人時，仍額外納入避免無資料時的
+  # 邊界情況）。
+  def burndown_combo_line_max(series_list, extra_values = [])
+    values = series_list.flatten.map { |p| p[:hours].to_f } + extra_values.map(&:to_f)
+    [ values.max || 0.0, 1 ].max
+  end
+
+  # 每人各自一根長條、並排顯示在同一週的欄位內（而非疊加），才能直接比較「這週誰做得多」。
+  # 單週人時理論上不會是負值，但保留 clamp 避免試算表資料修正（例如更正列）讓某週人時倒退。
   def burndown_combo_bars(weekly_by_assignee, dates, left_max)
     step_x = burndown_chart_plot_width / [ dates.length - 1, 1 ].max.to_f
-    bar_width = [ step_x * 0.5, 26 ].min
+    assignee_count = [ weekly_by_assignee.size, 1 ].max
+    slot_width = [ step_x * 0.7, 60 ].min
+    bar_width = slot_width / assignee_count
     plot_left = BURNDOWN_PADDING_LEFT
     plot_right = BURNDOWN_WIDTH - BURNDOWN_PADDING_RIGHT
+    zero_y = burndown_chart_y(0, 0, left_max)
 
     dates.each_with_index.flat_map do |date, i|
       x_center = BURNDOWN_PADDING_LEFT + i * step_x
-      # 長條跟折線一樣以 x_center 為中心點，但兩端點（第一週／最後一週）的長條會有一半寬度
-      # 伸出繪圖區域，跟左右軸的刻度文字重疊，故 clamp 在繪圖區域內（只影響最外側的長條，
-      # 不影響長條的 x_center 本身，跟折線／格線的對齊不受影響）。
-      bar_left = [ [ x_center - bar_width / 2, plot_left ].max, plot_right - bar_width ].min
-      bar_right = [ bar_left + bar_width, plot_right ].min
-      clamped_width = bar_right - bar_left
-      running = 0.0
+      # 整組並排長條（slot）以 x_center 為中心，但兩端點（第一週／最後一週）的 slot 會有一半
+      # 寬度伸出繪圖區域、跟左右軸的刻度文字重疊，故整組 clamp 在繪圖區域內。
+      slot_left = [ [ x_center - slot_width / 2, plot_left ].max, plot_right - slot_width ].min
 
       weekly_by_assignee.each_with_index.map do |w, idx|
         hours = [ w[:weekly].find { |p| p[:date] == date }&.dig(:hours).to_f || 0.0, 0.0 ].max
-        y_top = burndown_chart_y(running + hours, 0, left_max)
-        y_bottom = burndown_chart_y(running, 0, left_max)
-        running += hours
+        y_top = burndown_chart_y(hours, 0, left_max)
 
         {
           assignee: w[:assignee],
           color: BURNDOWN_STACK_COLORS[idx % BURNDOWN_STACK_COLORS.length],
-          x: bar_left.round(2),
+          x: (slot_left + idx * bar_width).round(2),
           y: y_top.round(2),
-          width: clamped_width.round(2),
-          height: (y_bottom - y_top).round(2),
+          width: bar_width.round(2),
+          height: (zero_y - y_top).round(2),
           hours: hours.round(2),
           date: date
         }
