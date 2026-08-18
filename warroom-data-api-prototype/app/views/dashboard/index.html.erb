@@ -47,6 +47,9 @@
     </fieldset>
 
     <label class="incomplete-toggle">
+      <%# 隱藏欄位：確保取消勾選時仍會送出 incomplete_only=0，
+          Controller 用「是否等於 "0"」判斷，需仰賴此欄位才會被明確覆蓋為 false %>
+      <input type="hidden" name="incomplete_only" value="0">
       <%= check_box_tag :incomplete_only, "1", @incomplete_only %>
       只顯示未完成
     </label>
