@@ -316,9 +316,32 @@ body {
 /* Turbo 在 frame 送出請求期間會自動幫 <turbo-frame> 加上 busy 屬性；
    通用選擇器讓 Dashboard（project-content）與 306 議題頁（issue-content）都套用同一效果 */
 turbo-frame[busy] {
+  position: relative;
+  min-height: 4rem;
   opacity: 0.5;
   pointer-events: none;
   transition: opacity 0.15s ease;
+}
+
+/* 疊加在淡化內容正中央的轉圈圈，純 CSS 實作，不需額外 JS/Stimulus controller */
+turbo-frame[busy]::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 2rem;
+  height: 2rem;
+  margin: -1rem 0 0 -1rem;
+  border: 3px solid var(--color-border-hover);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ── Project Block ── */
