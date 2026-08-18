@@ -100,7 +100,7 @@ module Sheets
           progress_percent: progress_percent_for(tasks),
           hours_estimated: sum_estimated_hours(tasks),
           hours_consumed: sum_consumed_hours(tasks),
-          has_overdue: tasks.any? { |t| duration_task_overdue?(t) }
+          has_overdue: tasks.any? { |t| t[:overdue] }
         }
       end
     end

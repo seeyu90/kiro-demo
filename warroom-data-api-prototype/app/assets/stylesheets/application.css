@@ -826,14 +826,6 @@ turbo-frame[busy] {
   stroke-width: 1;
 }
 
-.gantt-task-done {
-  fill: var(--color-accent);
-}
-
-.gantt-task-open {
-  fill: var(--overdue-text);
-}
-
 .gantt-month-gridline {
   stroke: var(--color-border);
   stroke-width: 1;
