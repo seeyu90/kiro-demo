@@ -16,6 +16,7 @@ Rails.application.routes.draw do
   get "/dashboard", to: "dashboard#index"
   get "/issues", to: "issues#index"
   get "/burndown", to: "burndown#index"
+  get "/project_history", to: "project_history#index"
 
   # API routes
   namespace :api do

@@ -13,6 +13,21 @@ RSpec.describe "Dashboard", type: :request do
 
   before { allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_return(valid_rows) }
 
+  # 305 頁面原本漏了 content_for :title，瀏覽器分頁標題會顯示不對；且 header 的返回連結
+  # 改為跟 306/307/專案歷程統一的麵包屑樣式（見 application.css 的 .breadcrumb 附註）。
+  describe "GET /dashboard header" do
+    before { get "/dashboard" }
+
+    it "sets the page title" do
+      expect(response.body).to include("<title>戰情室 — 專案進度</title>")
+    end
+
+    it "shows a breadcrumb back to the entry page, matching 306/307/專案歷程 style" do
+      expect(response.body).to include("breadcrumb")
+      expect(response.body).to include(">入口頁</a>")
+    end
+  end
+
   describe "GET /dashboard with filters disabled (scope=all, incomplete_only=0, all types)" do
     before do
       get "/dashboard", params: { scope: "all", incomplete_only: "0", "task_type[]" => ["功能", "PR", "調整"] }

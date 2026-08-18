@@ -38,8 +38,8 @@ RSpec.describe "Home", type: :request do
       expect(response).to have_http_status(200)
     end
 
-    it "renders a back link to the entry page" do
-      expect(response.body).to match(%r{<a class="back-link" href="/">})
+    it "renders a breadcrumb link back to the entry page" do
+      expect(response.body).to match(%r{<a[^>]*class="back-link"[^>]*href="/"[^>]*>入口頁</a>})
     end
   end
 
@@ -51,8 +51,8 @@ RSpec.describe "Home", type: :request do
       get "/issues"
     end
 
-    it "renders a back link to the entry page" do
-      expect(response.body).to match(%r{<a class="back-link" href="/">})
+    it "renders a breadcrumb link back to the entry page" do
+      expect(response.body).to match(%r{<a[^>]*class="back-link"[^>]*href="/"[^>]*>入口頁</a>})
     end
   end
 end

@@ -1,0 +1,49 @@
+<%= form_with url: "/project_history", method: :get, class: "project-selector",
+              data: { turbo_frame: "project-history-content" } do %>
+  <%= hidden_field_tag :view, @view %>
+  <div class="control-group">
+    <label for="year">年度：</label>
+    <%= select_tag :year,
+                   options_for_select([ [ "全部年度", "" ] ] + @available_years.map { |y| [ y, y ] }, @selected_year) %>
+  </div>
+  <div class="control-group">
+    <label for="status">狀態：</label>
+    <%= select_tag :status,
+                   options_for_select([ [ "全部狀態", "" ] ] + @statuses.map { |s| [ s, s ] }, @selected_status) %>
+  </div>
+  <div class="control-group">
+    <label for="customer">客戶：</label>
+    <%= select_tag :customer,
+                   options_for_select([ [ "全部客戶", "" ] ] + @customers.map { |c| [ c, c ] }, @selected_customer) %>
+  </div>
+  <div class="control-group">
+    <label for="project_name">專案：</label>
+    <%= select_tag :project_name,
+                   options_for_select([ [ "全部專案", "" ] ] + @project_names.map { |p| [ p, p ] }, @selected_project_name) %>
+  </div>
+  <div class="control-group">
+    <label for="pm">PM：</label>
+    <%= select_tag :pm, options_for_select([ [ "全部 PM", "" ] ] + @pms.map { |p| [ p, p ] }, @selected_pm) %>
+  </div>
+  <%= submit_tag "套用篩選", class: "apply-filters-btn" %>
+<% end %>
+
+<div class="view-toggle" role="group" aria-label="檢視模式切換">
+  <%= link_to "清單",
+              url_for(request.query_parameters.merge(view: "list")),
+              class: "view-toggle-btn #{'active' if @view == 'list'}" %>
+  <%= link_to "甘特圖",
+              url_for(request.query_parameters.merge(view: "gantt")),
+              class: "view-toggle-btn #{'active' if @view == 'gantt'}" %>
+</div>
+
+<section class="issue-section">
+  <% if @rows.empty? %>
+    <p class="empty-state">目前無符合條件的專案</p>
+  <% elsif @view == "gantt" %>
+    <%= render partial: "gantt_legend" %>
+    <%= render partial: "overview_gantt", locals: { rows: @rows } %>
+  <% else %>
+    <%= render partial: "overview_list", locals: { rows: @rows } %>
+  <% end %>
+</section>

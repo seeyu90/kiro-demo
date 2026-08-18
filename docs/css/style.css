@@ -691,6 +691,260 @@ table.project-tasks tbody tr:hover td {
   height: 0;
 }
 
+/* ── 專案歷程：檢視切換按鈕 ── */
+.view-toggle {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.view-toggle-btn {
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  padding: 0.4rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.view-toggle-btn:hover,
+.view-toggle-btn:focus-visible {
+  border-color: var(--color-accent);
+  outline: none;
+}
+
+.view-toggle-btn.active {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.project-history-link {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.project-history-link:hover,
+.project-history-link:focus {
+  text-decoration: underline;
+}
+
+/* ── 專案歷程：甘特圖 ──
+   每個議題畫成「預計」「實際」上下兩條窄條：預計＝規劃時程（307 的 start_date～due_date，
+   不受完成狀態影響）；實際＝依準時／逾期上色，並疊加工時消耗比例的填色。寬度不用 width:100%
+   硬塞縮放——月份多時 SVG 本身比容器寬，交給 .gantt-scroll 左右捲動，維持每個月一致的可讀
+   寬度，不會把色塊壓到看不出寬度差異。 */
+.gantt-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+}
+
+.gantt-svg {
+  display: block;
+}
+
+.gantt-row-label {
+  fill: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.gantt-row-baseline {
+  stroke: var(--color-border);
+  stroke-width: 1;
+}
+
+.gantt-month-gridline {
+  stroke: var(--color-border);
+  stroke-width: 1;
+}
+
+.gantt-month-label {
+  fill: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.gantt-today-line {
+  stroke: var(--overdue-text);
+  stroke-width: 2;
+  stroke-dasharray: 5 3;
+}
+
+.gantt-task-planned {
+  fill: var(--color-border);
+}
+
+.gantt-task-actual-track {
+  fill-opacity: 0.35;
+}
+
+.gantt-task-actual-ontime {
+  fill: var(--delay-negative);
+}
+
+.gantt-task-actual-delayed {
+  fill: var(--overdue-text);
+}
+
+.gantt-task-actual-fill-ontime {
+  fill: var(--delay-negative);
+}
+
+.gantt-task-actual-fill-delayed {
+  fill: var(--overdue-text);
+}
+
+.gantt-task-overdue {
+  stroke: var(--overdue-text);
+  stroke-width: 1.5;
+}
+
+.gantt-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+
+.legend-swatch-planned {
+  background: var(--color-border);
+}
+
+.legend-swatch-ontime {
+  background: var(--delay-negative);
+}
+
+.legend-swatch-delayed {
+  background: var(--overdue-text);
+}
+
+/* ── 專案歷程：總覽清單（卡片原地展開，<details>/<summary>，不需要 JS） ── */
+.project-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.project-card {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+}
+
+.project-card-overdue {
+  border-left: 3px solid var(--overdue-text);
+}
+
+.project-card-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  list-style: revert;
+}
+
+.project-card-summary:hover {
+  background: var(--table-row-hover-bg);
+}
+
+.project-card-name {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.project-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.tag-status {
+  color: var(--color-accent);
+}
+
+.tag-hours {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 「已消耗 / 預估」工時：每個 .hours-pair 是獨立元素（不同專案卡片／不同表格列各自一個），
+   彼此不共用同一個 grid，用 minmax(...,auto) 只會讓每一列各自依自己的內容寬度縮放，列跟列
+   之間還是對不齊。改用固定寬度（不是 auto）欄位，不管這一列的數字實際幾位數，每個 .hours-pair
+   的總寬度、"/" 的位置都一樣，才能真的讓所有列的 "/" 對在同一條垂直線上。 */
+.hours-pair {
+  display: inline-flex;
+  align-items: baseline;
+  font-variant-numeric: tabular-nums;
+}
+
+.hours-pair .hours-num {
+  display: inline-block;
+  width: 5.5ch;
+  text-align: right;
+}
+
+.hours-pair .hours-num:last-child {
+  width: 4.5ch;
+  text-align: left;
+}
+
+.hours-pair .hours-sep {
+  display: inline-block;
+  width: 1.5ch;
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+/* 已消耗超過預估（超支）：整組數字變警示色，跟逾期用同一個紅色 token，維持同一套「需要注意」
+   的視覺語言，不新增顏色。 */
+.hours-pair-overspent .hours-num {
+  color: var(--overdue-text);
+  font-weight: 600;
+}
+
+.hours-pair-overspent .hours-sep {
+  color: var(--overdue-text);
+}
+
+.project-card-body {
+  border-top: 1px solid var(--color-border);
+  padding: 0.5rem 1rem 1rem;
+}
+
+.row-overdue td:first-child {
+  border-left: 3px solid var(--overdue-text);
+}
+
 /* ── Tablet ── */
 @media (max-width: 768px) {
   .dashboard-header,

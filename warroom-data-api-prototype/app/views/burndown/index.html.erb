@@ -5,12 +5,17 @@
     <h1 class="dashboard-title">戰情室 <span>— 307 人時燃盡追蹤</span></h1>
     <button type="button" id="theme-toggle" class="theme-toggle" aria-label="切換至淺色模式">🌙 深色</button>
   </div>
-  <p class="back-link-row"><%= link_to "← 返回入口頁", "/", class: "back-link" %></p>
 </header>
 
 <%# data-turbo-frame 讓送出只換掉下方 burndown-content frame 的內容，比照 305/306
     （dashboard／issues）既有做法：瀏覽器網址列不會被填入篩選參數，也不會觸發整頁導覽。 %>
 <%= turbo_frame_tag "burndown-content" do %>
+  <p class="breadcrumb">
+    <%= link_to "入口頁", "/", class: "back-link", data: { turbo_frame: "_top" } %>
+    <span class="breadcrumb-sep">›</span>
+    <span class="breadcrumb-current">人時燃盡追蹤</span>
+  </p>
+
   <% if @error.present? %>
     <div class="error-message">
       <strong>錯誤：</strong><%= @error %>

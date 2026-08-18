@@ -5,10 +5,15 @@
     <h1 class="dashboard-title">戰情室 <span>— 306 臭蟲議題</span></h1>
     <button type="button" id="theme-toggle" class="theme-toggle" aria-label="切換至淺色模式">🌙 深色</button>
   </div>
-  <p class="back-link-row"><%= link_to "← 返回入口頁", "/", class: "back-link" %></p>
 </header>
 
 <%= turbo_frame_tag "issue-content" do %>
+  <p class="breadcrumb">
+    <%= link_to "入口頁", "/", class: "back-link", data: { turbo_frame: "_top" } %>
+    <span class="breadcrumb-sep">›</span>
+    <span class="breadcrumb-current">臭蟲議題</span>
+  </p>
+
   <% if @error.present? %>
     <div class="error-message">
       <strong>錯誤：</strong><%= @error %>
