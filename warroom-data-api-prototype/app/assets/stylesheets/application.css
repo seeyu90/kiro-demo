@@ -623,16 +623,65 @@ turbo-frame[busy]::after {
 }
 
 .burndown-chart-block h3 {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
   font-size: 0.95rem;
-  margin: 0 0 0.5rem;
+  margin: 0 0 0.75rem;
   color: var(--color-text-strong);
+  text-align: center;
 }
 
-.chart-caption {
-  font-size: 0.8rem;
-  color: var(--color-text-faint);
-  margin: 0 0 0.75rem;
-  max-width: 60ch;
+/* 圖表說明改成 hover/focus 才顯示的小 i 圖示，不用每張圖都攤開一整段文字
+   （原本 .chart-caption 常駐文字，議題一多、每張都展開時很佔版面，改成需要才看）。 */
+.chart-info {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 50%;
+  background: var(--color-border-hover);
+  color: var(--color-text-strong);
+  font-size: 0.7rem;
+  font-style: normal;
+  font-weight: 700;
+  cursor: help;
+  flex-shrink: 0;
+}
+
+.chart-info-tooltip {
+  position: absolute;
+  top: 140%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 22rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--color-text-muted);
+  text-align: left;
+  line-height: 1.5;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+  z-index: 10;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.chart-info:hover .chart-info-tooltip,
+.chart-info:focus .chart-info-tooltip,
+.chart-info:focus-visible .chart-info-tooltip {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
 }
 
 .burndown-ideal-line {
@@ -774,6 +823,34 @@ turbo-frame[busy]::after {
   background: none;
   border-top: 2px dashed var(--color-text-muted);
   height: 0;
+}
+
+/* 圖例可點擊切換顯示/隱藏該人資料（見 burndown_legend_controller.js），按鈕本身沿用純文字
+   外觀，不要看起來像一般按鈕。 */
+.burndown-legend-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+.burndown-legend-toggle:hover,
+.burndown-legend-toggle:focus-visible {
+  color: var(--color-text-strong);
+}
+
+.burndown-legend-toggle.is-hidden {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+
+.burndown-series.is-dimmed {
+  opacity: 0.08;
 }
 
 /* ── Responsive ── */

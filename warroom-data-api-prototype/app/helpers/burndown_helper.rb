@@ -5,11 +5,23 @@ module BurndownHelper
   BURNDOWN_WIDTH = 640
   BURNDOWN_HEIGHT = 250
   BURNDOWN_PADDING_LEFT = 40
-  # 右側要放第二個 Y 軸（累積人時）的刻度文字，比單軸圖表原本的窄邊界（12px）寬。
-  BURNDOWN_PADDING_RIGHT = 44
+  # 單軸圖表（左軸長條用）原本的窄右邊界；組合圖表改用 burndown_combo_padding_right 依
+  # 人數動態計算（每人一條自己的右軸，見下方常數與方法）。
+  BURNDOWN_PADDING_RIGHT = 12
   BURNDOWN_PADDING_TOP = 16
   BURNDOWN_PADDING_BOTTOM = 55
   BURNDOWN_Y_TICKS = 3
+
+  # 每人一條自己的右軸（而非全部人共用一條）：估計人時差很多時（例如 167 vs 20），共用一條
+  # 線性軸會把估計少的人壓扁在底部，看不出他自己的進度細節。每條軸各自的欄寬，以及固定的
+  # 右側基礎留白（軸線跟圖表最右緣的間距）。
+  BURNDOWN_AXIS_COLUMN_WIDTH = 34
+  BURNDOWN_PADDING_RIGHT_BASE = 14
+
+  # 組合圖表的右邊界：依人數動態計算，人數越多、需要的軸欄位越多。
+  def burndown_combo_padding_right(assignee_count)
+    BURNDOWN_PADDING_RIGHT_BASE + [ assignee_count, 1 ].max * BURNDOWN_AXIS_COLUMN_WIDTH
+  end
 
   # 實際／理想兩條序列共用同一組 X 軸日期：理想線會在頭尾補上開案／完成錨點（見
   # Sheets::FetchProjectBurndown#compute_ideal_series），這些錨點的日期不一定存在於試算表現有
@@ -19,9 +31,9 @@ module BurndownHelper
     (actual_series.map { |p| p[:date] } + ideal_series.map { |p| p[:date] }).uniq.sort
   end
 
-  def burndown_chart_points(series, dates, min, max)
+  def burndown_chart_points(series, dates, min, max, padding_right: BURNDOWN_PADDING_RIGHT)
     index_by_date = dates.each_with_index.to_h
-    step_x = burndown_chart_plot_width / [ dates.length - 1, 1 ].max.to_f
+    step_x = burndown_chart_plot_width(padding_right) / [ dates.length - 1, 1 ].max.to_f
 
     series.map do |point|
       x = BURNDOWN_PADDING_LEFT + index_by_date.fetch(point[:date]) * step_x
@@ -46,8 +58,8 @@ module BurndownHelper
     ticks.uniq { |t| t[:value] }.sort_by { |t| t[:value] }
   end
 
-  def burndown_chart_x_labels(dates)
-    step_x = burndown_chart_plot_width / [ dates.length - 1, 1 ].max.to_f
+  def burndown_chart_x_labels(dates, padding_right: BURNDOWN_PADDING_RIGHT)
+    step_x = burndown_chart_plot_width(padding_right) / [ dates.length - 1, 1 ].max.to_f
 
     dates.each_with_index.map do |date, i|
       x = BURNDOWN_PADDING_LEFT + i * step_x
@@ -129,13 +141,13 @@ module BurndownHelper
 
   # 每人各自一根長條、並排顯示在同一週的欄位內（而非疊加），才能直接比較「這週誰做得多」。
   # 單週人時理論上不會是負值，但保留 clamp 避免試算表資料修正（例如更正列）讓某週人時倒退。
-  def burndown_combo_bars(weekly_by_assignee, dates, left_max)
-    step_x = burndown_chart_plot_width / [ dates.length - 1, 1 ].max.to_f
+  def burndown_combo_bars(weekly_by_assignee, dates, left_max, padding_right: BURNDOWN_PADDING_RIGHT)
+    step_x = burndown_chart_plot_width(padding_right) / [ dates.length - 1, 1 ].max.to_f
     assignee_count = [ weekly_by_assignee.size, 1 ].max
     slot_width = [ step_x * 0.7, 60 ].min
     bar_width = slot_width / assignee_count
     plot_left = BURNDOWN_PADDING_LEFT
-    plot_right = BURNDOWN_WIDTH - BURNDOWN_PADDING_RIGHT
+    plot_right = BURNDOWN_WIDTH - padding_right
     zero_y = burndown_chart_y(0, 0, left_max)
 
     dates.each_with_index.flat_map do |date, i|
@@ -268,8 +280,8 @@ module BurndownHelper
 
   private
 
-  def burndown_chart_plot_width
-    BURNDOWN_WIDTH - BURNDOWN_PADDING_LEFT - BURNDOWN_PADDING_RIGHT
+  def burndown_chart_plot_width(padding_right = BURNDOWN_PADDING_RIGHT)
+    BURNDOWN_WIDTH - BURNDOWN_PADDING_LEFT - padding_right
   end
 
   def burndown_chart_plot_height
