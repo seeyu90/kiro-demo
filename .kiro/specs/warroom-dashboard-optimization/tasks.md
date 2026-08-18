@@ -6,8 +6,9 @@
 （305 專案進度、306 臭蟲議題、307 人時燃盡追蹤）共通的快取與載入體驗，並用 Playwright
 搭配真實 Google Sheets 資料實際截圖三個頁面，依畫面呈現提出後續優化方向。
 
-任務 1–3 已於本分支（`claude/warroom-dashboard-optimization`）實作完成；任務 4 是這次截圖
-複查後發現的新項目，尚未動工。
+任務 1–4 已於本分支（`claude/warroom-dashboard-optimization`）實作完成；任務 5 是使用者看過
+307 實際截圖後，覺得燃盡圖「不易理解、不確定用途」而提出的重新設計，改成狀態表為主、圖表為輔；
+任務 6 是使用者要求三頁篩選都加時間區間，屬於下一輪規劃，尚未動工。
 
 ---
 
@@ -46,20 +47,54 @@
 用 `.kiro/specs/warroom-dashboard-optimization/README` 開發流程截圖 `/dashboard`、
 `/issues`、`/burndown` 三頁，觀察到的視覺／資料呈現問題：
 
-- [ ] 4. 307 燃盡圖：資料點稀疏的議題仍佔滿整張圖表高度，頁面過長
-  - 現象：`/burndown` 預設篩選「狀態：進行中」時，剛開案、只有 1 個資料點的議題（例如
-    「亞炬 Wms／整合 RFID 標籤」）Y 軸範圍幾乎是 0～1，畫面上幾乎全空白，但仍套用跟
-    資料完整的議題相同的固定圖表高度（`BurndownHelper::BURNDOWN_HEIGHT = 250` viewBox，
-    實際渲染 ~450px 高，見 `app/helpers/burndown_helper.rb:5-10`）
-    - 每個議題有 2 張圖（燃盡圖 + 各人員累積人時堆疊圖），目前 6 個「進行中」議題就撐出
-      6480px 高的頁面，資料點少的議題讓使用者要捲動過一大片幾乎空白的圖表才能看到下一個
-      議題
-  - 建議方向：資料點數低於某門檻（例如 ≤ 1 個實際資料點）時，改用精簡的文字摘要卡片
-    （議題名稱＋「剛開案，尚無足夠資料繪圖」＋預估人時），取代滿版空白圖表；有足夠資料點
-    再顯示完整燃盡圖
-  - 待確認：門檻值（資料點數）與精簡卡片的呈現方式，需與使用者確認後再排入下一輪任務
-  - _相關檔案：`app/views/burndown/_burndown_chart.html.erb`、
-    `app/views/burndown/_burndown_stacked_chart.html.erb`、`app/helpers/burndown_helper.rb`_
+- [x] 4. 307 議題燃盡狀態改成「狀態摘要表 + 收合式趨勢圖」
+  - 起因：使用者看過 `/burndown` 真實截圖後反饋「資料呈現很難懂，不知道有什麼用途」；
+    原設計是敏捷燃盡圖（理想線／實際線疊圖、剩餘人時可為負值），對不熟悉這套圖表語言的人
+    門檻偏高，且資料點稀疏的議題仍佔滿整張圖表高度，6 個「進行中」議題就撐出 6480px 高的
+    頁面（見前版截圖）
+  - [x] 4.1 `BurndownHelper` 新增燈號與人時欄位計算
+    - `burndown_status(issue)`：比較「最新一週實際剩餘人時」與「理想線同一天應剩餘人時」
+      的落差，換算成佔預估人時的比例（相對值而非絕對小時數），分三檔：🟢正常
+      （落差 ≤ 5%）／🟡略慢（≤ 25%）／🔴超支（> 25%）；estimated_hours 為 0 或序列缺資料
+      時回傳「資料不足」
+    - 剩餘人時本身已是負值（花費超過整份預估）時一律強制判定超支，不看理想線落差（負值
+      落差原本會被誤判為「領先進度」，見 `spec/helpers/burndown_helper_spec.rb` 的迴歸測試）
+    - `burndown_remaining_hours`／`burndown_consumed_hours`：優先採用試算表 PM 手動填寫的
+      `reported_remaining_hours`，缺漏才退回 `actual_series` 最新一筆推算
+    - `app/helpers/burndown_helper.rb:114-158`
+  - [x] 4.2 View 改版：`app/views/burndown/index.html.erb`
+    - 議題燃盡狀態改為表格（議題／負責人／預估人時／已消耗／剩餘／燈號），一眼掃過所有
+      議題找出誰卡住了
+    - 原本的燃盡圖／堆疊圖包進 `<details>`，預設收合，表格燈號列有「查看趨勢圖 ↓」錨點
+      連結跳到對應區塊，想看趨勢的人再手動展開
+    - CSS 新增 `.status-on_track/.status-at_risk/.status-over/.status-unknown` 燈號樣式與
+      `.burndown-chart-details` 收合區塊樣式（`app/assets/stylesheets/application.css`）
+  - [x] 4.3 測試更新
+    - 新增 `spec/helpers/burndown_helper_spec.rb`（10 案例，含負值剩餘的迴歸測試）
+    - `spec/requests/burndown_spec.rb` 既有斷言改配合新標題「議題燃盡狀態」
+      （原「議題燃盡圖」），319/319 全過
+    - Playwright 截圖驗證：頁面高度從 6480px 降到約 1000px（未展開任何趨勢圖時），展開
+      單一議題後正確顯示原本的燃盡圖／堆疊圖，狀態燈號經真實資料驗證（含超支案例）
+
+- [ ] 5. 305／306／307 篩選加上時間區間設定（本年度／本月／多個月）
+  - 起因：使用者希望三個頁面的篩選條件都能設定時間區間，例如「今年度」「當月」或「多個
+    月份」，而不是現在各頁各自不同的日期篩選邏輯
+  - 現況盤點（下一輪動工前需要先確認，三頁目前的日期篩選語意互不相同，不是單純複製貼上）：
+    - 305（`/dashboard`）：`scope` 單選（全部／本週到期含逾期／已逾期），無「年度」或
+      「月份」概念，資料本身只到「本年度」試算表（見 `PROJECT_PROGRESS_SPREADSHEET_ID`
+      環境變數，每年換一份新試算表，本來就無法跨年查詢）
+    - 306（`/issues`）：`月度 KPI` 分頁已有單一月份下拉（`app/views/issues/index.html.erb`），
+      但只能選一個月，不支援「多個月」或「本年度」彙總
+    - 307（`/burndown`）：目前完全沒有時間篩選，只有專案／人員／狀態；資料來源是「單一
+      年度分頁」（`BURNDOWN_SHEET_NAME`），同樣無法跨年查詢，但年度內的週欄位範圍可以做
+      「本月」「多個月」篩選（依週欄位日期篩選 `actual_series`／`ideal_series` 的顯示範圍）
+  - 待確認方向：
+    - 「本年度」在 305/307 現有架構下本來就等於「不篩選」（資料本身按年度分表），是否還
+      需要在 UI 上放一個形式上的「本年度」選項，或只需要「本月」「多個月」兩種
+    - 306 的「多個月」是否要做成彙總（加總多個月的 KPI）還是趨勢圖延伸涵蓋範圍
+    - UI 統一走同一種元件（例如月份多選下拉、或起訖日期兩個 `date` input）還是各頁維持
+      現有元件、只是加一個共用的時間區間 partial
+  - _尚未實作，需先與使用者確認上述待確認方向，再排入下一輪任務拆解_
 
 ---
 
@@ -70,4 +105,5 @@
 - 本機／新 worktree 驗證步驟需要 `config/credentials/development.key`（見
   `warroom-data-api-prototype/README.md` 「在新的 git worktree 開發」段落），該檔案已
   `.gitignore`，需從既有 checkout 複製
-- 任務 4 是本次截圖複查的產出，屬於下一輪待確認項目，尚未實作
+- 任務 5（時間區間篩選）待與使用者確認 305/306/307 各自的日期篩選語意後，才拆解成可執行的
+  子任務；三頁目前的「年度」概念都綁在資料來源分頁／試算表上，不是單純的 UI 元件問題
