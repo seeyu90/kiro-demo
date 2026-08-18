@@ -65,16 +65,22 @@
   - [x] 4.2 View 改版：`app/views/burndown/index.html.erb`
     - 議題燃盡狀態改為表格（議題／負責人／預估人時／已消耗／剩餘／燈號），一眼掃過所有
       議題找出誰卡住了
-    - 原本的燃盡圖／堆疊圖包進 `<details>`，預設收合，表格燈號列有「查看趨勢圖 ↓」錨點
-      連結跳到對應區塊，想看趨勢的人再手動展開
+    - 每一列本身就是 `<details>`：點整列（不是另外的連結）就在原地展開該議題的燃盡圖／
+      堆疊圖，不需要跳到頁面下方另一個區塊——第一版做成表格 + 「查看趨勢圖 ↓」錨點連結
+      跳到頁尾另一份收合清單，使用者反饋這樣沒有直覺（為什麼不是點列表就顯示），改成
+      列本身可展開
     - CSS 新增 `.status-on_track/.status-at_risk/.status-over/.status-unknown` 燈號樣式與
-      `.burndown-chart-details` 收合區塊樣式（`app/assets/stylesheets/application.css`）
+      `.burndown-status-table/.burndown-status-row/.burndown-status-details` 系列樣式
+      （`app/assets/stylesheets/application.css`）；`<summary>` 內層用一個額外的
+      `.burndown-status-row` grid 容器包住 6 個欄位，展開箭頭（▸/▾）放在 summary 本身用
+      flex 排版，避免 `::before` 被當成 grid item 擠壓欄位、跟表頭對不齊
   - [x] 4.3 測試更新
     - 新增 `spec/helpers/burndown_helper_spec.rb`（10 案例，含負值剩餘的迴歸測試）
     - `spec/requests/burndown_spec.rb` 既有斷言改配合新標題「議題燃盡狀態」
       （原「議題燃盡圖」），319/319 全過
-    - Playwright 截圖驗證：頁面高度從 6480px 降到約 1000px（未展開任何趨勢圖時），展開
-      單一議題後正確顯示原本的燃盡圖／堆疊圖，狀態燈號經真實資料驗證（含超支案例）
+    - Playwright 截圖驗證兩輪：第一版（表格＋頁尾收合清單）與改版後（點列原地展開）皆
+      實際截圖確認，頁面高度從 6480px 降到約 600px（全部收合時），點列展開後圖表正確
+      顯示在該列正下方、欄位對齊不跑版，狀態燈號經真實資料驗證（含超支案例）
 
 - [ ] 5. 305／306／307 篩選加上時間區間設定（本年度／本月／多個月）
   - 起因：使用者希望三個頁面的篩選條件都能設定時間區間，例如「今年度」「當月」或「多個
