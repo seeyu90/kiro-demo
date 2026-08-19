@@ -262,6 +262,10 @@ body {
   color: var(--overdue-text);
 }
 
+.stat-warning .stat-value {
+  color: var(--at-risk-text);
+}
+
 .row-overdue td:first-child {
   border-left: 3px solid var(--overdue-text);
 }
@@ -533,6 +537,80 @@ turbo-frame[busy]::after {
   margin-top: 0.75rem;
 }
 
+.quick-filters {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0.75rem 0 0;
+}
+
+.quick-filter-tag {
+  display: inline-block;
+  padding: 0.3rem 0.85rem;
+  border-radius: 9999px;
+  border: 1px solid var(--color-border-hover);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-decoration: none;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.quick-filter-tag:hover {
+  border-color: var(--color-accent);
+  color: var(--color-text-strong);
+}
+
+.quick-filter-tag.is-active {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--btn-text);
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.pagination-summary {
+  font-size: 0.8rem;
+  color: var(--color-text-faint);
+}
+
+.pagination-pages {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.pagination-page {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.75rem;
+  height: 1.75rem;
+  padding: 0 0.4rem;
+  border-radius: 0.4rem;
+  border: 1px solid var(--color-border);
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+
+.pagination-page:hover {
+  border-color: var(--color-accent);
+  color: var(--color-text-strong);
+}
+
+.pagination-page.is-current {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--btn-text);
+  font-weight: 700;
+}
+
 /* ── Tabs（純 CSS，radio + label，無需 JS，Turbo Frame 局部更新後仍可正常運作） ── */
 .tab-radio {
   position: absolute;
@@ -594,8 +672,9 @@ turbo-frame[busy]::after {
   white-space: nowrap;
 }
 
+/* 客訴＝紅底、測試＝灰底（原本測試是藍底，跟「處理中」狀態 badge 的藍色搶顏色語意，改灰） */
 .attribution-shared     { background: var(--overdue-bg); color: var(--overdue-text); }
-.attribution-individual { background: var(--badge-progress-bg); color: var(--badge-progress-text); }
+.attribution-individual { background: var(--badge-pending-bg); color: var(--badge-pending-text); }
 .attribution-other       { background: var(--badge-pending-bg); color: var(--badge-pending-text); }
 
 .issue-id-link {
@@ -606,6 +685,49 @@ turbo-frame[busy]::after {
 .issue-id-link:hover,
 .issue-id-link:focus {
   text-decoration: underline;
+}
+
+.issue-project-sub {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--color-text-faint);
+  margin-top: 0.15rem;
+}
+
+/* 議題狀態 badge：來源是自由輸入的中文狀態文字，用關鍵字比對決定顏色（見
+   IssuesHelper#issue_status_badge_class）。原本純文字塞進窄欄位、沒有 white-space:nowrap，
+   四字狀態（例如「新建立」）會逐字換行變成直排，包成 badge span 順便解決這個破版問題。 */
+.issue-status-done       { background: var(--badge-completed-bg); color: var(--badge-completed-text); }
+.issue-status-processing { background: var(--at-risk-bg); color: var(--at-risk-text); }
+.issue-status-new         { background: var(--badge-progress-bg); color: var(--badge-progress-text); }
+.issue-status-other       { background: var(--badge-pending-bg); color: var(--badge-pending-text); }
+
+.issue-subject-truncate {
+  display: inline-block;
+  max-width: 26ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+.total-hours-empty {
+  color: var(--color-text-faint);
+}
+
+.assignee-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 50%;
+  background: var(--color-accent);
+  color: var(--btn-text);
+  font-size: 0.7rem;
+  font-weight: 700;
+  margin-right: 0.35rem;
+  vertical-align: middle;
 }
 
 .trend-chart-wrap {

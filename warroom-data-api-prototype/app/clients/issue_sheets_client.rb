@@ -14,7 +14,9 @@ class IssueSheetsClient
 
   MONTH_KPI_RANGE = "A:J"
   DAILY_KPI_RANGE = "A:E"
-  ISSUE_RANGE     = "A:K"
+  # 原本讀到 K（project）為止；L 欄是 total_hours（花費時間），warroom-issue-dashboard-ux-refresh
+  # 任務 6 需要，擴大範圍納入。
+  ISSUE_RANGE     = "A:L"
 
   SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"].freeze
   CACHE_EXPIRY = 5.minutes
@@ -33,8 +35,9 @@ class IssueSheetsClient
   end
 
   # raw_2023~raw_2027 皆使用相同欄位結構（issue_id, subject, type, tracker, status,
-  # assigned_to, start_date, due_date, work_days, sheet_name, project），與 305 的
-  # ProjectProgressSheetsClient 不同，這裡不需要額外附加分頁標記：試算表本身已含 sheet_name／project 欄位。
+  # assigned_to, start_date, due_date, work_days, sheet_name, project, total_hours），
+  # 與 305 的 ProjectProgressSheetsClient 不同，這裡不需要額外附加分頁標記：試算表本身已含
+  # sheet_name／project 欄位。
   def self.fetch_issue_rows
     Rails.cache.fetch(cache_key("issues"), expires_in: CACHE_EXPIRY) do
       new.fetch_and_merge_rows(ISSUE_SHEETS, ISSUE_RANGE)

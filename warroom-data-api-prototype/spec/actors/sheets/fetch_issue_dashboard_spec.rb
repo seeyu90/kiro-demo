@@ -129,14 +129,14 @@ RSpec.describe Sheets::FetchIssueDashboard do
 
   describe "#parse_issues" do
     let(:header) do
-      %w[issue_id subject type tracker status assigned_to start_date due_date work_days sheet_name project]
+      %w[issue_id subject type tracker status assigned_to start_date due_date work_days sheet_name project total_hours]
     end
 
     it "maps columns to the expected keys, dropping sheet_name" do
       rows = [
         header,
         ["4547", "未匯入行事曆", "Complaint", "臭蟲", "已結束", "黃靖益",
-         "2026/1/2", "2026/1/6", "3", "raw_2026", "Virtuous HRM"]
+         "2026/1/2", "2026/1/6", "3", "raw_2026", "Virtuous HRM", "0.75"]
       ]
 
       result = actor.send(:parse_issues, rows)
@@ -145,10 +145,22 @@ RSpec.describe Sheets::FetchIssueDashboard do
         {
           issue_id: "4547", subject: "未匯入行事曆", type: "Complaint", tracker: "臭蟲",
           status: "已結束", assigned_to: "黃靖益", start_date: "2026-01-02", due_date: "2026-01-06",
-          work_days: 3, project: "Virtuous HRM"
+          work_days: 3, project: "Virtuous HRM", total_hours: 0.75
         }
       ])
       expect(result.first.keys).not_to include(:sheet_name)
+    end
+
+    it "converts a valid total_hours string to Float" do
+      rows = [ header, [ "1", "s", "Complaint", "臭蟲", "已結束", "x", "", "", "", "raw_2026", "P", "8.25" ] ]
+
+      expect(actor.send(:parse_issues, rows).first[:total_hours]).to eq(8.25)
+    end
+
+    it "leaves total_hours nil when the source cell is empty or the column is missing" do
+      rows = [ header, [ "1", "s", "Complaint", "臭蟲", "已結束", "x", "", "", "", "raw_2026", "P", "" ] ]
+
+      expect(actor.send(:parse_issues, rows).first[:total_hours]).to be_nil
     end
 
     it "normalizes start_date and due_date to ISO 8601" do
@@ -290,7 +302,7 @@ RSpec.describe Sheets::FetchIssueDashboard do
 
     let(:issue_rows) do
       [
-        %w[issue_id subject type tracker status assigned_to start_date due_date work_days sheet_name project],
+        %w[issue_id subject type tracker status assigned_to start_date due_date work_days sheet_name project total_hours],
         ["4547", "未匯入行事曆", "Complaint", "臭蟲", "已結束", "黃靖益",
          "2026/1/2", "2026/1/6", "3", "raw_2026", "Virtuous HRM"],
         ["5165", "白名單申請時間錯誤", "TestingBug", "臭蟲", "新建立", "蔡秉逸",
@@ -324,6 +336,45 @@ RSpec.describe Sheets::FetchIssueDashboard do
       expect(result.project_breakdown).to eq([
         { project: "Virtuous HRM", complaint: 1, testing: 1, other: 0, total: 2 }
       ])
+    end
+
+    describe "q/type filters and issue_kpis" do
+      let(:issue_rows) do
+        [
+          %w[issue_id subject type tracker status assigned_to start_date due_date work_days sheet_name project total_hours],
+          [ "1001", "客訴逾期未結", "Complaint", "臭蟲", "處理中", "王贊勛",
+            "2026/8/1", "2026/8/10", "", "raw_2026", "P1", "2" ],
+          [ "1002", "測試無到期日", "TestingBug", "臭蟲", "新建立", "蔡秉逸",
+            "2026/8/12", "", "", "raw_2026", "P1", "0.5" ],
+          [ "1003", "已完成客訴", "Complaint", "臭蟲", "已確認", "黃靖益",
+            "2026/7/1", "2026/7/5", "", "raw_2026", "P1", "1.25" ]
+        ]
+      end
+
+      around { |example| travel_to(Date.new(2026, 8, 19)) { example.run } }
+
+      it "filters filtered_issues by q, case-insensitive, matching subject/issue_id/assigned_to" do
+        result = described_class.result(status: nil, q: "王贊勛")
+
+        expect(result.filtered_issues.map { |i| i[:issue_id] }).to eq([ "1001" ])
+      end
+
+      it "filters filtered_issues by exact type match" do
+        result = described_class.result(status: nil, type: "Complaint")
+
+        expect(result.filtered_issues.map { |i| i[:issue_id] }).to eq([ "1001", "1003" ])
+      end
+
+      it "computes issue_kpis from the filtered (not paginated) issue set, excluding done issues" do
+        result = described_class.result(status: nil)
+
+        # 1001（處理中、客訴、已逾期）／1002（新建立、測試、無到期日）算 pending；
+        # 1003（已確認）已完成，前三個數字都不算它，但 total_hours_sum 不分完成與否，
+        # 三筆的花費工時（2 + 0.5 + 1.25）都要加總進去。
+        expect(result.issue_kpis).to eq(
+          pending: 2, urgent_complaints: 1, overdue_or_undated: 2, total_hours_sum: 3.75
+        )
+      end
     end
 
     context "when IssueSheetsClient raises Google::Apis::ClientError status 404" do

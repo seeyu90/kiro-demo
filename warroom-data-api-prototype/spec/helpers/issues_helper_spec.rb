@@ -30,6 +30,49 @@ RSpec.describe IssuesHelper, type: :helper do
     end
   end
 
+  describe "#issue_status_badge_class" do
+    it "maps statuses containing 完成/確認/關閉/解決 to issue-status-done" do
+      expect(helper.issue_status_badge_class("已完成")).to eq("issue-status-done")
+      expect(helper.issue_status_badge_class("已確認")).to eq("issue-status-done")
+      expect(helper.issue_status_badge_class("已關閉")).to eq("issue-status-done")
+      expect(helper.issue_status_badge_class("已解決")).to eq("issue-status-done")
+    end
+
+    it "maps statuses containing 處理/進行 to issue-status-processing" do
+      expect(helper.issue_status_badge_class("處理中")).to eq("issue-status-processing")
+      expect(helper.issue_status_badge_class("進行中")).to eq("issue-status-processing")
+    end
+
+    it "maps statuses containing 新建/新增 to issue-status-new" do
+      expect(helper.issue_status_badge_class("新建立")).to eq("issue-status-new")
+    end
+
+    it "falls back to issue-status-other for anything unrecognized" do
+      expect(helper.issue_status_badge_class("擱置")).to eq("issue-status-other")
+      expect(helper.issue_status_badge_class(nil)).to eq("issue-status-other")
+    end
+  end
+
+  describe "#issue_timeline_label" do
+    around { |example| travel_to(Date.new(2026, 8, 19)) { example.run } }
+
+    it "shows start ~ due when due_date is present" do
+      issue = { start_date: "2026-08-01", due_date: "2026-08-10" }
+
+      expect(helper.issue_timeline_label(issue)).to eq("2026-08-01 ~ 2026-08-10")
+    end
+
+    it "shows start ~ 未指定（已開 N 天）when due_date is blank" do
+      issue = { start_date: "2026-08-05", due_date: nil }
+
+      expect(helper.issue_timeline_label(issue)).to eq("2026-08-05 ~ 未指定（已開 14 天）")
+    end
+
+    it "shows — when start_date is also blank" do
+      expect(helper.issue_timeline_label(start_date: nil, due_date: nil)).to eq("—")
+    end
+  end
+
   describe "#trend_chart_points" do
     it "assigns evenly spaced x coordinates across the plot width, first/last at the left/right padding" do
       records = [

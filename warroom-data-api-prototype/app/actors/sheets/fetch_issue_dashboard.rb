@@ -7,6 +7,10 @@ module Sheets
     input :status, default: "新建立"
     input :breakdown_sort, default: nil
     input :breakdown_dir, default: "desc"
+    # 「議題資料」分頁的搜尋框（比對主旨／議題編號／負責人）與快捷篩選 Tag（目前只有
+    # 「只看客訴」，固定送出 type="Complaint"，不是自由輸入）。
+    input :q, default: nil
+    input :type, default: nil
 
     output :month_kpi
     output :daily_kpi
@@ -26,6 +30,14 @@ module Sheets
     output :projects
     output :statuses
     output :filtered_issues
+    output :issue_kpis
+
+    # 「狀態」欄位是自由輸入的中文文字（來源是 Redmine，可能出現「新建立」「處理中」「已確認」
+    # 「已解決」「已關閉」「已結束」等各種寫法），無法窮舉每一種可能值，改用關鍵字比對判斷
+    # 「是否已完成」。IssuesHelper#issue_status_badge_class 的 badge 顏色判斷也共用同一個
+    # 常數（只有這裡的「完成／未完成」二分法，processing／new 的細分只有 View 呈現用，不影響
+    # KPI 計算，故不需要共用）。
+    ISSUE_DONE_STATUS_PATTERN = /完成|確認|關閉|解決|結束/
 
     BREAKDOWN_SORT_KEYS = %w[complaint testing other total].freeze
     BREAKDOWN_SORT_DIRS = %w[asc desc].freeze
@@ -54,6 +66,9 @@ module Sheets
       self.projects = issues.map { |i| i[:project] }.compact.uniq
       self.statuses = issues.map { |i| i[:status] }.compact.uniq
       self.filtered_issues = filter_issues(issues)
+      # KPI 卡片依「目前篩選結果」（含搜尋／快捷篩選，分頁之前的完整結果）計算，不是
+      # 分頁後那一頁的子集合，也不是完全未篩選的 issues 全量。
+      self.issue_kpis = compute_issue_kpis(filtered_issues)
     rescue Google::Apis::ClientError => e
       # 錯誤對應邏輯與 305 Sheets::FetchProjectProgress 相同（見 rails-standards.md 的
       # failure_code 對應表）：三個讀取類別（月度 KPI／每日趨勢／議題明細）中任一失敗，
@@ -122,7 +137,8 @@ module Sheets
     end
 
     # 欄位對應：issue_id, subject, type, tracker, status, assigned_to, start_date, due_date,
-    # work_days, sheet_name（略過，僅為來源標記，不需輸出）, project。
+    # work_days, sheet_name（略過，僅為來源標記，不需輸出）, project, total_hours（花費時間，
+    # warroom-issue-dashboard-ux-refresh 任務 6 新增；L 欄，浮點數，可能有小數如 0.75）。
     # issue_id／subject／status 任一為空白則跳過該列（需求 5.5），其餘正常列不受影響。
     # tracker 為「測試」的議題屬於測試性質議題（非真實缺陷），不列入品質相關統計與呈現，
     # 於解析階段整批跳過，不進入 issues／project_breakdown 輸出，API 與 HTML 頁面皆不會看到。
@@ -133,7 +149,8 @@ module Sheets
         next if blank_row?(row)
 
         issue_id, subject, type, tracker, status, assigned_to,
-          start_date, due_date, work_days, _sheet_name, project = row.values_at(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+          start_date, due_date, work_days, _sheet_name, project, total_hours =
+            row.values_at(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
         next if [ issue_id, subject, status ].any? { |value| value.to_s.strip.empty? }
         next if tracker.to_s.strip == "測試"
 
@@ -147,7 +164,8 @@ module Sheets
           start_date: normalize_date(start_date),
           due_date: normalize_date(due_date),
           work_days: safe_integer(work_days),
-          project: project
+          project: project,
+          total_hours: safe_float(total_hours)
         }
       end
     end
@@ -184,6 +202,46 @@ module Sheets
       issues
         .select { |i| project.blank? || i[:project] == project }
         .select { |i| status.blank? || i[:status] == status }
+        .select { |i| type.blank? || i[:type] == type }
+        .select { |i| q.blank? || issue_matches_query?(i, q) }
+    end
+
+    def issue_matches_query?(issue, query)
+      needle = query.to_s.downcase
+      [ issue[:subject], issue[:issue_id], issue[:assigned_to] ].any? { |value| value.to_s.downcase.include?(needle) }
+    end
+
+    def issue_done?(issue)
+      issue[:status].to_s.match?(ISSUE_DONE_STATUS_PATTERN)
+    end
+
+    def issue_overdue?(issue)
+      due = issue[:due_date]
+      return false if due.blank?
+
+      Date.parse(due) < Date.current
+    rescue ArgumentError, TypeError
+      false
+    end
+
+    # KPI 卡片：待處理議題（未完成）／緊急客訴（未完成的客訴且已逾期——資料裡沒有優先權／
+    # 嚴重度欄位，「客訴+已逾期」是目前能從既有資料算出最接近「緊急」的定義，見
+    # warroom-issue-dashboard-ux-refresh 任務 2.1 的取捨說明）／逾期或未定到期日（未完成
+    # 且到期日已過或缺漏）。三者都只算「未完成」的議題，已完成的議題不算緊急也不算逾期。
+    def compute_issue_kpis(issues)
+      pending = issues.reject { |i| issue_done?(i) }
+      urgent_complaints = pending.select { |i| i[:type] == "Complaint" && issue_overdue?(i) }
+      overdue_or_undated = pending.select { |i| i[:due_date].blank? || issue_overdue?(i) }
+      # 累積花費工時不限「未完成」——已完成的議題一樣花了那些工時，此卡片算的是「投入成本」
+      # 不是「還剩多少要做」，跟前三個只算 pending 的卡片語意不同。
+      total_hours_sum = issues.sum { |i| i[:total_hours].to_f }
+
+      {
+        pending: pending.size,
+        urgent_complaints: urgent_complaints.size,
+        overdue_or_undated: overdue_or_undated.size,
+        total_hours_sum: total_hours_sum.round(2)
+      }
     end
 
     # 以日期欄位前 7 碼（YYYY-MM）判斷是否屬於指定月份，與 prototype 的 sameMonth() 邏輯一致。

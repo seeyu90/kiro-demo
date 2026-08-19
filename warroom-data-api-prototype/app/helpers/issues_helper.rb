@@ -12,6 +12,43 @@ module IssuesHelper
     ATTRIBUTION_CLASSES[type] || "attribution-other"
   end
 
+  # 「狀態」欄位是自由輸入的中文文字（來源是 Redmine，可能出現「新建立」「處理中」「已確認」
+  # 「已解決」「已關閉」等各種寫法），無法窮舉每一種可能值，改用關鍵字比對決定 badge 顏色；
+  # 純文字狀態塞進表格窄欄位、沒有 white-space:nowrap 時，中文字會逐字換行變成直排
+  # （例如「新建立」被拆成三行），包成這個 badge span 就解決了。
+  def issue_status_badge_class(status)
+    text = status.to_s
+    if text.match?(/完成|確認|關閉|解決/)
+      "issue-status-done"
+    elsif text.match?(/處理|進行/)
+      "issue-status-processing"
+    elsif text.match?(/新建|新增/)
+      "issue-status-new"
+    else
+      "issue-status-other"
+    end
+  end
+
+  # 「開始／到期／工作天數」三個原本各自獨立的欄位合併成一個「時程與天數」欄位：有到期日
+  # 就顯示「開始 ~ 到期」，沒有到期日（議題還在進行、沒填預計完成日）就顯示「開始 ~
+  # 未指定（已開 N 天）」，N 用今天跟開始日期的差算出來；開始日期也缺就顯示 —（比起原本
+  # 三欄各自顯示「—」，這個合併欄位對「沒填日期」的情況一次講清楚，不用同時看三個空欄位）。
+  def issue_timeline_label(issue)
+    start_text = issue[:start_date].presence
+    return "—" if start_text.nil?
+
+    return "#{start_text} ~ #{issue[:due_date]}" if issue[:due_date].present?
+
+    days = issue_open_days(start_text)
+    days ? "#{start_text} ~ 未指定（已開 #{days} 天）" : "#{start_text} ~ 未指定"
+  end
+
+  def issue_open_days(start_date_str)
+    (Date.current - Date.parse(start_date_str)).to_i
+  rescue ArgumentError, TypeError
+    nil
+  end
+
   # 依專案分類表格的可排序欄位標題連結：同一欄位再次點選時反轉方向，切換到不同欄位時預設降冪
   # （筆數統計通常最關心「最多」的專案）；連結保留目前所選月份，並固定停留在「統計摘要」分頁籤。
   # 同時帶入 project／status，因為這也是一個不含這兩個 query params 的 GET 請求，若不帶入，
