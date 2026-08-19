@@ -199,7 +199,62 @@
       loading 動畫實測從快取命中時的 55～92ms 延長到穩定 1046ms（含少量 setTimeout 排程
       誤差），冷快取（真正需要等 API 回應）時不受影響、不會反而變更慢
 
+- [x] 9. 307 燃盡圖右軸顏色實際生效 + 版面微調
+  - 起因：使用者反饋「Y 軸還是看不出來誰是哪個」。追查後發現任務 8.1 當時就已經在
+    `_burndown_combo_chart.html.erb` 對每人的右軸刻度文字寫了 `fill="<%= color %>"`，
+    但套用的 `.trend-axis-label` 共用 class 有 `fill: var(--color-text-muted)` 宣告——
+    CSS 的 `fill` 屬性優先權高於 SVG 元素自己的 `fill` 屬性，即使沒有更高的選擇器特異性，
+    也會把每個人的顏色蓋成同一個灰色。也就是說「每人顏色對應右軸」這個功能從任務 8.1
+    完成以來其實從未真的顯示出來過，任務 8.6 當時的驗證紀錄「307 多軸刻度與圖例顏色
+    一致」只檢查了程式碼有沒有寫 `fill` 屬性，沒有實際截圖確認渲染結果，才沒抓到這個問題
+  - 詢問使用者「保留多軸、把軸上數字改成對應顏色」或「改回單一共用軸」，使用者選擇保留
+    多軸
+  - 右軸刻度數字改用專屬的 `.burndown-axis-label` class（只設 `font-size`，不設 `fill`），
+    inline `fill` 屬性才不會被蓋掉
+  - 額外補上軸線本身的顏色（原本只有數字上色、軸線是純灰）：每人一條彩色 `<line>`，軸線
+    正上方加一個小色塊 `<rect>` 標記——這其實是任務 8.3 說明文字裡本來就寫的行為
+    （「右側每欄軸線顏色對應同色的人（軸線正上方也有色塊標記）」），但同樣從未真的實作，
+    說明文字寫的功能跟畫面實際呈現長期對不上
+  - 使用者反饋數字離軸線太近、色塊離數字太近：`BURNDOWN_PADDING_TOP` 從 16 調大到 28
+    （目前只有燃盡組合圖用到這個常數，調大不影響其他圖表），數字改成離軸線右側 6px、
+    色塊往上多留間距，三層元素（色塊／數字／軸線）才不會糊在一起
+  - `ⓘ` 圖示改成純文字 `i`：原本用 Unicode `ⓘ` 字元本身就自帶一個圓圈，塞進 CSS 的圓形
+    背景會變成圓中圓，不同字型的繪製效果也不一致
+  - 說明文字精簡（原本一長串 6 段文字，補上軸線／色塊視覺化之後不需要再用文字解釋這麼多
+    細節，縮成 4 段）
+  - `app/helpers/burndown_helper.rb`、`app/views/burndown/_burndown_combo_chart.html.erb`、
+    `app/assets/stylesheets/application.css`
+  - 測試：`bundle exec rspec spec/helpers/burndown_helper_spec.rb spec/requests/burndown_spec.rb`
+    29/29 全過。即時真實資料驗證這次改用 curl 直接檢查渲染出的 SVG 屬性（`fill="#60a5fa"`／
+    `<line>`／`<rect>` 座標）確認邏輯正確；過程中一度遇到 Google Sheets API `Net::ReadTimeout`
+    （curl 直連 API 與 OAuth token endpoint 都秒回，推測是這次連續大量重啟 server／連續
+    請求造成的節流，非程式碼問題）
+
 ---
+
+- [x] 10. 補齊 docs/ 靜態原型同步（`docs/js/burndown.js`、`docs/burndown.html`）
+  - 起因同 warroom-issue-dashboard-ux-refresh spec 任務 8——docs/ 這份純前端靜態原型長期
+    跟 Rails 版分開維護，307 好幾輪迭代（任務 4 狀態摘要表、任務 5 合併長條＋雙軸線圖、
+    任務 8.1-8.3 每人一條右軸／圖例互動／說明文字）都沒同步過去，還停在最早期「獨立燃盡
+    折線圖＋獨立堆疊面積圖」的設計，跟任務 9 剛修的「右軸顏色實際生效」bug 完全無關
+    （那個 bug 只存在於已經合併圖表之後的版本，docs/ 舊版根本沒有多軸這個概念）
+  - 全部改用組合圖表（長條＋每人各自理想／實際累積折線＋各自右軸，右軸線本身也上色、
+    正上方色塊標記，直接套用任務 9 修好的版本，不重蹈同一個 bug）＋議題狀態摘要表
+    （`<details>` 點列原地展開）＋圖例可獨立切換顯示/隱藏（純 JS 事件處理，比照 Rails
+    `burndown_legend_controller.js` 的 toggle 邏輯：`data-assignee` 比對＋
+    `is-hidden`／`is-dimmed`，邏輯一致，不是 Stimulus）
+  - Mock 資料維持原本三筆範例（落後／超前超支／多人合併），不需要额外新增
+  - `docs/css/style.css` 補上 `.burndown-status-table`／`.burndown-status-details`／
+    `.status-on_track`／`.chart-info`／`.burndown-axis-label`／`.burndown-legend-toggle`
+    等 class，跟 Rails 端 `application.css` 命名一致；移除舊版專屬、combo chart 上線後
+    不再使用的 `.burndown-ideal-line`／`.burndown-actual-line`／`.burndown-actual-point`／
+    `.burndown-estimate-reference-line`／`.burndown-stack-swatch-reference`
+  - 用 jsdom 載入實際的 `burndown.html`＋`burndown.js` 執行期驗證：狀態摘要表筆數（依
+    進行中／已完成篩選）、右軸 `fill` 顏色確實依人員不同（非全部同一個灰色，任務 9 那個
+    bug 沒有在這份新寫的版本重演）、軸線＋色塊標記存在、圖例點擊正確只切換該人（非誤觸
+    其他人）、再點一次正確還原
+  - 本機瀏覽器工具連不到這個環境的 `localhost`，無法截圖，改用 jsdom 執行期驗證＋人工核對
+    輸出內容替代
 
 ## Notes
 

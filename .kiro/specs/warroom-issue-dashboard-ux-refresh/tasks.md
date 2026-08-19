@@ -142,7 +142,99 @@ session/current_user 概念），原始需求的「[只看我的議題]」快捷
     `spec/blueprints/issue_blueprint_spec.rb`、`spec/requests/api/issue_dashboard_spec.rb`
     （欄位清單補上 `total_hours`）皆已更新
 
+- [x] 7. Code review 修正 + 使用者看畫面後的追加回饋
+  - [x] 7.1 Code review 抓到的正確性問題
+    - `IssuesHelper#issue_status_badge_class` 的「完成」判斷改成直接引用
+      `Sheets::FetchIssueDashboard::ISSUE_DONE_STATUS_PATTERN`：原本自己另外寫一份關鍵字
+      regex，少了「結束」，導致狀態「已結束」的議題在 KPI 卡片被算成已完成，表格上的
+      badge 卻顯示成灰色未分類——commit message 當時聲稱兩邊共用同一套規則，實際上是
+      兩份獨立維護、已經走鐘的 regex
+    - `IssuesController` 分頁改用 `pagy` gem（新增依賴），取代手刻的
+      `params[:page].to_i.clamp(...)`：原本 `params[:page]` 若是陣列（例如
+      `?page[]=1&page[]=2`）會讓 `Array#to_i` 直接噴 `NoMethodError`（500），Pagy 內部用
+      `page.to_s.to_i` 處理各種輸入型別，不會炸；分頁邏輯也因此從 Controller 移出
+      （原本違反 `rails-standards.md` 的「Controller 不含轉換邏輯」規則），改成呼叫
+      `pagy(:offset, result.filtered_issues, limit: ISSUE_PAGE_SIZE)` 對原始（未
+      Blueprint 過的）陣列先切頁、只對當頁 15 筆做 Blueprint，一併解決「整批篩選結果都
+      序列化一次卻只用其中 15 筆」的效能浪費
+    - `Sheets::FetchIssueDashboard#safe_float` 補上千分位逗號的 strip
+      （`value.to_s.delete(",")`），跟 307 `FetchProjectBurndown#safe_float` 對齊——原本
+      兩邊實作不一致，`total_hours` 若是 `"1,200"` 這種格式會被誤判成無法解析而歸零
+    - `compute_issue_kpis` 的 `issue_overdue?` 原本對同一筆議題呼叫兩次（`urgent_complaints`
+      與 `overdue_or_undated` 各自呼叫一次），改成每筆只算一次、結果共用
+    - `app/helpers/issues_helper.rb`、`app/controllers/issues_controller.rb`、
+      `app/controllers/application_controller.rb`（新增 `include Pagy::Method`）、
+      `app/actors/sheets/fetch_issue_dashboard.rb`、`Gemfile`
+  - [x] 7.2 使用者看過真實畫面後的追加回饋
+    - 搜尋框（`text_field_tag :q`）補上跟 select 一致的深色底／邊框樣式
+      （`.project-selector input[type="text"]`）：原本沿用瀏覽器預設白底樣式，跟同一排的
+      select 不一致
+    - 移除負責人頭像色塊（`.assignee-avatar`），使用者覺得沒必要
+    - 分頁 UI 改用 Pagy 的 `series_nav`（省略號＋首尾頁），取代原本 415 筆資料會排出
+      28 個頁碼按鈕、擠成一長條的版面
+    - 「只看客訴」快捷篩選 Tag 移到跟專案／狀態／搜尋同一個 flex row（原本另外獨立一行）
+    - 「時程與天數」欄位日期改成月-日格式（不顯示年份，同一頁不會橫跨太多年份）；沒有
+      到期日時的呈現字眼從「未指定」改成「進行中」——使用者反饋「還沒結束不是沒填」，
+      只有議題本身已完成卻沒填到期日這種真正的資料缺漏，才維持顯示「未指定」（新增
+      `IssuesHelper#issue_done_status?` 共用「是否已完成」判斷，同一套規則也用在
+      badge 顏色上）
+    - 「緊急客訴」「逾期／未定到期日」KPI 補上業務 SLA（`ISSUE_SLA_DAYS`）：沒填到期日時，
+      客訴兩天內要完成、測試（個人責任）當天要完成，超過就算逾期，取代原本「沒填到期日
+      一律不算逾期」的判斷——起因是使用者截圖看到好幾筆客訴都開了 13-15 天卻「緊急客訴」
+      顯示 0，追問後才發現這些客訴根本沒填到期日，原本的定義完全沒把這種情況算進去
+    - `app/helpers/issues_helper.rb`、`app/views/issues/index.html.erb`、
+      `app/views/issues/_issue_list.html.erb`、`app/assets/stylesheets/application.css`、
+      `app/actors/sheets/fetch_issue_dashboard.rb`
+  - [x] 7.3 測試
+    - `spec/actors/sheets/fetch_issue_dashboard_spec.rb`：新增 SLA 逾期判斷案例（客訴／
+      測試／其他類型、到期日缺漏但仍在 SLA 期限內外的邊界情況）、`safe_float` 逗號案例
+    - `spec/helpers/issues_helper_spec.rb`：`issue_status_badge_class` 補「已結束」案例、
+      `issue_timeline_label` 改成驗證月-日格式／「進行中」vs「未指定」／`work_days` 優先
+      於「已開 N 天」
+    - `bundle exec rspec` 399/400 全過（唯一失敗是既有的 `project_history_helper_spec.rb:91`
+      浮點數捨入 flaky test，跟本次改動無關，`git stash` 後單獨跑一樣失敗）
+
 ---
+
+- [x] 8. 補齊 docs/ 靜態原型同步（`docs/js/issues.js`、`docs/issues.html`）
+  - 起因：使用者問「docs 的檔案這次是不是沒有一併調整？」，追查後發現 docs/ 這份純前端
+    靜態原型（無後端，`project-rules.md` 另有一套規則，長期跟 Rails 版分開維護）落差不只
+    這次的修正，而是整個 306 UX 改版（本 spec 任務 1-7）都從未同步過去，還停在改版前的
+    9 欄舊版表格
+  - 詢問使用者處理範圍，使用者選擇全部補齊：KPI 卡片、搜尋框＋「只看客訴」快捷篩選、
+    表格從 9 欄精簡為 7 欄（含 badge／花費時間／時程與天數合併欄位）、分頁（省略號導覽，
+    比照 Rails 端 Pagy 的 series_nav 產出格式，用簡化版 JS 實作）、SLA 逾期判斷，全部依
+    本 spec 任務 1-7 與 Rails 端目前的實作對齊
+  - Mock 資料新增兩筆沒填到期日的客訴（用 `daysAgoISO(n)` 算相對「現在」的開始日期，不是
+    寫死的固定日期），一筆超過兩天 SLA、一筆還在兩天內，才能示範「緊急客訴」判定——原本
+    7 筆固定日期的範例資料裡沒有任何一筆「未完成客訴 + 沒填到期日」的組合，光補邏輯不補
+    資料看不出效果
+  - `docs/css/style.css` 補上對應的 CSS（`--at-risk-bg`／`--at-risk-text` 變數、
+    `.issue-status-*`／`.quick-filter-tag`／`.pagy.series-nav`／搜尋框樣式等），與 Rails
+    端 `application.css` 的 class 命名保持一致
+  - 用 jsdom 載入實際的 `issues.html`＋`issues.js` 執行期驗證（非只有語法檢查）：KPI 數字、
+    「已結束」badge 顏色、搜尋／快捷篩選／分頁互動、SLA 逾期判斷皆與 Rails 端邏輯一致；
+    過程中抓到一個真的執行期 bug——新增的 `shortDate()` helper 跟既有「每日趨勢圖」的
+    `shortDate()` 同名，同一個 IIFE 作用域內後面的函式宣告覆蓋前面的，導致「時程與天數」
+    欄位日期實際印出來是 `08/12`（沿用了舊函式的斜線格式）而不是預期的 `08-12`，改名為
+    `timelineShortDate` 才修正
+  - 本機瀏覽器工具連不到這個環境的 `localhost`（跟 Rails 端驗證時同樣的限制），無法截圖，
+    改用 jsdom 執行期驗證＋人工核對輸出文字內容替代
+
+- [x] 9. PR review 回饋：補上分頁的 request spec 測試覆蓋
+  - GitHub PR #6 的 review comment 指出：這次修的兩個核心問題（`params[:page]` 陣列時
+    500、Pagy 分頁 UI）完全依賴人工 curl 驗證，`spec/` 裡沒有任何測試打 `?page=`，也沒有
+    超過 `ISSUE_PAGE_SIZE`（15 筆）的 fixture，`series_nav` 分頁 UI 從未被自動化測試實際
+    渲染過
+  - `spec/requests/issues_spec.rb` 新增 4 個案例：`page[]=1&page[]=2`／非數字 page 值都
+    不會 500；20 筆議題（超過一頁）時分頁摘要文字＋`pagy series-nav` 正確渲染、換頁後
+    顯示正確的剩餘筆數
+  - 過程中一個測試寫法上的教訓：第一版用 `not_to include("錯誤")` 判斷沒有錯誤訊息，結果
+    誤判——既有 fixture 裡剛好有一筆議題主旨叫「白名單申請時間錯誤」，字面上就含有「錯誤」
+    兩個字，跟真正的錯誤橫幅字樣撞在一起；`<tr>` 計數同理誤中依專案分類表格的列。改成比對
+    `class="error-message"`／`class="issue-id-link"` 這種更精確的 markup，不用容易被
+    無關文字內容撞到的粗略字串比對
+  - `bundle exec rspec` 404/404 全過（同一個既有 flaky test 不算）
 
 ## Notes
 

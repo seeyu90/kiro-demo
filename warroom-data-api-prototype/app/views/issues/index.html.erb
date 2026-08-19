@@ -153,49 +153,33 @@
             <%= text_field_tag :q, @selected_q, placeholder: "主旨／編號／負責人" %>
           </div>
 
+          <%# 快捷篩選只有「只看客訴」：這個 App 沒有登入／使用者身分機制，assigned_to 只是
+              試算表裡的姓名字串，沒有「目前使用者是誰」的資訊來源，無法做「只看我的議題」。
+              放在同一個 flex row 裡（跟專案／狀態／搜尋同一行），不需要另外獨立一行。 %>
+          <span class="quick-filters">
+            <%= link_to "只看客訴",
+                        issues_path(issue_filter_params(type: (@selected_type == "Complaint" ? nil : "Complaint"))),
+                        class: "quick-filter-tag #{'is-active' if @selected_type == 'Complaint'}",
+                        data: { turbo_frame: "issue-content" } %>
+          </span>
+
           <div class="filter-actions">
             <%= submit_tag "套用篩選", class: "apply-filters-btn" %>
           </div>
         <% end %>
 
-        <div class="quick-filters">
-          <%# 快捷篩選只有「只看客訴」：這個 App 沒有登入／使用者身分機制，assigned_to 只是
-              試算表裡的姓名字串，沒有「目前使用者是誰」的資訊來源，無法做「只看我的議題」。 %>
-          <%= link_to "只看客訴",
-                      issues_path(tab: "detail", project: @selected_project, status: @selected_status,
-                                   q: @selected_q, month: @selected_month, breakdown_sort: @breakdown_sort,
-                                   breakdown_dir: @breakdown_dir,
-                                   type: (@selected_type == "Complaint" ? nil : "Complaint")),
-                      class: "quick-filter-tag #{'is-active' if @selected_type == 'Complaint'}",
-                      data: { turbo_frame: "issue-content" } %>
-        </div>
-
         <section class="issue-section">
           <h2>議題明細</h2>
           <%= render partial: "issue_list", locals: { issues: @issues } %>
 
-          <% if @total_issue_count.positive? %>
+          <% if @pagy && @pagy.count.positive? %>
             <div class="pagination">
               <p class="pagination-summary">
-                顯示 <%= (@page - 1) * IssuesController::ISSUE_PAGE_SIZE + 1 %>–<%= [ @page * IssuesController::ISSUE_PAGE_SIZE, @total_issue_count ].min %>
-                筆，共 <%= @total_issue_count %> 筆
+                顯示 <%= @pagy.from %>–<%= @pagy.to %> 筆，共 <%= @pagy.count %> 筆
               </p>
-              <% if @total_pages > 1 %>
-                <div class="pagination-pages">
-                  <% (1..@total_pages).each do |p| %>
-                    <% if p == @page %>
-                      <span class="pagination-page is-current"><%= p %></span>
-                    <% else %>
-                      <%= link_to p,
-                                  issues_path(tab: "detail", project: @selected_project, status: @selected_status,
-                                               q: @selected_q, type: @selected_type, month: @selected_month,
-                                               breakdown_sort: @breakdown_sort, breakdown_dir: @breakdown_dir, page: p),
-                                  class: "pagination-page",
-                                  data: { turbo_frame: "issue-content" } %>
-                    <% end %>
-                  <% end %>
-                </div>
-              <% end %>
+              <%# Pagy 的 series_nav 直接沿用目前請求的 query params（見 Pagy::Linkable），
+                  不需要像上面快捷篩選那樣手動帶入 project／status／q 等篩選值。 %>
+              <%= raw @pagy.series_nav(anchor_string: 'data-turbo-frame="issue-content"', aria_label: "議題分頁") if @pagy.pages > 1 %>
             </div>
           <% end %>
         </section>

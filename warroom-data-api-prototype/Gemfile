@@ -18,6 +18,8 @@ gem "jbuilder"
 gem "service_actor"
 # JSON blueprinting for APIs [https://github.com/procore/blueprinter]
 gem "blueprinter"
+# Pagination [https://github.com/ddnexus/pagy]
+gem "pagy"
 # Use Redis adapter to run Action Cable in production
 # gem "redis", ">= 4.0.1"
 
