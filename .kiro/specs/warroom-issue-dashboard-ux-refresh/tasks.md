@@ -221,6 +221,21 @@ session/current_user 概念），原始需求的「[只看我的議題]」快捷
   - 本機瀏覽器工具連不到這個環境的 `localhost`（跟 Rails 端驗證時同樣的限制），無法截圖，
     改用 jsdom 執行期驗證＋人工核對輸出文字內容替代
 
+- [x] 9. PR review 回饋：補上分頁的 request spec 測試覆蓋
+  - GitHub PR #6 的 review comment 指出：這次修的兩個核心問題（`params[:page]` 陣列時
+    500、Pagy 分頁 UI）完全依賴人工 curl 驗證，`spec/` 裡沒有任何測試打 `?page=`，也沒有
+    超過 `ISSUE_PAGE_SIZE`（15 筆）的 fixture，`series_nav` 分頁 UI 從未被自動化測試實際
+    渲染過
+  - `spec/requests/issues_spec.rb` 新增 4 個案例：`page[]=1&page[]=2`／非數字 page 值都
+    不會 500；20 筆議題（超過一頁）時分頁摘要文字＋`pagy series-nav` 正確渲染、換頁後
+    顯示正確的剩餘筆數
+  - 過程中一個測試寫法上的教訓：第一版用 `not_to include("錯誤")` 判斷沒有錯誤訊息，結果
+    誤判——既有 fixture 裡剛好有一筆議題主旨叫「白名單申請時間錯誤」，字面上就含有「錯誤」
+    兩個字，跟真正的錯誤橫幅字樣撞在一起；`<tr>` 計數同理誤中依專案分類表格的列。改成比對
+    `class="error-message"`／`class="issue-id-link"` 這種更精確的 markup，不用容易被
+    無關文字內容撞到的粗略字串比對
+  - `bundle exec rspec` 404/404 全過（同一個既有 flaky test 不算）
+
 ## Notes
 
 - 表格欄位從 9 欄精簡為 7 欄：議題／專案（合併）、類別、主旨、狀態、負責人、時程與天數

@@ -377,4 +377,57 @@ RSpec.describe "Issues", type: :request do
       expect(tab_checked?(response.body, "tab-stats")).to be true
     end
   end
+
+  describe "GET /issues pagination (Pagy)" do
+    # 這次改動的核心問題之一：params[:page] 若被送成陣列（例如 ?page[]=1&page[]=2），舊版手刻
+    # 的 params[:page].to_i 會讓 Array#to_i 直接噴 NoMethodError（500）。Pagy 內部改用
+    # page.to_s.to_i，各種輸入型別都不會炸，這裡直接驗證這個曾經的崩潰路徑現在回 200。
+    it "does not 500 when page is submitted as an array" do
+      get "/issues", params: { tab: "detail", status: "", page: [ "1", "2" ] }
+
+      # 不能用 include("錯誤") 判斷有沒有錯誤訊息：這份 fixture 裡剛好有一筆議題主旨是
+      # 「白名單申請時間錯誤」，字面上就含有「錯誤」兩個字，會跟真正的錯誤橫幅字樣混在一起
+      # 誤判。改成比對實際的錯誤橫幅 markup（見 app/views/issues/index.html.erb 的
+      # <div class="error-message">）。
+      expect(response).to have_http_status(200)
+      expect(response.body).not_to include('class="error-message"')
+    end
+
+    it "does not 500 for a non-numeric page value, and falls back to page 1" do
+      get "/issues", params: { tab: "detail", status: "", page: "not-a-number" }
+
+      expect(response).to have_http_status(200)
+      expect(response.body).to include("顯示 1–")
+    end
+
+    context "with more issues than fit on one page" do
+      let(:issue_rows) do
+        header = %w[issue_id subject type tracker status assigned_to start_date due_date work_days sheet_name project]
+        rows = (1..20).map do |n|
+          [ "60#{n.to_s.rjust(2, '0')}", "議題 #{n}", "Other", "臭蟲", "新建立", "王贊勛",
+            "2026/8/1", "2026/8/10", "1", "raw_2026", "P" ]
+        end
+        [ header ] + rows
+      end
+
+      it "renders 20 issues across 2 pages with a working Pagy nav" do
+        get "/issues", params: { tab: "detail", status: "" }
+
+        expect(response).to have_http_status(200)
+        expect(response.body).to include("顯示 1–15 筆，共 20 筆")
+        expect(response.body).to include('class="pagy series-nav"')
+        # 用 issue-id-link 數量算實際渲染的議題列數，不用 <tr>——同一頁還有依專案分類的表格
+        # 等其他 <table>，直接數 <tr> 會把那些表格的列也算進去。
+        expect(response.body.scan('class="issue-id-link"').size).to eq(15)
+      end
+
+      it "shows the remaining issues on page 2" do
+        get "/issues", params: { tab: "detail", status: "", page: 2 }
+
+        expect(response).to have_http_status(200)
+        expect(response.body).to include("顯示 16–20 筆，共 20 筆")
+        expect(response.body.scan('class="issue-id-link"').size).to eq(5)
+      end
+    end
+  end
 end
