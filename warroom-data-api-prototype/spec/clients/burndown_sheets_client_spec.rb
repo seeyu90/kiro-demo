@@ -116,6 +116,21 @@ RSpec.describe BurndownSheetsClient do
 
         expect(project_cell.encoding).to eq(Encoding::UTF_8)
       end
+
+      it "caches the result so a second call within the TTL does not hit the API again" do
+        # 測試環境的 cache_store 是 :null_store（快取實質停用），改用真實 MemoryStore
+        # 才能驗證第二次呼叫確實命中快取、不再打 API（比照 ProjectProgressSheetsClient 的作法）。
+        allow(Rails).to receive(:cache).and_return(ActiveSupport::Cache::MemoryStore.new)
+
+        header = %w[剩餘人時 專案 議題 人員 議題ID 開案日期 完成日期 預估人時]
+        fake_service = stub_service(header_row: header)
+        stub_data_range(fake_service, last_col: "H", rows: [ header ])
+
+        described_class.fetch_rows
+        described_class.fetch_rows
+
+        expect(fake_service).to have_received(:get_spreadsheet_values).twice
+      end
     end
 
     context "when Rails credentials return nil, fallback to ENV var" do

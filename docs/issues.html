@@ -64,16 +64,23 @@
 
       <div class="tab-panel" id="tab-panel-detail">
         <section class="issue-section">
-          <div class="section-heading-row">
-            <h2>議題明細</h2>
-            <div class="control-group">
-              <label for="issue-project">專案：</label>
-              <select id="issue-project" name="issue-project"></select>
-              <label for="issue-status">狀態：</label>
-              <select id="issue-status" name="issue-status"></select>
-            </div>
+          <h2>議題明細</h2>
+          <div id="issue-kpi-cards" class="summary-bar" aria-live="polite"></div>
+
+          <div class="project-selector">
+            <label for="issue-project">專案：</label>
+            <select id="issue-project" name="issue-project"></select>
+            <label for="issue-status">狀態：</label>
+            <select id="issue-status" name="issue-status"></select>
+            <label for="issue-search">搜尋：</label>
+            <input type="text" id="issue-search" name="issue-search" placeholder="主旨／編號／負責人">
+            <span class="quick-filters">
+              <button type="button" id="quick-filter-complaint" class="quick-filter-tag">只看客訴</button>
+            </span>
           </div>
+
           <div id="issue-table" aria-live="polite"></div>
+          <div id="issue-pagination" class="pagination" aria-live="polite"></div>
         </section>
       </div>
     </div>

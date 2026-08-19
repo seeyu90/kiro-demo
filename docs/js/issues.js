@@ -39,29 +39,169 @@
     { date: "2026-08-13", complaint: 0, testing: 0, other: 0, total: 0 }
   ];
 
+  // 依「現在」往前推 N 天，回傳 YYYY-MM-DD：用於新增的兩筆客訴範例（見下方 B-1/B-2），
+  // 讓「緊急客訴（客訴＋已逾期）」KPI 卡片跟 SLA 判斷不管什麼時候開這個靜態頁面都能正確
+  // 展示出來，不像其餘固定日期的範例列會隨時間過去而逐漸「看起來過期」（沿用本檔既有的
+  // currentYearMonth()／burndown.js 的 issueInProgress() 同一種取捨：這份純前端展示本來
+  // 就用瀏覽器當下時間，不是固定某個時間點）。
+  function daysAgoISO(n) {
+    var d = new Date();
+    d.setDate(d.getDate() - n);
+    return d.toISOString().slice(0, 10);
+  }
+
   // 原始資料模擬 raw_2023~raw_2026 分頁：tracker 欄位值包含「臭蟲」與「測試」，「測試」為測試性質
   // 議題（非真實缺陷），不列入品質相關統計與呈現，故載入後立即整批過濾掉，不進入本頁面任何區塊
-  // （KPI 摘要、每日趨勢、依專案分類統計、議題明細清單）。
+  // （KPI 摘要、每日趨勢、依專案分類統計、議題明細清單）。total_hours（花費時間）比照真實
+  // 試算表 L 欄。
   var RAW_ISSUE_ROWS = [
-    { issue_id: 4547, subject: "[客訴] 未匯入 2026 行事曆", type: "Complaint", tracker: "臭蟲", status: "已結束", assigned_to: "黃靖益", start_date: "2026-01-02", due_date: "2026-01-06", work_days: 3, project: "Virtuous HRM" },
-    { issue_id: 4884, subject: "[測試] 按離職結算，出現伺服器錯誤", type: "TestingBug", tracker: "臭蟲", status: "已結束", assigned_to: "黃靖益", start_date: "2026-05-18", due_date: null, work_days: null, project: "Virtuous HRM" },
-    { issue_id: 5160, subject: "[客訴] A3原料發貨異常", type: "Complaint", tracker: "臭蟲", status: "已解決", assigned_to: "王贊勛", start_date: "2026-08-11", due_date: "2026-08-11", work_days: 0, project: "JZN 舊振南智慧工廠" },
-    { issue_id: 5165, subject: "[測試] Cloud Admin 申請白名單 申請時間錯誤", type: "TestingBug", tracker: "臭蟲", status: "新建立", assigned_to: "蔡秉逸", start_date: "2026-08-12", due_date: null, work_days: null, project: "Virtuous HRM" },
-    { issue_id: 3058, subject: "[PMS] 結案小工序DeadlockVictim", type: "Other", tracker: "臭蟲", status: "已暫停", assigned_to: "王贊勛", start_date: "2024-04-29", due_date: null, work_days: null, project: "AG 亞炬" },
-    { issue_id: 4301, subject: "[客訴] QC登入後會出現無權限使用此功能的跳窗", type: "Complaint", tracker: "臭蟲", status: "已結束", assigned_to: "王贊勛", start_date: "2025-09-03", due_date: "2026-01-30", work_days: 108, project: "JieZhou 傑宙" },
-    { issue_id: 5170, subject: "[測試] 測試環境資料回填驗證", type: "TestingBug", tracker: "測試", status: "新建立", assigned_to: "蔡秉逸", start_date: "2026-08-13", due_date: null, work_days: null, project: "Virtuous HRM" }
+    { issue_id: 4547, subject: "[客訴] 未匯入 2026 行事曆", type: "Complaint", tracker: "臭蟲", status: "已結束", assigned_to: "黃靖益", start_date: "2026-01-02", due_date: "2026-01-06", work_days: 3, project: "Virtuous HRM", total_hours: 0.75 },
+    { issue_id: 4884, subject: "[測試] 按離職結算，出現伺服器錯誤", type: "TestingBug", tracker: "臭蟲", status: "已結束", assigned_to: "黃靖益", start_date: "2026-05-18", due_date: null, work_days: null, project: "Virtuous HRM", total_hours: 2 },
+    { issue_id: 5160, subject: "[客訴] A3原料發貨異常", type: "Complaint", tracker: "臭蟲", status: "已解決", assigned_to: "王贊勛", start_date: "2026-08-11", due_date: "2026-08-11", work_days: 0, project: "JZN 舊振南智慧工廠", total_hours: 1.5 },
+    { issue_id: 5165, subject: "[測試] Cloud Admin 申請白名單 申請時間錯誤", type: "TestingBug", tracker: "臭蟲", status: "新建立", assigned_to: "蔡秉逸", start_date: "2026-08-12", due_date: null, work_days: null, project: "Virtuous HRM", total_hours: null },
+    { issue_id: 3058, subject: "[PMS] 結案小工序DeadlockVictim", type: "Other", tracker: "臭蟲", status: "已暫停", assigned_to: "王贊勛", start_date: "2024-04-29", due_date: null, work_days: null, project: "AG 亞炬", total_hours: null },
+    { issue_id: 4301, subject: "[客訴] QC登入後會出現無權限使用此功能的跳窗", type: "Complaint", tracker: "臭蟲", status: "已結束", assigned_to: "王贊勛", start_date: "2025-09-03", due_date: "2026-01-30", work_days: 108, project: "JieZhou 傑宙", total_hours: 14 },
+    { issue_id: 5170, subject: "[測試] 測試環境資料回填驗證", type: "TestingBug", tracker: "測試", status: "新建立", assigned_to: "蔡秉逸", start_date: "2026-08-13", due_date: null, work_days: null, project: "Virtuous HRM", total_hours: null },
+    // 沒填到期日的客訴：一筆超過兩天 SLA（示範「緊急客訴」判定＋逾期計入），一筆還在兩天內
+    // （示範還不算緊急、時程欄位顯示「進行中」）——對應真實使用情境：使用者截圖看到好幾筆
+    // 客訴開了十幾天卻「緊急客訴」顯示 0，才發現這些客訴根本沒填到期日。
+    { issue_id: 5201, subject: "[客訴] 訂單同步延遲", type: "Complaint", tracker: "臭蟲", status: "處理中", assigned_to: "陳筱涵", start_date: daysAgoISO(5), due_date: null, work_days: null, project: "AG 亞炬", total_hours: 0 },
+    { issue_id: 5202, subject: "[客訴] 通知信未寄出", type: "Complaint", tracker: "臭蟲", status: "新建立", assigned_to: "王贊勛", start_date: daysAgoISO(1), due_date: null, work_days: null, project: "JZN 舊振南智慧工廠", total_hours: 0 }
   ];
 
   var ISSUES = RAW_ISSUE_ROWS.filter(function (issue) { return issue.tracker !== "測試"; });
+
+  // 「是否已完成」關鍵字比對，badge 顏色（issueStatusBadgeClass）與 KPI 卡片（isIssueDone）
+  // 共用同一個 regex，才不會發生「這筆議題 KPI 算完成、badge 卻顯示未分類顏色」的不一致
+  // （比照 Rails Sheets::FetchIssueDashboard::ISSUE_DONE_STATUS_PATTERN／
+  // IssuesHelper#issue_status_badge_class 的取捨）。
+  var ISSUE_DONE_STATUS_PATTERN = /完成|確認|關閉|解決|結束/;
+
+  function isIssueDone(status) {
+    return ISSUE_DONE_STATUS_PATTERN.test(String(status));
+  }
+
+  function issueStatusBadgeClass(status) {
+    var text = String(status);
+    if (isIssueDone(text)) return "issue-status-done";
+    if (/處理|進行/.test(text)) return "issue-status-processing";
+    if (/新建|新增/.test(text)) return "issue-status-new";
+    return "issue-status-other";
+  }
+
+  // 開始／到期日已經是 YYYY-MM-DD，只在確實是這個格式時才去掉年份（同一頁不會橫跨太多
+  // 年份，年份對這個窄欄位幫助不大）。
+  function timelineShortDate(dateStrForTimeline) {
+    var m = /^\d{4}-(\d{2}-\d{2})$/.exec(String(dateStrForTimeline));
+    return m ? m[1] : dateStrForTimeline;
+  }
+
+  function issueOpenDays(startDateStr) {
+    var start = new Date(startDateStr);
+    if (isNaN(start.getTime())) return null;
+    var diffMs = Date.now() - start.getTime();
+    return Math.floor(diffMs / (24 * 60 * 60 * 1000));
+  }
+
+  // 「開始／到期／工作天數」合併成一欄：有工作天數（來源試算表既有欄位）就附註「工作 N
+  // 天」；沒填工作天數、也還沒到期時，退而求其次附註「已開 N 天」。沒有到期日時的呈現字眼：
+  // 議題還在進行中顯示「進行中」，只有議題本身已完成卻沒填到期日這種真正的資料缺漏，才
+  // 顯示「未指定」（比照 Rails IssuesHelper#issue_timeline_label／#issue_done_status?）。
+  function issueTimelineLabel(issue) {
+    if (!issue.start_date) return "—";
+
+    var range;
+    if (issue.due_date) {
+      range = timelineShortDate(issue.start_date) + " ~ " + timelineShortDate(issue.due_date);
+    } else {
+      range = timelineShortDate(issue.start_date) + " ~ " + (isIssueDone(issue.status) ? "未指定" : "進行中");
+    }
+
+    var note = null;
+    if (issue.work_days !== null && issue.work_days !== undefined) {
+      note = "工作 " + issue.work_days + " 天";
+    } else if (!issue.due_date) {
+      var days = issueOpenDays(issue.start_date);
+      if (days !== null) note = "已開 " + days + " 天";
+    }
+
+    return note ? range + "（" + note + "）" : range;
+  }
+
+  // 沒填到期日時的內建 SLA（依 type 而定，天數是從開始日算起「最晚應完成」的期限）：客訴
+  // 兩天內要完成、測試（TestingBug／個人責任）當天要完成，其餘類型沒有對應 SLA（比照 Rails
+  // Sheets::FetchIssueDashboard::ISSUE_SLA_DAYS）。
+  var ISSUE_SLA_DAYS = { Complaint: 2, TestingBug: 0 };
+
+  function issueOverdue(issue) {
+    // 用 "YYYY-MM-DD" 字串本身做字典序比較，不經過 Date 物件，避開 new Date(str) 以 UTC
+    // 解析、但今天的日期是本地時區這種時區不一致造成的誤判空間。
+    if (issue.due_date) {
+      return issue.due_date < todayLocalDateString();
+    }
+    var slaDays = ISSUE_SLA_DAYS[issue.type];
+    if (slaDays === undefined || !issue.start_date) return false;
+    var deadline = addDaysToDateString(issue.start_date, slaDays);
+    return deadline !== null && deadline < todayLocalDateString();
+  }
+
+  function todayLocalDateString() {
+    return dateToLocalDateString(new Date());
+  }
+
+  function addDaysToDateString(dateStr, days) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateStr);
+    if (!m) return null;
+    var d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    if (isNaN(d.getTime())) return null;
+    d.setDate(d.getDate() + days);
+    return dateToLocalDateString(d);
+  }
+
+  function dateToLocalDateString(d) {
+    var y = d.getFullYear();
+    var m = String(d.getMonth() + 1).padStart(2, "0");
+    var day = String(d.getDate()).padStart(2, "0");
+    return y + "-" + m + "-" + day;
+  }
+
+  // KPI 卡片：待處理議題（未完成）／緊急客訴（未完成的客訴且已逾期）／累積總花費工時
+  // （不限完成與否，投入成本）／逾期或未定到期日（未完成且到期日已過，或沒填到期日、也沒有
+  // 對應 SLA 可判斷）。比照 Rails Sheets::FetchIssueDashboard#compute_issue_kpis。
+  function computeIssueKpis(issues) {
+    var pending = issues.filter(function (i) { return !isIssueDone(i.status); });
+    var urgentCount = 0;
+    var overdueOrUndatedCount = 0;
+
+    pending.forEach(function (i) {
+      var overdue = issueOverdue(i);
+      var undated = !i.due_date && !(i.type in ISSUE_SLA_DAYS);
+      if (i.type === "Complaint" && overdue) urgentCount += 1;
+      if (undated || overdue) overdueOrUndatedCount += 1;
+    });
+
+    var totalHoursSum = issues.reduce(function (sum, i) { return sum + (Number(i.total_hours) || 0); }, 0);
+
+    return {
+      pending: pending.length,
+      urgent_complaints: urgentCount,
+      overdue_or_undated: overdueOrUndatedCount,
+      total_hours_sum: Math.round(totalHoursSum * 100) / 100
+    };
+  }
 
   // ── 篩選狀態 ──────────────────────────────────────────────
 
   // 預設篩選：全部專案 + 狀態「新建立」，聚焦最需要處理的新進議題。
   // breakdownSort：依專案分類表格目前的排序欄位／方向，key 為 null 時維持原始（依專案分組）順序。
+  // q／type：議題資料分頁的搜尋框與快捷篩選（只看客訴）；page：表格目前頁碼（1 起算）。
   var state = {
-    issueFilters: { project: null, status: "新建立" },
-    breakdownSort: { key: null, dir: -1 }
+    issueFilters: { project: null, status: "新建立", q: "", type: null },
+    breakdownSort: { key: null, dir: -1 },
+    page: 1
   };
+
+  var ISSUE_PAGE_SIZE = 15;
 
   // ── 共用輔助 ──────────────────────────────────────────────
 
@@ -339,6 +479,8 @@
   function initIssueFilters() {
     var projectSelect = document.getElementById("issue-project");
     var statusSelect = document.getElementById("issue-status");
+    var searchInput = document.getElementById("issue-search");
+    var quickFilterBtn = document.getElementById("quick-filter-complaint");
 
     var allProjectOption = document.createElement("option");
     allProjectOption.value = "";
@@ -366,50 +508,209 @@
 
     projectSelect.value = state.issueFilters.project || "";
     statusSelect.value = state.issueFilters.status || "";
+    if (searchInput) searchInput.value = state.issueFilters.q || "";
 
     projectSelect.addEventListener("change", function () {
       state.issueFilters.project = projectSelect.value || null;
+      state.page = 1;
       renderIssueTable();
     });
 
     statusSelect.addEventListener("change", function () {
       state.issueFilters.status = statusSelect.value || null;
+      state.page = 1;
       renderIssueTable();
     });
+
+    if (searchInput) {
+      searchInput.addEventListener("input", function () {
+        state.issueFilters.q = searchInput.value;
+        state.page = 1;
+        renderIssueTable();
+      });
+    }
+
+    // 「只看客訴」快捷篩選：這個頁面沒有登入／使用者身分機制，assigned_to 只是姓名字串，
+    // 沒有「目前使用者是誰」的資訊來源，不做「只看我的議題」（比照 Rails 端取捨）。
+    if (quickFilterBtn) {
+      quickFilterBtn.addEventListener("click", function () {
+        state.issueFilters.type = state.issueFilters.type === "Complaint" ? null : "Complaint";
+        state.page = 1;
+        renderIssueTable();
+      });
+    }
   }
 
   var REDMINE_ISSUE_URL_BASE = "https://redmine.amastek.com.tw/issues/";
 
+  // 四捨五入到小數 2 位；JS 的 Number → String 本來就不會補多餘的 .00（跟 Ruby
+  // number_with_precision 需要另外指定 strip_insignificant_zeros 不同），故只需要 round。
+  function formatHours(value) {
+    return String(Math.round(value * 100) / 100);
+  }
+
+  // 表格從原本 9 欄精簡為 7 欄：議題／專案合併、類別（原「歸屬類型」）、主旨截斷、狀態改
+  // badge、負責人（不含頭像，使用者反饋不必要）、開始／到期／工作天數合併成「時程與天數」、
+  // 花費時間（比照 Rails IssuesController 306 改版）。
   var ISSUE_COLUMNS = [
-    { key: "issue_id", label: "議題編號", render: function (value) {
+    { key: "issue_id", label: "議題／專案", render: function (value, record) {
+      var frag = document.createDocumentFragment();
       var link = document.createElement("a");
       link.className = "issue-id-link";
       link.href = REDMINE_ISSUE_URL_BASE + value;
       link.target = "_blank";
       link.rel = "noopener noreferrer";
       link.textContent = formatValue(value);
-      return link;
+      frag.appendChild(link);
+      frag.appendChild(document.createElement("br"));
+      var sub = document.createElement("span");
+      sub.className = "issue-project-sub";
+      sub.textContent = record.project;
+      frag.appendChild(sub);
+      return frag;
     } },
-    { key: "project", label: "專案" },
-    { key: "subject", label: "主旨" },
-    { key: "attribution", label: "歸屬類型", render: function (value, record) {
+    { key: "type", label: "類別", render: function (value) {
       var badge = document.createElement("span");
-      badge.className = "attribution-badge " + attributionClass(record.type);
-      badge.textContent = attributionLabel(record.type);
+      badge.className = "attribution-badge " + attributionClass(value);
+      badge.textContent = attributionLabel(value);
       return badge;
     } },
-    { key: "status", label: "狀態" },
+    { key: "subject", label: "主旨", render: function (value) {
+      var span = document.createElement("span");
+      span.className = "issue-subject-truncate";
+      span.title = value;
+      span.textContent = value;
+      return span;
+    } },
+    { key: "status", label: "狀態", render: function (value) {
+      var badge = document.createElement("span");
+      badge.className = "status-badge " + issueStatusBadgeClass(value);
+      badge.textContent = value;
+      return badge;
+    } },
     { key: "assigned_to", label: "負責人" },
-    { key: "start_date", label: "開始日期" },
-    { key: "due_date", label: "到期日期" },
-    { key: "work_days", label: "工作天數" }
+    { key: "timeline", label: "時程與天數", render: function (value, record) {
+      return document.createTextNode(issueTimelineLabel(record));
+    } },
+    { key: "total_hours", label: "花費時間", render: function (value) {
+      var span = document.createElement("span");
+      var hours = Number(value) || 0;
+      if (hours === 0) {
+        span.className = "total-hours-empty";
+        span.textContent = "0h";
+      } else {
+        span.textContent = formatHours(hours) + "h";
+      }
+      return span;
+    } }
   ];
+
+  function issueMatchesQuery(issue, query) {
+    var needle = String(query).toLowerCase();
+    return [issue.subject, issue.issue_id, issue.assigned_to].some(function (value) {
+      return String(value == null ? "" : value).toLowerCase().indexOf(needle) !== -1;
+    });
+  }
 
   function filterIssues() {
     return ISSUES.filter(function (issue) {
       if (state.issueFilters.project && issue.project !== state.issueFilters.project) return false;
       if (state.issueFilters.status && issue.status !== state.issueFilters.status) return false;
+      if (state.issueFilters.type && issue.type !== state.issueFilters.type) return false;
+      if (state.issueFilters.q && !issueMatchesQuery(issue, state.issueFilters.q)) return false;
       return true;
+    });
+  }
+
+  // 簡化版的省略號分頁序列（比照 Rails 端改用 Pagy gem 產生的 series 概念，這裡資料量小，
+  // 用簡單版本即可）：永遠顯示第一頁、最後一頁、目前頁前後各一頁，其餘用「…」省略。
+  function pageSeries(current, total) {
+    var series = [];
+    for (var p = 1; p <= total; p++) {
+      if (p === 1 || p === total || Math.abs(p - current) <= 1) {
+        series.push(p);
+      } else if (series[series.length - 1] !== "…") {
+        series.push("…");
+      }
+    }
+    return series;
+  }
+
+  function paginate(records) {
+    var totalCount = records.length;
+    var totalPages = Math.max(Math.ceil(totalCount / ISSUE_PAGE_SIZE), 1);
+    state.page = Math.min(Math.max(state.page, 1), totalPages);
+    var start = (state.page - 1) * ISSUE_PAGE_SIZE;
+    return { pageItems: records.slice(start, start + ISSUE_PAGE_SIZE), totalCount: totalCount, totalPages: totalPages, page: state.page };
+  }
+
+  function renderPagination(pageInfo) {
+    var container = document.getElementById("issue-pagination");
+    if (!container) return;
+    container.innerHTML = "";
+    if (pageInfo.totalCount === 0) return;
+
+    var summary = document.createElement("p");
+    summary.className = "pagination-summary";
+    var from = (pageInfo.page - 1) * ISSUE_PAGE_SIZE + 1;
+    var to = Math.min(pageInfo.page * ISSUE_PAGE_SIZE, pageInfo.totalCount);
+    summary.textContent = "顯示 " + from + "–" + to + " 筆，共 " + pageInfo.totalCount + " 筆";
+    container.appendChild(summary);
+
+    if (pageInfo.totalPages <= 1) return;
+
+    var nav = document.createElement("nav");
+    nav.className = "pagy series-nav";
+    nav.setAttribute("aria-label", "議題分頁");
+
+    pageSeries(pageInfo.page, pageInfo.totalPages).forEach(function (item) {
+      var a = document.createElement("a");
+      if (item === "…") {
+        a.setAttribute("role", "separator");
+        a.setAttribute("aria-disabled", "true");
+        a.textContent = "…";
+      } else if (item === pageInfo.page) {
+        a.setAttribute("role", "link");
+        a.setAttribute("aria-current", "page");
+        a.textContent = String(item);
+      } else {
+        a.href = "#";
+        a.textContent = String(item);
+        a.addEventListener("click", function (e) {
+          e.preventDefault();
+          state.page = item;
+          renderIssueTable();
+        });
+      }
+      nav.appendChild(a);
+    });
+    container.appendChild(nav);
+  }
+
+  function renderIssueKpis(kpis) {
+    var el = document.getElementById("issue-kpi-cards");
+    if (!el) return;
+    el.innerHTML = "";
+
+    var items = [
+      { label: "待處理議題", value: kpis.pending },
+      { label: "緊急客訴（客訴＋已逾期）", value: kpis.urgent_complaints, className: "stat-overdue" },
+      { label: "累積總花費工時", value: formatHours(kpis.total_hours_sum) + "h" },
+      { label: "逾期／未定到期日", value: kpis.overdue_or_undated, className: "stat-warning" }
+    ];
+
+    items.forEach(function (item) {
+      var stat = document.createElement("div");
+      stat.className = "stat-item" + (item.className ? " " + item.className : "");
+      var num = document.createElement("span");
+      num.className = "stat-value";
+      num.textContent = String(item.value);
+      var label = document.createElement("span");
+      label.className = "stat-label";
+      label.textContent = item.label;
+      stat.appendChild(num);
+      stat.appendChild(label);
+      el.appendChild(stat);
     });
   }
 
@@ -465,20 +766,30 @@
   }
 
   function renderIssueTable() {
+    var filtered = filterIssues();
+
+    // KPI 卡片依「目前篩選結果」（含搜尋／快捷篩選，分頁之前的完整結果）計算，不是分頁後
+    // 那一頁的子集合（比照 Rails 端取捨）。
+    renderIssueKpis(computeIssueKpis(filtered));
+
+    var quickFilterBtn = document.getElementById("quick-filter-complaint");
+    if (quickFilterBtn) quickFilterBtn.classList.toggle("is-active", state.issueFilters.type === "Complaint");
+
     var container = document.getElementById("issue-table");
     container.innerHTML = "";
-
-    var filtered = filterIssues();
 
     if (filtered.length === 0) {
       var empty = document.createElement("p");
       empty.className = "empty-state";
       empty.textContent = "目前無符合條件的議題";
       container.appendChild(empty);
+      renderPagination({ totalCount: 0, totalPages: 1, page: 1 });
       return;
     }
 
-    container.appendChild(buildGenericTable(filtered, ISSUE_COLUMNS));
+    var pageInfo = paginate(filtered);
+    container.appendChild(buildGenericTable(pageInfo.pageItems, ISSUE_COLUMNS));
+    renderPagination(pageInfo);
   }
 
   // ── 主題切換 ──────────────────────────────────────────────

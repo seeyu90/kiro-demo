@@ -4,15 +4,13 @@
   <table class="project-tasks">
     <thead>
       <tr>
-        <th>議題編號</th>
-        <th>專案</th>
+        <th>議題／專案</th>
+        <th>類別</th>
         <th>主旨</th>
-        <th>歸屬類型</th>
         <th>狀態</th>
         <th>負責人</th>
-        <th>開始日期</th>
-        <th>到期日期</th>
-        <th>工作天數</th>
+        <th>時程與天數</th>
+        <th>花費時間</th>
       </tr>
     </thead>
     <tbody>
@@ -21,19 +19,29 @@
           <td>
             <%= link_to issue[:issue_id], "https://redmine.amastek.com.tw/issues/#{issue[:issue_id]}",
                         class: "issue-id-link", target: "_blank", rel: "noopener noreferrer" %>
+            <br>
+            <span class="issue-project-sub"><%= issue[:project] %></span>
           </td>
-          <td><%= issue[:project] %></td>
-          <td><%= issue[:subject] %></td>
           <td>
             <span class="attribution-badge <%= attribution_class(issue[:type]) %>">
               <%= attribution_label(issue[:type]) %>
             </span>
           </td>
-          <td><%= issue[:status] %></td>
+          <td>
+            <span class="issue-subject-truncate" title="<%= issue[:subject] %>"><%= issue[:subject] %></span>
+          </td>
+          <td>
+            <span class="status-badge <%= issue_status_badge_class(issue[:status]) %>"><%= issue[:status] %></span>
+          </td>
           <td><%= issue[:assigned_to].presence || "—" %></td>
-          <td><%= issue[:start_date].presence || "—" %></td>
-          <td><%= issue[:due_date].presence || "—" %></td>
-          <td><%= issue[:work_days].nil? ? "—" : issue[:work_days] %></td>
+          <td><%= issue_timeline_label(issue) %></td>
+          <td>
+            <% if issue[:total_hours].to_f.zero? %>
+              <span class="total-hours-empty">0h</span>
+            <% else %>
+              <%= number_with_precision(issue[:total_hours], precision: 2, strip_insignificant_zeros: true) %>h
+            <% end %>
+          </td>
         </tr>
       <% end %>
     </tbody>

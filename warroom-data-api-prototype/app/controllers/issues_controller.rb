@@ -5,6 +5,10 @@ class IssuesController < ApplicationController
   BREAKDOWN_SORT_KEYS = Sheets::FetchIssueDashboard::BREAKDOWN_SORT_KEYS
   BREAKDOWN_SORT_DIRS = Sheets::FetchIssueDashboard::BREAKDOWN_SORT_DIRS
   DEFAULT_BREAKDOWN_SORT_DIR = "desc".freeze
+  # 「議題資料」分頁的表格分頁大小；分頁本身交給 Pagy 處理（見 build_success 的 pagy 呼叫），
+  # Controller 只需要提供 limit。KPI 卡片（見 build_success）讀 result.issue_kpis，是 Actor
+  # 依「分頁前」的完整篩選結果算好的，不受這裡的分頁影響。
+  ISSUE_PAGE_SIZE = 15
 
   def index
     result = Sheets::FetchIssueDashboard.result(
@@ -12,7 +16,9 @@ class IssuesController < ApplicationController
       project: params[:project].presence,
       status: params.key?(:status) ? params[:status] : DEFAULT_STATUS,
       breakdown_sort: BREAKDOWN_SORT_KEYS.include?(params[:breakdown_sort]) ? params[:breakdown_sort] : nil,
-      breakdown_dir: BREAKDOWN_SORT_DIRS.include?(params[:breakdown_dir]) ? params[:breakdown_dir] : DEFAULT_BREAKDOWN_SORT_DIR
+      breakdown_dir: BREAKDOWN_SORT_DIRS.include?(params[:breakdown_dir]) ? params[:breakdown_dir] : DEFAULT_BREAKDOWN_SORT_DIR,
+      q: params[:q].presence,
+      type: params[:type].presence
     )
     if result.success?
       build_success(result)
@@ -44,8 +50,15 @@ class IssuesController < ApplicationController
     @statuses = result.statuses
     @selected_project = params[:project].presence
     @selected_status = params.key?(:status) ? params[:status] : DEFAULT_STATUS
+    @selected_q = params[:q].presence
+    @selected_type = params[:type].presence
+    @issue_kpis = result.issue_kpis
 
-    @issues = IssueBlueprint.render_as_hash(result.filtered_issues)
+    # 分頁交給 Pagy 處理（Countable 直接支援 Array，不需要額外的 gem extra）：先對 Actor 回傳
+    # 的原始 hash 陣列切出當頁範圍，再只對這一頁呼叫 Blueprint，避免把整批篩選結果都序列化一次
+    # 卻只用其中 15 筆。
+    @pagy, page_issues = pagy(:offset, result.filtered_issues, limit: ISSUE_PAGE_SIZE)
+    @issues = IssueBlueprint.render_as_hash(page_issues)
     @error = nil
   end
 
@@ -64,6 +77,10 @@ class IssuesController < ApplicationController
     @statuses = []
     @selected_project = nil
     @selected_status = DEFAULT_STATUS
+    @selected_q = nil
+    @selected_type = nil
+    @issue_kpis = { pending: 0, urgent_complaints: 0, overdue_or_undated: 0, total_hours_sum: 0 }
+    @pagy = nil
     @issues = []
     @error = message
   end

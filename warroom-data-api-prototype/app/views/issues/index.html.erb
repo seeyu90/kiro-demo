@@ -33,10 +33,12 @@
                       data: { turbo_frame: "issue-content" } do %>
           <%= hidden_field_tag :tab, "stats" %>
           <%# 兩個分頁籤的表單各自獨立送出，但 Controller 是無狀態的：若不帶入「議題資料」分頁目前
-              的篩選值，送出本表單時 project／status 會被重設為預設值，等於覆蓋掉使用者在另一個
-              分頁的選擇。故補上這兩個 hidden fields，讓它們原樣跟著送出。 %>
+              的篩選值，送出本表單時 project／status／q／type 會被重設為預設值，等於覆蓋掉
+              使用者在另一個分頁的選擇。故補上這些 hidden fields，讓它們原樣跟著送出。 %>
           <%= hidden_field_tag :project, @selected_project %>
           <%= hidden_field_tag :status, @selected_status %>
+          <%= hidden_field_tag :q, @selected_q %>
+          <%= hidden_field_tag :type, @selected_type %>
           <div class="control-group">
             <label for="month">月份：</label>
             <%= select_tag :month, options_for_select(@available_months, @selected_month) %>
@@ -103,6 +105,25 @@
       </div>
 
       <div class="tab-panel" id="tab-panel-detail">
+        <div class="summary-bar">
+          <div class="stat-item">
+            <span class="stat-value"><%= @issue_kpis[:pending] %></span>
+            <span class="stat-label">待處理議題</span>
+          </div>
+          <div class="stat-item stat-overdue">
+            <span class="stat-value"><%= @issue_kpis[:urgent_complaints] %></span>
+            <span class="stat-label">緊急客訴（客訴＋已逾期）</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value"><%= number_with_precision(@issue_kpis[:total_hours_sum], precision: 2, strip_insignificant_zeros: true) %>h</span>
+            <span class="stat-label">累積總花費工時</span>
+          </div>
+          <div class="stat-item stat-warning">
+            <span class="stat-value"><%= @issue_kpis[:overdue_or_undated] %></span>
+            <span class="stat-label">逾期／未定到期日</span>
+          </div>
+        </div>
+
         <%= form_with url: "/issues", method: :get, class: "project-selector",
                       data: { turbo_frame: "issue-content" } do %>
           <%= hidden_field_tag :tab, "detail" %>
@@ -110,6 +131,11 @@
           <%= hidden_field_tag :month, @selected_month %>
           <%= hidden_field_tag :breakdown_sort, @breakdown_sort %>
           <%= hidden_field_tag :breakdown_dir, @breakdown_dir %>
+          <%# 快捷篩選 Tag（見下方）是獨立連結、不經過這個表單送出，但點擊後仍會落在
+              「議題資料」分頁；type 本身不需要在這裡當隱藏欄位，因為它是靠連結參數帶入，
+              送出這個表單（套用篩選）時維持目前的 type 選擇，故仍要帶。 %>
+          <%= hidden_field_tag :type, @selected_type %>
+
           <div class="control-group">
             <label for="project">專案：</label>
             <%= select_tag :project,
@@ -122,12 +148,40 @@
                            options_for_select([["全部狀態", ""]] + @statuses.map { |s| [s, s] }, @selected_status) %>
           </div>
 
-          <%= submit_tag "套用篩選", class: "apply-filters-btn" %>
+          <div class="control-group">
+            <label for="q">搜尋：</label>
+            <%= text_field_tag :q, @selected_q, placeholder: "主旨／編號／負責人" %>
+          </div>
+
+          <%# 快捷篩選只有「只看客訴」：這個 App 沒有登入／使用者身分機制，assigned_to 只是
+              試算表裡的姓名字串，沒有「目前使用者是誰」的資訊來源，無法做「只看我的議題」。
+              放在同一個 flex row 裡（跟專案／狀態／搜尋同一行），不需要另外獨立一行。 %>
+          <span class="quick-filters">
+            <%= link_to "只看客訴",
+                        issues_path(issue_filter_params(type: (@selected_type == "Complaint" ? nil : "Complaint"))),
+                        class: "quick-filter-tag #{'is-active' if @selected_type == 'Complaint'}",
+                        data: { turbo_frame: "issue-content" } %>
+          </span>
+
+          <div class="filter-actions">
+            <%= submit_tag "套用篩選", class: "apply-filters-btn" %>
+          </div>
         <% end %>
 
         <section class="issue-section">
           <h2>議題明細</h2>
           <%= render partial: "issue_list", locals: { issues: @issues } %>
+
+          <% if @pagy && @pagy.count.positive? %>
+            <div class="pagination">
+              <p class="pagination-summary">
+                顯示 <%= @pagy.from %>–<%= @pagy.to %> 筆，共 <%= @pagy.count %> 筆
+              </p>
+              <%# Pagy 的 series_nav 直接沿用目前請求的 query params（見 Pagy::Linkable），
+                  不需要像上面快捷篩選那樣手動帶入 project／status／q 等篩選值。 %>
+              <%= raw @pagy.series_nav(anchor_string: 'data-turbo-frame="issue-content"', aria_label: "議題分頁") if @pagy.pages > 1 %>
+            </div>
+          <% end %>
         </section>
       </div>
     </div>

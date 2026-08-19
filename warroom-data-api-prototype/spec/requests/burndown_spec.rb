@@ -8,7 +8,7 @@ RSpec.describe "Burndown", type: :request do
   end
 
   def issue_series_section(body)
-    body[%r{<h2>議題燃盡圖</h2>.*?</section>}m]
+    body[%r{<h2>議題燃盡狀態</h2>.*?</section>}m]
   end
 
   let(:fixed_header) { %w[剩餘人時 專案 議題 人員 議題ID 開案日期 完成日期 狀態 預估人時] }
@@ -150,7 +150,7 @@ RSpec.describe "Burndown", type: :request do
     end
 
     it "does not render any filter dropdown options or charts" do
-      expect(response.body).not_to include("議題燃盡圖")
+      expect(response.body).not_to include("議題燃盡狀態")
     end
   end
 end

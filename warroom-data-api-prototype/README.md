@@ -132,6 +132,17 @@ export GOOGLE_SHEETS_CREDENTIALS_JSON='{"type":"service_account","project_id":".
 
 任一來源有有效憑證即可。
 
+### 在新的 git worktree 開發（本機驗證用）
+
+`config/credentials/development.key` 已列入 `.gitignore`，新開的 worktree 不會自動帶有這份金鑰，
+本機起 `rails server` 會因解不開 `config/credentials/development.yml.enc` 而找不到憑證（即使
+`rails credentials:edit` 已經設定過也一樣，因為那是對「主要 checkout」設定的）。從既有的主要
+checkout 複製過去即可，不需要重新產生一組新金鑰（兩邊共用同一份 `development.yml.enc`）：
+
+```bash
+cp /home/rita/kiro-demo/warroom-data-api-prototype/config/credentials/development.key config/credentials/development.key
+```
+
 ### 確認憑證設定成功
 
 設定完成後，訪問 `/api/project_progress` 若回傳 305 專案進度資料，表示憑證設定成功（`/burndown`

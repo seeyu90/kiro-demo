@@ -72,7 +72,7 @@ RSpec.describe "Api::IssueDashboard", type: :request do
       expect(json["issues"].map { |i| i["issue_id"] }).to eq(["4547", "5165"])
       json["issues"].each do |issue|
         expect(issue.keys).to match_array(
-          %w[issue_id subject type tracker status assigned_to start_date due_date work_days project]
+          %w[issue_id subject type tracker status assigned_to start_date due_date work_days project total_hours]
         )
       end
     end

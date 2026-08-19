@@ -25,6 +25,8 @@
   --badge-pending-text: #a0aec0;
   --overdue-bg: #4a1c1c;
   --overdue-text: #fc8181;
+  --at-risk-bg: #4a3c1c;
+  --at-risk-text: #f6d365;
 
   --delay-negative: #68d391;
   --delay-positive: #fc8181;
@@ -62,6 +64,8 @@ html[data-theme="light"] {
   --badge-pending-text: #4a5568;
   --overdue-bg: #fed7d7;
   --overdue-text: #9b2c2c;
+  --at-risk-bg: #fefcbf;
+  --at-risk-text: #975a16;
 
   --delay-negative: #2f855a;
   --delay-positive: #c53030;
@@ -152,6 +156,16 @@ body {
   flex-wrap: wrap;
 }
 
+/* 版面較窄、篩選項目換行時，這兩個按鈕常自己獨立換到下一行；margin-left:auto 把它們推到
+   所在那一行的最右側（flex-wrap 底下 auto margin 是逐行生效），比靠左黏在篩選項目下面
+   更符合一般「篩選在左、動作按鈕在右」的慣例。 */
+.filter-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-left: auto;
+}
+
 .control-group {
   display: flex;
   align-items: center;
@@ -170,10 +184,30 @@ body {
   margin: 0;
 }
 
+/* <legend> 即使 fieldset 設 display:flex，瀏覽器仍會把 legend 渲染成獨立一行、疊在
+   checkbox／radio 那一列「上面」（撐高整個 fieldset），跟同一排的 .control-group／
+   .apply-filters-btn 等純 div／button 元素比，會讓 fieldset 明顯變高，即使外層
+   .project-selector 的 align-items:center 有把每個 item 的「外框」置中，fieldset 裡面
+   真正的 checkbox 那一列仍會因為上方多出 legend 的高度而看起來偏低、跟其他控制項對不齊
+   （見 warroom-dashboard-optimization spec 的截圖回報）。改成 legend 本身視覺隱藏（保留
+   給螢幕閱讀器用），另外用一個 <span> 當作看得到的標籤、跟 checkbox／radio 同一列排列，
+   fieldset 才會跟其他控制項一樣只有單行高度。 */
 .type-filter legend,
 .scope-filter legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.filter-group-label {
   font-weight: 600;
-  padding: 0 0.25rem;
+  padding: 0 0.25rem 0 0;
   color: var(--color-text-muted);
   font-size: 0.875rem;
 }
@@ -228,6 +262,10 @@ body {
   color: var(--overdue-text);
 }
 
+.stat-warning .stat-value {
+  color: var(--at-risk-text);
+}
+
 .row-overdue td:first-child {
   border-left: 3px solid var(--overdue-text);
 }
@@ -266,6 +304,28 @@ body {
 
 .project-selector select:hover,
 .project-selector select:focus {
+  border-color: var(--color-accent);
+  outline: none;
+}
+
+/* 搜尋框跟 select 共用同一套外觀（背景／邊框／圓角／字級），避免瀏覽器預設的白底文字輸入框
+   跟深色主題的 select 混在同一排時視覺不一致。 */
+.project-selector input[type="text"] {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border-hover);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  transition: border-color 0.2s;
+}
+
+.project-selector input[type="text"]::placeholder {
+  color: var(--color-text-faint);
+}
+
+.project-selector input[type="text"]:hover,
+.project-selector input[type="text"]:focus {
   border-color: var(--color-accent);
   outline: none;
 }
@@ -316,9 +376,32 @@ body {
 /* Turbo 在 frame 送出請求期間會自動幫 <turbo-frame> 加上 busy 屬性；
    通用選擇器讓 Dashboard（project-content）與 306 議題頁（issue-content）都套用同一效果 */
 turbo-frame[busy] {
+  position: relative;
+  min-height: 4rem;
   opacity: 0.5;
   pointer-events: none;
   transition: opacity 0.15s ease;
+}
+
+/* 疊加在淡化內容正中央的轉圈圈，純 CSS 實作，不需額外 JS/Stimulus controller */
+turbo-frame[busy]::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 2rem;
+  height: 2rem;
+  margin: -1rem 0 0 -1rem;
+  border: 3px solid var(--color-border-hover);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ── Project Block ── */
@@ -449,8 +532,11 @@ turbo-frame[busy] {
   font-size: 0.875rem;
 }
 
-/* ── 306 議題頁面（IssuesController） ── */
+/* ── 306 議題頁面（IssuesController，306/307/專案歷程共用） ── */
 .issue-section {
+  /* 篩選表單（.project-selector）本身沒有 margin-bottom，緊接著的標題（h2）也只有
+     margin-bottom，兩者中間完全沒有間距，篩選列跟下方標題會黏在一起（見截圖回報）。 */
+  margin-top: 1.5rem;
   margin-bottom: 2.5rem;
 }
 
@@ -471,6 +557,90 @@ turbo-frame[busy] {
    margin 會把文字拉進表單裡疊在一起，改用一般正向間距。 */
 .section-note-standalone {
   margin-top: 0.75rem;
+}
+
+.quick-filters {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.quick-filter-tag {
+  display: inline-block;
+  padding: 0.3rem 0.85rem;
+  border-radius: 9999px;
+  border: 1px solid var(--color-border-hover);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-decoration: none;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.quick-filter-tag:hover {
+  border-color: var(--color-accent);
+  color: var(--color-text-strong);
+}
+
+.quick-filter-tag.is-active {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--btn-text);
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.pagination-summary {
+  font-size: 0.8rem;
+  color: var(--color-text-faint);
+}
+
+/* Pagy 的 series_nav 產出 <nav class="pagy series-nav"><a>...</a>...</nav>，目前頁用
+   aria-current="page"、省略號跟停用的上一頁／下一頁用 role="separator"／aria-disabled="true"
+   標記，不是額外的 CSS class，故改用屬性選擇器對應（見 pagy gem 的 series_nav 實作）。 */
+.pagy.series-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.pagy.series-nav a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.75rem;
+  height: 1.75rem;
+  padding: 0 0.4rem;
+  border-radius: 0.4rem;
+  border: 1px solid var(--color-border);
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+
+.pagy.series-nav a:hover {
+  border-color: var(--color-accent);
+  color: var(--color-text-strong);
+}
+
+.pagy.series-nav a[aria-current="page"] {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--btn-text);
+  font-weight: 700;
+}
+
+.pagy.series-nav a[role="separator"],
+.pagy.series-nav a[aria-disabled="true"] {
+  border-color: transparent;
+  color: var(--color-text-faint);
+  cursor: default;
 }
 
 /* ── Tabs（純 CSS，radio + label，無需 JS，Turbo Frame 局部更新後仍可正常運作） ── */
@@ -534,8 +704,9 @@ turbo-frame[busy] {
   white-space: nowrap;
 }
 
+/* 客訴＝紅底、測試＝灰底（原本測試是藍底，跟「處理中」狀態 badge 的藍色搶顏色語意，改灰） */
 .attribution-shared     { background: var(--overdue-bg); color: var(--overdue-text); }
-.attribution-individual { background: var(--badge-progress-bg); color: var(--badge-progress-text); }
+.attribution-individual { background: var(--badge-pending-bg); color: var(--badge-pending-text); }
 .attribution-other       { background: var(--badge-pending-bg); color: var(--badge-pending-text); }
 
 .issue-id-link {
@@ -546,6 +717,34 @@ turbo-frame[busy] {
 .issue-id-link:hover,
 .issue-id-link:focus {
   text-decoration: underline;
+}
+
+.issue-project-sub {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--color-text-faint);
+  margin-top: 0.15rem;
+}
+
+/* 議題狀態 badge：來源是自由輸入的中文狀態文字，用關鍵字比對決定顏色（見
+   IssuesHelper#issue_status_badge_class）。原本純文字塞進窄欄位、沒有 white-space:nowrap，
+   四字狀態（例如「新建立」）會逐字換行變成直排，包成 badge span 順便解決這個破版問題。 */
+.issue-status-done       { background: var(--badge-completed-bg); color: var(--badge-completed-text); }
+.issue-status-processing { background: var(--at-risk-bg); color: var(--at-risk-text); }
+.issue-status-new         { background: var(--badge-progress-bg); color: var(--badge-progress-text); }
+.issue-status-other       { background: var(--badge-pending-bg); color: var(--badge-pending-text); }
+
+.issue-subject-truncate {
+  display: inline-block;
+  max-width: 26ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+.total-hours-empty {
+  color: var(--color-text-faint);
 }
 
 .trend-chart-wrap {
@@ -589,6 +788,14 @@ turbo-frame[busy] {
   font-size: 10px;
 }
 
+/* 燃盡圖每人一條右軸，軸上數字要對應該人的顏色（見 _burndown_combo_chart.html.erb 的
+   fill="<%= color %>"）：不能沿用 .trend-axis-label，CSS 的 fill 宣告（即使沒有 class
+   選擇器以外的限定）優先權高於 SVG 元素自己的 fill 屬性，套用共用 class 會把每人的顏色
+   蓋成同一個 var(--color-text-muted)，讓所有軸的數字看起來一樣、分不出對應哪個人。 */
+.burndown-axis-label {
+  font-size: 10px;
+}
+
 /* ── 307 燃盡圖（理想線／實際線疊圖） ── */
 
 .burndown-chart-block {
@@ -596,9 +803,72 @@ turbo-frame[busy] {
 }
 
 .burndown-chart-block h3 {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
   font-size: 0.95rem;
-  margin: 0 0 0.5rem;
+  margin: 0 0 0.75rem;
   color: var(--color-text-strong);
+  text-align: center;
+}
+
+/* 圖表說明改成 hover/focus 才顯示的小 i 圖示，不用每張圖都攤開一整段文字
+   （原本 .chart-caption 常駐文字，議題一多、每張都展開時很佔版面，改成需要才看）。 */
+.chart-info {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 50%;
+  background: var(--color-border-hover);
+  color: var(--color-text-strong);
+  cursor: help;
+  flex-shrink: 0;
+}
+
+/* 原本用 Unicode 的 ⓘ（已經內建一個圓圈），塞進 .chart-info 自己的圓形背景裡變成
+   圓中圓，不同字型繪製效果也不一致；改成純文字 "i"，樣式完全由 CSS 控制。 */
+.chart-info-icon {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 0.75rem;
+  font-style: italic;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.chart-info-tooltip {
+  position: absolute;
+  top: 140%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 22rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--color-text-muted);
+  text-align: left;
+  line-height: 1.5;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+  z-index: 10;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.chart-info:hover .chart-info-tooltip,
+.chart-info:focus .chart-info-tooltip,
+.chart-info:focus-visible .chart-info-tooltip {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
 }
 
 .burndown-ideal-line {
@@ -612,6 +882,86 @@ turbo-frame[busy] {
   fill: none;
   stroke: var(--color-accent);
   stroke-width: 2;
+}
+
+/* ── 307 議題狀態摘要表（燈號：實際剩餘 vs 理想剩餘的落差） ── */
+.status-on_track { background: var(--badge-completed-bg); color: var(--badge-completed-text); }
+.status-at_risk   { background: var(--at-risk-bg); color: var(--at-risk-text); }
+.status-over       { background: var(--overdue-bg); color: var(--overdue-text); }
+.status-unknown   { background: var(--badge-pending-bg); color: var(--badge-pending-text); }
+
+/* 每一列本身就是 <details>，summary 是可點擊整列展開的表頭列，點列即可在原地展開該議題的
+   趨勢圖，不需要另外的「查看趨勢圖」連結跳到頁面下方另一個區塊。 */
+.burndown-status-table {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+
+.burndown-status-row {
+  display: grid;
+  grid-template-columns: 2fr 1.2fr 0.8fr 0.8fr 0.8fr 1fr;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+}
+
+.burndown-status-header {
+  color: var(--color-text-faint);
+  font-weight: 500;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.burndown-status-details {
+  border-bottom: 1px solid var(--table-row-border);
+}
+
+.burndown-status-details:last-child {
+  border-bottom: none;
+}
+
+/* summary 本身用 flex 排「展開箭頭」+「內層 grid 列」兩塊，箭頭不能放進 grid 內層
+   （.burndown-status-row 的 ::before 會被當成一個 grid item，把 6 欄位擠位移、跟表頭對不齊）。 */
+.burndown-status-details > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  color: var(--color-text);
+  list-style: none;
+}
+
+.burndown-status-details > summary .burndown-status-row {
+  flex: 1;
+  padding: 0;
+}
+
+.burndown-status-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.burndown-status-details > summary::before {
+  content: "▸";
+  color: var(--color-accent);
+  flex-shrink: 0;
+}
+
+.burndown-status-details[open] > summary::before {
+  content: "▾";
+}
+
+.burndown-status-details > summary:hover {
+  background: var(--table-row-hover-bg);
+}
+
+.burndown-status-detail {
+  padding: 0 1rem 1.25rem;
 }
 
 .burndown-actual-point {
@@ -660,6 +1010,34 @@ turbo-frame[busy] {
   background: none;
   border-top: 2px dashed var(--color-text-muted);
   height: 0;
+}
+
+/* 圖例可點擊切換顯示/隱藏該人資料（見 burndown_legend_controller.js），按鈕本身沿用純文字
+   外觀，不要看起來像一般按鈕。 */
+.burndown-legend-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+.burndown-legend-toggle:hover,
+.burndown-legend-toggle:focus-visible {
+  color: var(--color-text-strong);
+}
+
+.burndown-legend-toggle.is-hidden {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+
+.burndown-series.is-dimmed {
+  opacity: 0.08;
 }
 
 /* ── Responsive ── */

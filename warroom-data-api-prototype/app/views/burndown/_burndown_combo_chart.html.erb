@@ -1,0 +1,95 @@
+<div class="burndown-chart-block" data-controller="burndown-legend">
+  <% title = "#{issue[:project]}／#{issue[:issue_title]}（#{issue[:assignees].join('、')}）" %>
+  <h3>
+    <%= title %>
+    <span class="chart-info" tabindex="0" aria-label="說明">
+      <span class="chart-info-icon" aria-hidden="true">i</span>
+      <span class="chart-info-tooltip">長條＝當週實際｜虛線＝計畫、實線＝實際累積（實線低於虛線即落後）｜右軸顏色對應人員｜點圖例可篩選</span>
+    </span>
+  </h3>
+
+  <% dates = burndown_combo_dates(issue) %>
+  <% if dates.blank? %>
+    <p class="empty-state">無燃盡資料</p>
+  <% else %>
+    <% assignee_count = issue[:per_assignee].size %>
+    <% padding_right = burndown_combo_padding_right(assignee_count) %>
+    <% plot_right = BurndownHelper::BURNDOWN_WIDTH - padding_right %>
+
+    <% weekly_by_assignee = burndown_weekly_by_assignee(issue[:per_assignee]) %>
+    <% left_max = burndown_combo_bar_max(weekly_by_assignee, dates) %>
+    <% bars = burndown_combo_bars(weekly_by_assignee, dates, left_max, padding_right: padding_right) %>
+
+    <% per_assignee_ideal = issue[:per_assignee].map { |pa| burndown_per_assignee_ideal_series(pa, issue, dates) } %>
+    <% axis_top = BurndownHelper::BURNDOWN_PADDING_TOP %>
+    <% axis_bottom = BurndownHelper::BURNDOWN_HEIGHT - BurndownHelper::BURNDOWN_PADDING_BOTTOM %>
+
+    <svg viewBox="0 0 <%= BurndownHelper::BURNDOWN_WIDTH %> <%= BurndownHelper::BURNDOWN_HEIGHT %>" class="trend-svg" role="img" aria-label="<%= title %> 週別人時與累積進度">
+      <% burndown_chart_y_ticks(0, left_max).each do |tick| %>
+        <line x1="<%= BurndownHelper::BURNDOWN_PADDING_LEFT %>" x2="<%= plot_right %>"
+              y1="<%= tick[:y] %>" y2="<%= tick[:y] %>" class="trend-gridline"></line>
+        <text x="<%= BurndownHelper::BURNDOWN_PADDING_LEFT - 8 %>" y="<%= tick[:y] + 3 %>" text-anchor="end" class="trend-axis-label trend-y-label"><%= tick[:value] %></text>
+      <% end %>
+
+      <% burndown_chart_x_labels(dates, padding_right: padding_right).each do |label| %>
+        <% label_y = BurndownHelper::BURNDOWN_HEIGHT - BurndownHelper::BURNDOWN_PADDING_BOTTOM + 18 %>
+        <text x="<%= label[:x] %>" y="<%= label_y %>" text-anchor="end" transform="rotate(-45 <%= label[:x] %> <%= label_y %>)" class="trend-axis-label trend-x-label"><%= label[:text] %></text>
+      <% end %>
+
+      <% bars.each do |bar| %>
+        <rect class="burndown-series" data-assignee="<%= bar[:assignee] %>"
+              x="<%= bar[:x] %>" y="<%= bar[:y] %>" width="<%= bar[:width] %>" height="<%= bar[:height] %>"
+              fill="<%= bar[:color] %>" fill-opacity="0.55">
+          <title><%= bar[:assignee] %>｜<%= bar[:date] %>｜當週 <%= bar[:hours] %> 小時</title>
+        </rect>
+      <% end %>
+
+      <% issue[:per_assignee].each_with_index do |pa, idx| %>
+        <% color = BurndownHelper::BURNDOWN_STACK_COLORS[idx % BurndownHelper::BURNDOWN_STACK_COLORS.length] %>
+        <% own_max = burndown_combo_line_max([ pa[:cumulative_series], per_assignee_ideal[idx] ], [ pa[:estimated_hours] ]) %>
+        <% ideal_points = burndown_chart_points(per_assignee_ideal[idx], dates, 0, own_max, padding_right: padding_right) %>
+        <% actual_points = burndown_chart_points(pa[:cumulative_series], dates, 0, own_max, padding_right: padding_right) %>
+        <% axis_x = plot_right + 8 + idx * BurndownHelper::BURNDOWN_AXIS_COLUMN_WIDTH %>
+
+        <%# 軸線本身也上色（不只是數字），色塊標記在軸線正上方，光看軸線／色塊就能對應到人，
+            不用先讀數字顏色才知道是誰。色塊跟數字之間、數字跟軸線之間都要留可辨識的間距，
+            緊貼在一起會糊成一團看不清楚是三個各自獨立的元素。 %>
+        <line x1="<%= axis_x %>" x2="<%= axis_x %>" y1="<%= axis_top %>" y2="<%= axis_bottom %>"
+              stroke="<%= color %>" stroke-width="1.5" stroke-opacity="0.55"></line>
+        <rect x="<%= axis_x - 4 %>" y="<%= axis_top - 22 %>" width="8" height="8" rx="2" fill="<%= color %>"></rect>
+
+        <% burndown_combo_right_ticks(own_max).each do |tick| %>
+          <text x="<%= axis_x + 6 %>" y="<%= tick[:y] + 3 %>" text-anchor="start" class="burndown-axis-label"
+                fill="<%= color %>"><%= tick[:value] %></text>
+        <% end %>
+
+        <g class="burndown-series" data-assignee="<%= pa[:assignee] %>">
+          <% if ideal_points.any? %>
+            <polyline points="<%= burndown_chart_polyline(ideal_points) %>" fill="none" stroke="<%= color %>" stroke-width="2" stroke-dasharray="6,4"></polyline>
+          <% end %>
+          <polyline points="<%= burndown_chart_polyline(actual_points) %>" fill="none" stroke="<%= color %>" stroke-width="2"></polyline>
+
+          <% actual_points.each do |point| %>
+            <circle cx="<%= point[:x] %>" cy="<%= point[:y] %>" r="3.5" fill="var(--color-surface)" stroke="<%= color %>" stroke-width="2" tabindex="0">
+              <title><%= pa[:assignee] %>｜<%= point[:date] %> ｜實際累積消耗 <%= point[:hours] %> 小時</title>
+            </circle>
+          <% end %>
+        </g>
+      <% end %>
+    </svg>
+
+    <ul class="burndown-stack-legend">
+      <% issue[:per_assignee].each_with_index do |pa, idx| %>
+        <% pa_status = burndown_per_assignee_status(pa, issue) %>
+        <% pa_consumed = pa[:cumulative_series].max_by { |p| p[:date] }&.dig(:hours) %>
+        <li>
+          <button type="button" class="burndown-legend-toggle" data-action="click->burndown-legend#toggle" data-assignee="<%= pa[:assignee] %>">
+            <span class="burndown-stack-swatch" style="background-color: <%= BurndownHelper::BURNDOWN_STACK_COLORS[idx % BurndownHelper::BURNDOWN_STACK_COLORS.length] %>"></span>
+            <%= pa[:assignee] %>（<%= pa_consumed %> ／ <%= pa[:estimated_hours] %>）
+          </button>
+          <span class="status-badge status-<%= pa_status[:key] %>"><%= pa_status[:label] %></span>
+        </li>
+      <% end %>
+    </ul>
+  <% end %>
+</div>

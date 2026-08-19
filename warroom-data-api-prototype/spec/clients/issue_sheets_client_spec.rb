@@ -47,7 +47,7 @@ RSpec.describe IssueSheetsClient do
   def all_issue_sheets_rows(empty_sheets: [])
     described_class::ISSUE_SHEETS.each_with_object({}) do |name, acc|
       rows = empty_sheets.include?(name) ? [issue_header] : [issue_header] + issue_rows_for(name)
-      acc["#{name}!A:K"] = rows
+      acc["#{name}!A:L"] = rows
     end
   end
 
@@ -114,7 +114,7 @@ RSpec.describe IssueSheetsClient do
 
         described_class::ISSUE_SHEETS.each do |name|
           expect(fake_service).to have_received(:get_spreadsheet_values)
-            .with(described_class::SPREADSHEET_ID, "#{name}!A:K", value_render_option: "FORMATTED_VALUE")
+            .with(described_class::SPREADSHEET_ID, "#{name}!A:L", value_render_option: "FORMATTED_VALUE")
             .once
         end
       end
@@ -148,7 +148,7 @@ RSpec.describe IssueSheetsClient do
 
       it "treats a sheet with a nil response as contributing no rows" do
         rows = all_issue_sheets_rows
-        rows["raw_2024!A:K"] = nil
+        rows["raw_2024!A:L"] = nil
         stub_service_for(rows)
 
         result = described_class.fetch_issue_rows
@@ -162,7 +162,7 @@ RSpec.describe IssueSheetsClient do
         data_row = ["raw_2023-0", "客訴主旨", "Complaint", "臭蟲", "已結束", "owner",
                     "2026/1/1", "2026/1/2", "1", "raw_2023", "project"]
         rows = all_issue_sheets_rows
-        rows["raw_2023!A:K"] = [issue_header, data_row]
+        rows["raw_2023!A:L"] = [issue_header, data_row]
         stub_service_for(rows)
 
         result = described_class.fetch_issue_rows
