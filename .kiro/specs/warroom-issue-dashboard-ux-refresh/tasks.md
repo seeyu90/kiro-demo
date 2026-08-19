@@ -196,6 +196,31 @@ session/current_user 概念），原始需求的「[只看我的議題]」快捷
 
 ---
 
+- [x] 8. 補齊 docs/ 靜態原型同步（`docs/js/issues.js`、`docs/issues.html`）
+  - 起因：使用者問「docs 的檔案這次是不是沒有一併調整？」，追查後發現 docs/ 這份純前端
+    靜態原型（無後端，`project-rules.md` 另有一套規則，長期跟 Rails 版分開維護）落差不只
+    這次的修正，而是整個 306 UX 改版（本 spec 任務 1-7）都從未同步過去，還停在改版前的
+    9 欄舊版表格
+  - 詢問使用者處理範圍，使用者選擇全部補齊：KPI 卡片、搜尋框＋「只看客訴」快捷篩選、
+    表格從 9 欄精簡為 7 欄（含 badge／花費時間／時程與天數合併欄位）、分頁（省略號導覽，
+    比照 Rails 端 Pagy 的 series_nav 產出格式，用簡化版 JS 實作）、SLA 逾期判斷，全部依
+    本 spec 任務 1-7 與 Rails 端目前的實作對齊
+  - Mock 資料新增兩筆沒填到期日的客訴（用 `daysAgoISO(n)` 算相對「現在」的開始日期，不是
+    寫死的固定日期），一筆超過兩天 SLA、一筆還在兩天內，才能示範「緊急客訴」判定——原本
+    7 筆固定日期的範例資料裡沒有任何一筆「未完成客訴 + 沒填到期日」的組合，光補邏輯不補
+    資料看不出效果
+  - `docs/css/style.css` 補上對應的 CSS（`--at-risk-bg`／`--at-risk-text` 變數、
+    `.issue-status-*`／`.quick-filter-tag`／`.pagy.series-nav`／搜尋框樣式等），與 Rails
+    端 `application.css` 的 class 命名保持一致
+  - 用 jsdom 載入實際的 `issues.html`＋`issues.js` 執行期驗證（非只有語法檢查）：KPI 數字、
+    「已結束」badge 顏色、搜尋／快捷篩選／分頁互動、SLA 逾期判斷皆與 Rails 端邏輯一致；
+    過程中抓到一個真的執行期 bug——新增的 `shortDate()` helper 跟既有「每日趨勢圖」的
+    `shortDate()` 同名，同一個 IIFE 作用域內後面的函式宣告覆蓋前面的，導致「時程與天數」
+    欄位日期實際印出來是 `08/12`（沿用了舊函式的斜線格式）而不是預期的 `08-12`，改名為
+    `timelineShortDate` 才修正
+  - 本機瀏覽器工具連不到這個環境的 `localhost`（跟 Rails 端驗證時同樣的限制），無法截圖，
+    改用 jsdom 執行期驗證＋人工核對輸出文字內容替代
+
 ## Notes
 
 - 表格欄位從 9 欄精簡為 7 欄：議題／專案（合併）、類別、主旨、狀態、負責人、時程與天數

@@ -10,7 +10,7 @@
   // 比照真實試算表：同一議題（同 issue_id）可能拆給多位人員分別填一列（見 B-2001），故資料
   // 以「原始列」（BURNDOWN_ROWS）存放，渲染前先依 issue_id 合併（見 mergeRows）。
   // 至少涵蓋一筆「落後於理想線」（B-1001）、一筆「超前且超支（剩餘人時為負）」（B-1002，
-  // 示範 Y 軸負值支援）、一筆「多人合併＋堆疊圖」（B-2001）的範例。
+  // 示範 Y 軸負值支援）、一筆「多人合併＋各自並排長條與右軸」（B-2001）的範例。
 
   var BURNDOWN_ROWS = [
     // 落後範例：預估 40 小時，但每週實際登記工時很少，剩餘人時遠高於理想線。
@@ -38,7 +38,7 @@
     },
     // 多人合併範例：同一議題（B-2001）拆給兩位人員分別填一列，合併後預估人時＝15+10＝25、
     // 週人時逐週加總；狀態「執行中」＋「未開始」合併後仍視為進行中（見 mergeStatus）；
-    // 卡片下方會顯示兩人各自累積消耗人時的堆疊圖。
+    // 估計人時差很多（15 vs 10，這裡差距不大，主要示範每人各自並排長條＋各自右軸的排版）。
     {
       project: "Virtuous HRM", issue_id: "B-2001", issue_title: "排班衝突偵測", assignee: "黃靖益",
       start_date: "2026-07-08", due_date: "2026-08-24", status: "執行中", estimated_hours: 15,
@@ -81,8 +81,8 @@
       var estimatedHours = group.reduce(function (sum, r) { return sum + r.estimated_hours; }, 0);
       var weeklyActual = sumWeeklyByDate(group.map(function (r) { return r.weekly_actual; }));
 
-      // 同一人若拆成多列（例如更正列），先依人員名稱分組合併，堆疊圖才不會把同一人畫成
-      // 兩塊色塊（比照 Ruby Actor 版本 per_assignee_series 的合併邏輯）。
+      // 同一人若拆成多列（例如更正列），先依人員名稱分組合併，長條／折線才不會把同一人畫成
+      // 兩份（比照 Ruby Actor 版本 per_assignee_series 的合併邏輯）。
       var byAssignee = {};
       var assigneeOrder = [];
       group.forEach(function (r) {
@@ -104,11 +104,15 @@
         estimated_hours: estimatedHours,
         weekly_actual: weeklyActual
       };
+      // per_assignee 同時保留 weekly（每週增量，長條圖用）與 cumulative_series（累積消耗，
+      // 折線圖與狀態燈號用）：直接在合併當下算好兩種形態，比 Rails 端「只存累積、圖表要用
+      // 每週增量時再用相鄰兩筆累積值相減還原」（見 burndown_helper.rb 的
+      // burndown_weekly_by_assignee）簡單一點，效果相同。
       merged.per_assignee = assigneeOrder.map(function (assignee) {
-        var rows = byAssignee[assignee];
-        var estimated = rows.reduce(function (sum, r) { return sum + r.estimated_hours; }, 0);
-        var weekly = sumWeeklyByDate(rows.map(function (r) { return r.weekly_actual; }));
-        return { assignee: assignee, estimated_hours: estimated, cumulative_series: computeCumulativeSeries(weekly) };
+        var assigneeRows = byAssignee[assignee];
+        var estimated = assigneeRows.reduce(function (sum, r) { return sum + r.estimated_hours; }, 0);
+        var weekly = sumWeeklyByDate(assigneeRows.map(function (r) { return r.weekly_actual; }));
+        return { assignee: assignee, estimated_hours: estimated, weekly: weekly, cumulative_series: computeCumulativeSeries(weekly) };
       });
       return merged;
     });
@@ -144,6 +148,7 @@
   // 邏輯與 design.md「Sheets::FetchProjectBurndown」段落的 Ruby 版本一致（線性比例分攤、
   // 依日期累加，理想線頭尾補開案／完成錨點），但兩邊各自獨立實作。
 
+  // 「剩餘人時」理想線（供狀態燈號使用，見 burndownStatus）：由滿額往 0 線性遞減。
   function computeIdealSeries(issue) {
     var start = new Date(issue.start_date);
     var due = new Date(issue.due_date);
@@ -168,6 +173,7 @@
     return points;
   }
 
+  // 「剩餘人時」實際線（供狀態燈號使用）：估計人時 − 累積消耗。
   function computeActualSeries(issue) {
     var cumulative = 0;
     return issue.weekly_actual.map(function (week) {
@@ -176,7 +182,28 @@
     });
   }
 
-  // 累積消耗人時（由 0 往上累加，不是剩餘人時）：供堆疊圖使用。
+  // 每人自己的理想「累積消耗」人時軌跡（供組合圖表使用，方向跟上面兩個「剩餘」序列相反）：
+  // 起點 0 落在開案日、終點是「這個人自己的預估人時」落在完成日，跟 burndownPerAssigneeStatus
+  // 用同一套時間比例公式，只是這裡算出整條線（每個 X 軸日期一個點）而不是只算最新一點
+  // （比照 Rails burndown_per_assignee_ideal_series）。
+  function computePerAssigneeIdealSeries(paEntry, issue, dates) {
+    var start = new Date(issue.start_date);
+    var due = new Date(issue.due_date);
+    if (isNaN(start.getTime()) || isNaN(due.getTime()) || due <= start) return [];
+
+    var estimated = paEntry.estimated_hours;
+    var totalSpan = due.getTime() - start.getTime();
+    var points = [];
+    dates.forEach(function (dateStr) {
+      var d = new Date(dateStr);
+      if (isNaN(d.getTime())) return;
+      var ratio = Math.max(0, Math.min(1, (d.getTime() - start.getTime()) / totalSpan));
+      points.push({ date: dateStr, hours: round2(estimated * ratio) });
+    });
+    return points;
+  }
+
+  // 累積消耗人時（由 0 往上累加，不是剩餘人時）：組合圖表的折線／長條都是這個方向。
   function computeCumulativeSeries(weeklyActual) {
     var cumulative = 0;
     return weeklyActual.map(function (week) {
@@ -187,6 +214,83 @@
 
   function round2(value) {
     return Math.round(value * 100) / 100;
+  }
+
+  // ── 議題燃盡狀態燈號（比照 Rails BurndownHelper#burndown_status／#burndown_per_assignee_status）
+  // ──────────────────────────────────────────────────────────
+
+  var STATUS_AT_RISK_RATIO = 0.05;
+  var STATUS_OVER_RATIO = 0.25;
+  var STATUS_LABELS = { on_track: "正常", at_risk: "略慢", over: "超支", unknown: "資料不足" };
+
+  function findByOrNearestDate(series, dateStr) {
+    var exact = series.filter(function (p) { return p.date === dateStr; })[0];
+    if (exact) return exact;
+    var target = new Date(dateStr).getTime();
+    return series.reduce(function (best, p) {
+      var diff = Math.abs(new Date(p.date).getTime() - target);
+      return diff < best.diff ? { point: p, diff: diff } : best;
+    }, { point: null, diff: Infinity }).point;
+  }
+
+  // 議題整體燈號：比較「最新一週實際剩餘人時」與「同一天理想線應剩餘人時」的落差，換算成
+  // 佔預估人時的比例（相對值而非絕對小時數）。剩餘人時已經是負值（花費超過整份預估）時，
+  // 一律強制判定超支，不論理想線落在哪裡（負值剩餘若只看落差方向，反而會被誤判成領先進度）。
+  function burndownStatus(issue) {
+    var actualSeries = computeActualSeries(issue);
+    var idealSeries = computeIdealSeries(issue);
+    var estimatedHours = issue.estimated_hours;
+    if (actualSeries.length === 0 || idealSeries.length === 0 || !estimatedHours) {
+      return { key: "unknown", label: STATUS_LABELS.unknown };
+    }
+
+    var latestActual = actualSeries.reduce(function (a, b) { return a.date > b.date ? a : b; });
+    if (latestActual.hours < 0) return { key: "over", label: STATUS_LABELS.over };
+
+    var idealAtDate = findByOrNearestDate(idealSeries, latestActual.date);
+    var deltaRatio = (latestActual.hours - idealAtDate.hours) / estimatedHours;
+    return statusFromDeltaRatio(deltaRatio);
+  }
+
+  // 各人員燈號：比較「這個人自己已消耗人時」vs「這個人自己的預估人時 ×（議題整體時間已過的
+  // 比例）」，落差方向跟 burndownStatus 相反（這裡比較的是「已消耗」不是「剩餘」：消耗得比
+  // 理想進度少才是落後）。
+  function burndownPerAssigneeStatus(paEntry, issue) {
+    var estimated = paEntry.estimated_hours;
+    var cumulativeSeries = paEntry.cumulative_series;
+    if (!estimated || cumulativeSeries.length === 0) return { key: "unknown", label: STATUS_LABELS.unknown };
+
+    var latest = cumulativeSeries.reduce(function (a, b) { return a.date > b.date ? a : b; });
+    var actualConsumed = latest.hours;
+    if (actualConsumed > estimated) return { key: "over", label: STATUS_LABELS.over };
+
+    var start = new Date(issue.start_date);
+    var due = new Date(issue.due_date);
+    if (isNaN(start.getTime()) || isNaN(due.getTime()) || due <= start) return { key: "unknown", label: STATUS_LABELS.unknown };
+
+    var latestDate = new Date(latest.date);
+    var timeRatio = Math.max(0, Math.min(1, (latestDate.getTime() - start.getTime()) / (due.getTime() - start.getTime())));
+    var idealConsumed = estimated * timeRatio;
+    var deltaRatio = (idealConsumed - actualConsumed) / estimated;
+    return statusFromDeltaRatio(deltaRatio);
+  }
+
+  function statusFromDeltaRatio(deltaRatio) {
+    if (deltaRatio <= STATUS_AT_RISK_RATIO) return { key: "on_track", label: STATUS_LABELS.on_track };
+    if (deltaRatio <= STATUS_OVER_RATIO) return { key: "at_risk", label: STATUS_LABELS.at_risk };
+    return { key: "over", label: STATUS_LABELS.over };
+  }
+
+  function burndownRemainingHours(issue) {
+    var actualSeries = computeActualSeries(issue);
+    if (actualSeries.length === 0) return null;
+    return actualSeries.reduce(function (a, b) { return a.date > b.date ? a : b; }).hours;
+  }
+
+  function burndownConsumedHours(issue) {
+    var remaining = burndownRemainingHours(issue);
+    if (remaining === null) return null;
+    return round2(issue.estimated_hours - remaining);
   }
 
   // ── 篩選狀態 ──────────────────────────────────────────────
@@ -291,9 +395,15 @@
     });
   }
 
-  // ── 渲染 ──────────────────────────────────────────────────
+  // ── 渲染：狀態摘要表（點列原地展開燃盡圖，比照 Rails burndown/index.html.erb） ──────
 
-  // 議題燃盡圖：專案／人員／狀態篩選同時存在時取交集（比照 Rails 端需求 4.4）。
+  function appendEmptyState(container, text) {
+    var empty = document.createElement("p");
+    empty.className = "empty-state";
+    empty.textContent = text;
+    container.appendChild(empty);
+  }
+
   function renderIssueSeries(issues) {
     var container = document.getElementById("issue-series");
     container.innerHTML = "";
@@ -304,39 +414,91 @@
       return;
     }
 
-    filtered.forEach(function (issue) {
-      var title = issue.project + "／" + issue.issue_title + "（" + issue.assignees.join("、") + "）";
-      renderBurndownChart(container, title, computeActualSeries(issue), computeIdealSeries(issue));
-      if (issue.assignees.length > 1) {
-        renderStackedChart(container, issue.per_assignee, issue.estimated_hours);
-      }
+    var table = document.createElement("div");
+    table.className = "burndown-status-table";
+
+    var header = document.createElement("div");
+    header.className = "burndown-status-row burndown-status-header";
+    ["議題", "負責人", "預估人時", "已消耗", "剩餘", "狀態"].forEach(function (label) {
+      var span = document.createElement("span");
+      span.textContent = label;
+      header.appendChild(span);
     });
+    table.appendChild(header);
+
+    filtered.forEach(function (issue) {
+      table.appendChild(renderStatusDetails(issue));
+    });
+
+    container.appendChild(table);
   }
 
-  function appendEmptyState(container, text) {
-    var empty = document.createElement("p");
-    empty.className = "empty-state";
-    empty.textContent = text;
-    container.appendChild(empty);
+  function renderStatusDetails(issue) {
+    var details = document.createElement("details");
+    details.className = "burndown-status-details";
+
+    var summary = document.createElement("summary");
+    var row = document.createElement("span");
+    row.className = "burndown-status-row";
+
+    var statusInfo = burndownStatus(issue);
+    var remaining = burndownRemainingHours(issue);
+    var consumed = burndownConsumedHours(issue);
+
+    var titleSpan = document.createElement("span");
+    titleSpan.textContent = issue.project + "／" + issue.issue_title;
+    row.appendChild(titleSpan);
+
+    var assigneeSpan = document.createElement("span");
+    assigneeSpan.textContent = issue.assignees.join("、");
+    row.appendChild(assigneeSpan);
+
+    [issue.estimated_hours, consumed === null ? "—" : consumed, remaining === null ? "—" : remaining].forEach(function (value) {
+      var span = document.createElement("span");
+      span.textContent = String(value);
+      row.appendChild(span);
+    });
+
+    var badge = document.createElement("span");
+    badge.className = "status-badge status-" + statusInfo.key;
+    badge.textContent = statusInfo.label;
+    row.appendChild(badge);
+
+    summary.appendChild(row);
+    details.appendChild(summary);
+
+    var title = issue.project + "／" + issue.issue_title + "（" + issue.assignees.join("、") + "）";
+    var detail = document.createElement("div");
+    detail.className = "burndown-status-detail";
+    detail.appendChild(renderComboChart(issue, title));
+    details.appendChild(detail);
+
+    return details;
   }
 
-  // ── 燃盡圖（手刻 SVG 雙折線圖，比照 renderTrendChart 的做法，新增理想線虛線樣式） ──
+  // ── 燃盡圖（長條＝當週實際 + 每人各自一條理想／實際累積折線與右軸，
+  // 比照 Rails _burndown_combo_chart.html.erb） ──────────────────────
 
   var CHART_WIDTH = 640;
   var CHART_HEIGHT = 250;
   var CHART_PADDING_LEFT = 40;
-  var CHART_PADDING_RIGHT = 12;
-  var CHART_PADDING_TOP = 16;
+  // 燃盡組合圖右軸每人一條，正上方要放色塊標記＋數字，留大一點的上邊界才不會擠在一起
+  // （跟 Rails 端 BurndownHelper::BURNDOWN_PADDING_TOP 同步調整過的值一致）。
+  var CHART_PADDING_TOP = 28;
   var CHART_PADDING_BOTTOM = 55;
   var CHART_Y_TICKS = 3;
+  var AXIS_COLUMN_WIDTH = 34;
+  var PADDING_RIGHT_BASE = 14;
   var svgNS = "http://www.w3.org/2000/svg";
+
+  var STACK_COLORS = ["#60a5fa", "#f472b6", "#34d399", "#fbbf24", "#a78bfa", "#fb923c", "#38bdf8", "#f87171"];
 
   function shortDate(dateStr) {
     var parts = String(dateStr).split("-");
     return parts.length === 3 ? parts[1] + "/" + parts[2] : dateStr;
   }
 
-  function plotWidth() { return CHART_WIDTH - CHART_PADDING_LEFT - CHART_PADDING_RIGHT; }
+  function plotWidth(paddingRight) { return CHART_WIDTH - CHART_PADDING_LEFT - paddingRight; }
   function plotHeight() { return CHART_HEIGHT - CHART_PADDING_TOP - CHART_PADDING_BOTTOM; }
 
   function yAt(value, min, max) {
@@ -344,18 +506,18 @@
     return CHART_HEIGHT - CHART_PADDING_BOTTOM - ratio * plotHeight();
   }
 
-  function addText(svg, x, y, text, anchor, extraClass, rotateDeg) {
+  function addText(svg, x, y, text, anchor, className, fill) {
     var el = document.createElementNS(svgNS, "text");
     el.setAttribute("x", x);
     el.setAttribute("y", y);
     el.setAttribute("text-anchor", anchor);
-    el.setAttribute("class", "trend-axis-label" + (extraClass ? " " + extraClass : ""));
-    if (rotateDeg) el.setAttribute("transform", "rotate(" + rotateDeg + " " + x + " " + y + ")");
+    el.setAttribute("class", className);
+    if (fill) el.setAttribute("fill", fill);
     el.textContent = text;
     svg.appendChild(el);
+    return el;
   }
 
-  // 均分格線 + 固定補一條「0」格線（min／max 跨越 0 時）：比照 Rails burndown_chart_y_ticks。
   function yTicks(min, max) {
     var ticks = [];
     var seen = {};
@@ -366,197 +528,235 @@
         ticks.push({ value: value, y: yAt(value, min, max) });
       }
     }
-    if (min < 0 && max > 0 && !(0 in seen)) {
-      ticks.push({ value: 0, y: yAt(0, min, max) });
-    }
+    if (min < 0 && max > 0 && !(0 in seen)) ticks.push({ value: 0, y: yAt(0, min, max) });
     ticks.sort(function (a, b) { return a.value - b.value; });
     return ticks;
   }
 
-  function renderBurndownChart(container, title, actualSeries, idealSeries) {
-    var block = document.createElement("div");
-    block.className = "burndown-chart-block";
-
-    var heading = document.createElement("h3");
-    heading.textContent = title;
-    block.appendChild(heading);
-
-    if (actualSeries.length === 0) {
-      appendEmptyState(block, "無燃盡資料");
-      container.appendChild(block);
-      return;
-    }
-
-    var allPoints = actualSeries.concat(idealSeries);
-    var max = Math.max.apply(null, allPoints.map(function (p) { return p.hours; }).concat([1]));
-    var min = Math.min.apply(null, allPoints.map(function (p) { return p.hours; }).concat([0]));
-
-    // 實際／理想兩條序列共用同一組 X 軸日期（理想線的開案／完成錨點不一定存在於實際序列），
-    // 取兩者日期聯集、依日期排序，兩條線才能對齊到同一個座標系（比照 Rails burndown_chart_dates）。
+  function combinedDates(issue, perAssigneeIdeal) {
+    var seen = {};
     var dates = [];
-    var seenDate = {};
-    allPoints.forEach(function (p) {
-      if (!(p.date in seenDate)) { seenDate[p.date] = true; dates.push(p.date); }
-    });
+    function addDate(d) { if (!(d in seen)) { seen[d] = true; dates.push(d); } }
+    issue.per_assignee.forEach(function (pa) { pa.cumulative_series.forEach(function (p) { addDate(p.date); }); });
+    perAssigneeIdeal.forEach(function (series) { series.forEach(function (p) { addDate(p.date); }); });
     dates.sort();
-    var indexByDate = {};
-    dates.forEach(function (d, i) { indexByDate[d] = i; });
-    var stepX = plotWidth() / Math.max(dates.length - 1, 1);
-    function xAt(i) { return CHART_PADDING_LEFT + i * stepX; }
-
-    var svg = document.createElementNS(svgNS, "svg");
-    svg.setAttribute("viewBox", "0 0 " + CHART_WIDTH + " " + CHART_HEIGHT);
-    svg.setAttribute("class", "trend-svg");
-    svg.setAttribute("role", "img");
-    svg.setAttribute("aria-label", title + " 燃盡圖");
-
-    yTicks(min, max).forEach(function (tick) {
-      var gridline = document.createElementNS(svgNS, "line");
-      gridline.setAttribute("x1", CHART_PADDING_LEFT);
-      gridline.setAttribute("x2", CHART_WIDTH - CHART_PADDING_RIGHT);
-      gridline.setAttribute("y1", tick.y);
-      gridline.setAttribute("y2", tick.y);
-      gridline.setAttribute("class", "trend-gridline");
-      svg.appendChild(gridline);
-      addText(svg, CHART_PADDING_LEFT - 8, tick.y + 3, String(tick.value), "end", "trend-y-label");
-    });
-
-    dates.forEach(function (date, i) {
-      addText(svg, xAt(i), CHART_HEIGHT - CHART_PADDING_BOTTOM + 18, shortDate(date), "end", "trend-x-label", -45);
-    });
-
-    if (idealSeries.length > 0) {
-      var idealPoints = idealSeries.map(function (p) { return xAt(indexByDate[p.date]) + "," + yAt(p.hours, min, max); }).join(" ");
-      var idealLine = document.createElementNS(svgNS, "polyline");
-      idealLine.setAttribute("points", idealPoints);
-      idealLine.setAttribute("class", "burndown-ideal-line");
-      svg.appendChild(idealLine);
-    }
-
-    var actualPoints = actualSeries.map(function (p) { return xAt(indexByDate[p.date]) + "," + yAt(p.hours, min, max); }).join(" ");
-    var actualLine = document.createElementNS(svgNS, "polyline");
-    actualLine.setAttribute("points", actualPoints);
-    actualLine.setAttribute("class", "burndown-actual-line");
-    svg.appendChild(actualLine);
-
-    actualSeries.forEach(function (point) {
-      var circle = document.createElementNS(svgNS, "circle");
-      circle.setAttribute("cx", xAt(indexByDate[point.date]));
-      circle.setAttribute("cy", yAt(point.hours, min, max));
-      circle.setAttribute("r", 4);
-      circle.setAttribute("class", "burndown-actual-point");
-      circle.setAttribute("tabindex", "0");
-
-      var titleEl = document.createElementNS(svgNS, "title");
-      titleEl.textContent = point.date + " ｜ 實際剩餘 " + point.hours + " 小時";
-      circle.appendChild(titleEl);
-
-      svg.appendChild(circle);
-    });
-
-    block.appendChild(svg);
-    container.appendChild(block);
+    return dates;
   }
 
-  // ── 堆疊圖（多人議題各自累積消耗人時，比照 Rails _burndown_stacked_chart.html.erb） ──
-
-  var STACK_COLORS = ["#60a5fa", "#f472b6", "#34d399", "#fbbf24", "#a78bfa", "#fb923c", "#38bdf8", "#f87171"];
-
-  function renderStackedChart(container, perAssignee, estimatedHours) {
-    var block = document.createElement("div");
-    block.className = "burndown-chart-block";
+  function renderComboChart(issue, title) {
+    var wrap = document.createElement("div");
+    wrap.className = "burndown-chart-block";
 
     var heading = document.createElement("h3");
-    heading.textContent = "各人員累積消耗人時（" + perAssignee.length + " 人）";
-    block.appendChild(heading);
+    heading.appendChild(document.createTextNode(title + " "));
+    var info = document.createElement("span");
+    info.className = "chart-info";
+    info.tabIndex = 0;
+    info.setAttribute("aria-label", "說明");
+    var icon = document.createElement("span");
+    icon.className = "chart-info-icon";
+    icon.setAttribute("aria-hidden", "true");
+    icon.textContent = "i";
+    info.appendChild(icon);
+    var tooltip = document.createElement("span");
+    tooltip.className = "chart-info-tooltip";
+    tooltip.textContent = "長條＝當週實際｜虛線＝計畫、實線＝實際累積（實線低於虛線即落後）｜右軸顏色對應人員｜點圖例可篩選";
+    info.appendChild(tooltip);
+    heading.appendChild(info);
+    wrap.appendChild(heading);
 
-    var dates = perAssignee.length > 0 ? perAssignee[0].cumulative_series.map(function (p) { return p.date; }) : [];
+    var perAssigneeIdeal = issue.per_assignee.map(function (pa) { return computePerAssigneeIdealSeries(pa, issue, pa.cumulative_series.map(function (p) { return p.date; })); });
+    var dates = combinedDates(issue, perAssigneeIdeal);
     if (dates.length === 0) {
-      appendEmptyState(block, "無燃盡資料");
-      container.appendChild(block);
-      return;
+      appendEmptyState(wrap, "無燃盡資料");
+      return wrap;
     }
+    // 補上完整的日期後，理想線的錨點需要重新對齊到這個共用日期集合。
+    perAssigneeIdeal = issue.per_assignee.map(function (pa) { return computePerAssigneeIdealSeries(pa, issue, dates); });
 
-    var totals = dates.map(function (_, i) {
-      return perAssignee.reduce(function (sum, pa) { return sum + pa.cumulative_series[i].hours; }, 0);
-    });
-    var max = Math.max.apply(null, totals.concat([estimatedHours, 1]));
-    var stepX = plotWidth() / Math.max(dates.length - 1, 1);
+    var assigneeCount = issue.per_assignee.length;
+    var paddingRight = PADDING_RIGHT_BASE + Math.max(assigneeCount, 1) * AXIS_COLUMN_WIDTH;
+    var plotRight = CHART_WIDTH - paddingRight;
+
+    var leftMax = Math.max.apply(null, dates.map(function (date) {
+      return Math.max.apply(null, issue.per_assignee.map(function (pa) {
+        var point = pa.weekly.filter(function (p) { return p.date === date; })[0];
+        return point ? point.hours : 0;
+      }).concat([0]));
+    }).concat([1]));
+
+    var stepX = plotWidth(paddingRight) / Math.max(dates.length - 1, 1);
     function xAt(i) { return CHART_PADDING_LEFT + i * stepX; }
 
     var svg = document.createElementNS(svgNS, "svg");
     svg.setAttribute("viewBox", "0 0 " + CHART_WIDTH + " " + CHART_HEIGHT);
     svg.setAttribute("class", "trend-svg");
     svg.setAttribute("role", "img");
-    svg.setAttribute("aria-label", "各人員累積消耗人時堆疊圖");
+    svg.setAttribute("aria-label", title + " 週別人時與累積進度");
 
-    yTicks(0, max).forEach(function (tick) {
+    yTicks(0, leftMax).forEach(function (tick) {
       var gridline = document.createElementNS(svgNS, "line");
       gridline.setAttribute("x1", CHART_PADDING_LEFT);
-      gridline.setAttribute("x2", CHART_WIDTH - CHART_PADDING_RIGHT);
+      gridline.setAttribute("x2", plotRight);
       gridline.setAttribute("y1", tick.y);
       gridline.setAttribute("y2", tick.y);
       gridline.setAttribute("class", "trend-gridline");
       svg.appendChild(gridline);
-      addText(svg, CHART_PADDING_LEFT - 8, tick.y + 3, String(tick.value), "end", "trend-y-label");
+      addText(svg, CHART_PADDING_LEFT - 8, tick.y + 3, String(tick.value), "end", "trend-axis-label trend-y-label");
     });
 
     dates.forEach(function (date, i) {
-      addText(svg, xAt(i), CHART_HEIGHT - CHART_PADDING_BOTTOM + 18, shortDate(date), "end", "trend-x-label", -45);
+      addText(svg, xAt(i), CHART_HEIGHT - CHART_PADDING_BOTTOM + 18, shortDate(date), "end", "trend-axis-label trend-x-label")
+        .setAttribute("transform", "rotate(-45 " + xAt(i) + " " + (CHART_HEIGHT - CHART_PADDING_BOTTOM + 18) + ")");
     });
 
-    // 依 per_assignee 順序，逐人算出一塊堆疊區塊：下緣＝前面所有人已疊加的累計，
-    // 上緣＝加上這個人自己的累積人時之後的新高度。
-    var running = dates.map(function () { return 0; });
-    perAssignee.forEach(function (pa, idx) {
-      var top = dates.map(function (_, i) { return running[i] + pa.cumulative_series[i].hours; });
-      var bottomEdge = dates.map(function (_, i) { return xAt(i) + "," + yAt(running[i], 0, max); });
-      var topEdge = dates.map(function (_, i) { return xAt(i) + "," + yAt(top[i], 0, max); }).reverse();
-      var polygon = document.createElementNS(svgNS, "polygon");
-      polygon.setAttribute("points", bottomEdge.concat(topEdge).join(" "));
+    // 每人各自一根長條、並排顯示在同一週欄位內（而非疊加），才能直接比較「這週誰做得多」。
+    var slotWidth = Math.min(stepX * 0.7, 60);
+    var barWidth = slotWidth / Math.max(assigneeCount, 1);
+    var zeroY = yAt(0, 0, leftMax);
+    dates.forEach(function (date, i) {
+      var xCenter = xAt(i);
+      var slotLeft = Math.min(Math.max(xCenter - slotWidth / 2, CHART_PADDING_LEFT), plotRight - slotWidth);
+      issue.per_assignee.forEach(function (pa, idx) {
+        var point = pa.weekly.filter(function (p) { return p.date === date; })[0];
+        var hours = Math.max(point ? point.hours : 0, 0);
+        var yTop = yAt(hours, 0, leftMax);
+        var color = STACK_COLORS[idx % STACK_COLORS.length];
+        var rect = document.createElementNS(svgNS, "rect");
+        rect.setAttribute("class", "burndown-series");
+        rect.setAttribute("data-assignee", pa.assignee);
+        rect.setAttribute("x", (slotLeft + idx * barWidth).toFixed(2));
+        rect.setAttribute("y", yTop.toFixed(2));
+        rect.setAttribute("width", barWidth.toFixed(2));
+        rect.setAttribute("height", (zeroY - yTop).toFixed(2));
+        rect.setAttribute("fill", color);
+        rect.setAttribute("fill-opacity", "0.55");
+        var titleEl = document.createElementNS(svgNS, "title");
+        titleEl.textContent = pa.assignee + "｜" + date + "｜當週 " + hours + " 小時";
+        rect.appendChild(titleEl);
+        svg.appendChild(rect);
+      });
+    });
+
+    var indexByDate = {};
+    dates.forEach(function (d, i) { indexByDate[d] = i; });
+
+    issue.per_assignee.forEach(function (pa, idx) {
       var color = STACK_COLORS[idx % STACK_COLORS.length];
-      polygon.setAttribute("fill", color);
-      polygon.setAttribute("fill-opacity", "0.75");
-      polygon.setAttribute("stroke", color);
-      polygon.setAttribute("stroke-width", "1");
-      var titleEl = document.createElementNS(svgNS, "title");
-      titleEl.textContent = pa.assignee;
-      polygon.appendChild(titleEl);
-      svg.appendChild(polygon);
-      running = top;
+      var idealSeries = perAssigneeIdeal[idx];
+      var ownMax = Math.max.apply(null, pa.cumulative_series.concat(idealSeries).map(function (p) { return p.hours; }).concat([pa.estimated_hours, 1]));
+      var axisX = plotRight + 8 + idx * AXIS_COLUMN_WIDTH;
+
+      // 軸線本身也上色（不只是數字），色塊標記在軸線正上方，光看軸線／色塊就能對應到人，
+      // 不用先讀數字顏色才知道是誰；色塊跟數字之間、數字跟軸線之間都留可辨識的間距。
+      var axisLine = document.createElementNS(svgNS, "line");
+      axisLine.setAttribute("x1", axisX);
+      axisLine.setAttribute("x2", axisX);
+      axisLine.setAttribute("y1", CHART_PADDING_TOP);
+      axisLine.setAttribute("y2", CHART_HEIGHT - CHART_PADDING_BOTTOM);
+      axisLine.setAttribute("stroke", color);
+      axisLine.setAttribute("stroke-width", "1.5");
+      axisLine.setAttribute("stroke-opacity", "0.55");
+      svg.appendChild(axisLine);
+
+      var marker = document.createElementNS(svgNS, "rect");
+      marker.setAttribute("x", axisX - 4);
+      marker.setAttribute("y", CHART_PADDING_TOP - 22);
+      marker.setAttribute("width", 8);
+      marker.setAttribute("height", 8);
+      marker.setAttribute("rx", 2);
+      marker.setAttribute("fill", color);
+      svg.appendChild(marker);
+
+      // 右軸刻度數字不能沿用 .trend-axis-label（那個 class 有自己的 fill 宣告，CSS 的 fill
+      // 優先權高於 SVG 元素自己的 fill 屬性，會把每人的顏色蓋成同一個灰色），改用只設
+      // font-size、不設 fill 的 .burndown-axis-label。
+      yTicks(0, ownMax).forEach(function (tick) {
+        addText(svg, axisX + 6, tick.y + 3, String(tick.value), "start", "burndown-axis-label", color);
+      });
+
+      if (idealSeries.length > 0) {
+        var idealPoints = idealSeries.map(function (p) { return xAt(indexByDate[p.date]) + "," + yAt(p.hours, 0, ownMax); }).join(" ");
+        var idealLine = document.createElementNS(svgNS, "polyline");
+        idealLine.setAttribute("points", idealPoints);
+        idealLine.setAttribute("class", "burndown-series");
+        idealLine.setAttribute("data-assignee", pa.assignee);
+        idealLine.setAttribute("fill", "none");
+        idealLine.setAttribute("stroke", color);
+        idealLine.setAttribute("stroke-width", "2");
+        idealLine.setAttribute("stroke-dasharray", "6,4");
+        svg.appendChild(idealLine);
+      }
+
+      var actualPoints = pa.cumulative_series.map(function (p) { return xAt(indexByDate[p.date]) + "," + yAt(p.hours, 0, ownMax); }).join(" ");
+      var actualLine = document.createElementNS(svgNS, "polyline");
+      actualLine.setAttribute("points", actualPoints);
+      actualLine.setAttribute("class", "burndown-series");
+      actualLine.setAttribute("data-assignee", pa.assignee);
+      actualLine.setAttribute("fill", "none");
+      actualLine.setAttribute("stroke", color);
+      actualLine.setAttribute("stroke-width", "2");
+      svg.appendChild(actualLine);
+
+      pa.cumulative_series.forEach(function (point) {
+        var circle = document.createElementNS(svgNS, "circle");
+        circle.setAttribute("class", "burndown-series");
+        circle.setAttribute("data-assignee", pa.assignee);
+        circle.setAttribute("cx", xAt(indexByDate[point.date]));
+        circle.setAttribute("cy", yAt(point.hours, 0, ownMax));
+        circle.setAttribute("r", 3.5);
+        circle.setAttribute("fill", "var(--color-surface)");
+        circle.setAttribute("stroke", color);
+        circle.setAttribute("stroke-width", "2");
+        circle.setAttribute("tabindex", "0");
+        var titleEl = document.createElementNS(svgNS, "title");
+        titleEl.textContent = pa.assignee + "｜" + point.date + " ｜實際累積消耗 " + point.hours + " 小時";
+        circle.appendChild(titleEl);
+        svg.appendChild(circle);
+      });
     });
 
-    var refY = yAt(estimatedHours, 0, max);
-    var refLine = document.createElementNS(svgNS, "line");
-    refLine.setAttribute("x1", CHART_PADDING_LEFT);
-    refLine.setAttribute("x2", CHART_WIDTH - CHART_PADDING_RIGHT);
-    refLine.setAttribute("y1", refY);
-    refLine.setAttribute("y2", refY);
-    refLine.setAttribute("class", "burndown-estimate-reference-line");
-    svg.appendChild(refLine);
+    wrap.appendChild(svg);
 
-    block.appendChild(svg);
+    if (issue.per_assignee.length > 1) {
+      wrap.appendChild(renderLegend(wrap, issue.per_assignee));
+    }
 
+    return wrap;
+  }
+
+  // 圖例：點某人的按鈕獨立切換該人是否隱藏（不是「只顯示這一人」的互斥選取），純顯示層級
+  // 切換（class + opacity），不影響底層資料、燈號或右軸刻度的計算（比照 Rails
+  // app/javascript/controllers/burndown_legend_controller.js 的 toggle 邏輯，這裡不需要
+  // Stimulus，直接用原生事件處理；scope 限定在同一個 .burndown-chart-block 內，避免誤觸
+  // 其他議題的圖表）。
+  function renderLegend(scope, perAssignee) {
     var legend = document.createElement("ul");
     legend.className = "burndown-stack-legend";
+
     perAssignee.forEach(function (pa, idx) {
       var li = document.createElement("li");
+      var button = document.createElement("button");
+      button.type = "button";
+      button.className = "burndown-legend-toggle";
+      button.setAttribute("data-assignee", pa.assignee);
       var swatch = document.createElement("span");
       swatch.className = "burndown-stack-swatch";
       swatch.style.backgroundColor = STACK_COLORS[idx % STACK_COLORS.length];
-      li.appendChild(swatch);
-      li.appendChild(document.createTextNode(pa.assignee));
+      button.appendChild(swatch);
+      button.appendChild(document.createTextNode(pa.assignee));
+      button.addEventListener("click", function () {
+        var hidden = button.classList.toggle("is-hidden");
+        scope.querySelectorAll('[data-assignee="' + CSS.escape(pa.assignee) + '"]').forEach(function (el) {
+          if (el === button) return;
+          el.classList.toggle("is-dimmed", hidden);
+        });
+      });
+      li.appendChild(button);
       legend.appendChild(li);
     });
-    var refLi = document.createElement("li");
-    var refSwatch = document.createElement("span");
-    refSwatch.className = "burndown-stack-swatch burndown-stack-swatch-reference";
-    refLi.appendChild(refSwatch);
-    refLi.appendChild(document.createTextNode("總預估人時（" + estimatedHours + "）"));
-    legend.appendChild(refLi);
-    block.appendChild(legend);
 
-    container.appendChild(block);
+    return legend;
   }
 
   // ── 主題切換 ──────────────────────────────────────────────

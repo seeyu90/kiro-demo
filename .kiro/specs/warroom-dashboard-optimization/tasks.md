@@ -232,6 +232,30 @@
 
 ---
 
+- [x] 10. 補齊 docs/ 靜態原型同步（`docs/js/burndown.js`、`docs/burndown.html`）
+  - 起因同 warroom-issue-dashboard-ux-refresh spec 任務 8——docs/ 這份純前端靜態原型長期
+    跟 Rails 版分開維護，307 好幾輪迭代（任務 4 狀態摘要表、任務 5 合併長條＋雙軸線圖、
+    任務 8.1-8.3 每人一條右軸／圖例互動／說明文字）都沒同步過去，還停在最早期「獨立燃盡
+    折線圖＋獨立堆疊面積圖」的設計，跟任務 9 剛修的「右軸顏色實際生效」bug 完全無關
+    （那個 bug 只存在於已經合併圖表之後的版本，docs/ 舊版根本沒有多軸這個概念）
+  - 全部改用組合圖表（長條＋每人各自理想／實際累積折線＋各自右軸，右軸線本身也上色、
+    正上方色塊標記，直接套用任務 9 修好的版本，不重蹈同一個 bug）＋議題狀態摘要表
+    （`<details>` 點列原地展開）＋圖例可獨立切換顯示/隱藏（純 JS 事件處理，比照 Rails
+    `burndown_legend_controller.js` 的 toggle 邏輯：`data-assignee` 比對＋
+    `is-hidden`／`is-dimmed`，邏輯一致，不是 Stimulus）
+  - Mock 資料維持原本三筆範例（落後／超前超支／多人合併），不需要额外新增
+  - `docs/css/style.css` 補上 `.burndown-status-table`／`.burndown-status-details`／
+    `.status-on_track`／`.chart-info`／`.burndown-axis-label`／`.burndown-legend-toggle`
+    等 class，跟 Rails 端 `application.css` 命名一致；移除舊版專屬、combo chart 上線後
+    不再使用的 `.burndown-ideal-line`／`.burndown-actual-line`／`.burndown-actual-point`／
+    `.burndown-estimate-reference-line`／`.burndown-stack-swatch-reference`
+  - 用 jsdom 載入實際的 `burndown.html`＋`burndown.js` 執行期驗證：狀態摘要表筆數（依
+    進行中／已完成篩選）、右軸 `fill` 顏色確實依人員不同（非全部同一個灰色，任務 9 那個
+    bug 沒有在這份新寫的版本重演）、軸線＋色塊標記存在、圖例點擊正確只切換該人（非誤觸
+    其他人）、再點一次正確還原
+  - 本機瀏覽器工具連不到這個環境的 `localhost`，無法截圖，改用 jsdom 執行期驗證＋人工核對
+    輸出內容替代
+
 ## Notes
 
 - 三個頁面（305/306/307）目前快取策略已一致：`Rails.cache.fetch` + 5 分鐘 TTL，快取鍵
