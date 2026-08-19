@@ -215,31 +215,55 @@ module Sheets
       issue[:status].to_s.match?(ISSUE_DONE_STATUS_PATTERN)
     end
 
-    def issue_overdue?(issue)
-      due = issue[:due_date]
-      return false if due.blank?
+    # 沒填到期日時的內建 SLA（依 type 而定，天數是從開始日算起「最晚應完成」的期限）：客訴兩天內
+    # 要完成、測試（TestingBug／個人責任）當天要完成。取代原本「沒填到期日一律不算逾期」的判斷
+    # ——這兩種類型即使沒有明確到期日，業務上仍有既定的完成期限，不該永遠不算逾期、也不該
+    # 永遠被歸類到「未定到期日」（見 compute_issue_kpis 的 undated 判斷）。其餘沒有 SLA 對應的
+    # 類型（Other）沒填到期日時維持「未定」，不會被視為逾期。
+    ISSUE_SLA_DAYS = { "Complaint" => 2, "TestingBug" => 0 }.freeze
 
-      Date.parse(due) < Date.current
+    def issue_overdue?(issue)
+      if issue[:due_date].present?
+        Date.parse(issue[:due_date]) < Date.current
+      else
+        sla_overdue?(issue)
+      end
     rescue ArgumentError, TypeError
       false
+    end
+
+    def sla_overdue?(issue)
+      sla_days = ISSUE_SLA_DAYS[issue[:type]]
+      return false if sla_days.nil? || issue[:start_date].blank?
+
+      Date.parse(issue[:start_date]) + sla_days < Date.current
     end
 
     # KPI 卡片：待處理議題（未完成）／緊急客訴（未完成的客訴且已逾期——資料裡沒有優先權／
     # 嚴重度欄位，「客訴+已逾期」是目前能從既有資料算出最接近「緊急」的定義，見
     # warroom-issue-dashboard-ux-refresh 任務 2.1 的取捨說明）／逾期或未定到期日（未完成
-    # 且到期日已過或缺漏）。三者都只算「未完成」的議題，已完成的議題不算緊急也不算逾期。
+    # 且到期日已過，或沒填到期日、也沒有對應 SLA 可判斷）。三者都只算「未完成」的議題，
+    # 已完成的議題不算緊急也不算逾期。
     def compute_issue_kpis(issues)
       pending = issues.reject { |i| issue_done?(i) }
-      urgent_complaints = pending.select { |i| i[:type] == "Complaint" && issue_overdue?(i) }
-      overdue_or_undated = pending.select { |i| i[:due_date].blank? || issue_overdue?(i) }
+      # overdue? 每筆只算一次（Date.parse 有成本），urgent_complaints／overdue_or_undated
+      # 共用同一個結果，不各自重算一次。
+      urgent_count = 0
+      overdue_or_undated_count = 0
+      pending.each do |i|
+        overdue = issue_overdue?(i)
+        undated = i[:due_date].blank? && !ISSUE_SLA_DAYS.key?(i[:type])
+        urgent_count += 1 if i[:type] == "Complaint" && overdue
+        overdue_or_undated_count += 1 if undated || overdue
+      end
       # 累積花費工時不限「未完成」——已完成的議題一樣花了那些工時，此卡片算的是「投入成本」
       # 不是「還剩多少要做」，跟前三個只算 pending 的卡片語意不同。
       total_hours_sum = issues.sum { |i| i[:total_hours].to_f }
 
       {
         pending: pending.size,
-        urgent_complaints: urgent_complaints.size,
-        overdue_or_undated: overdue_or_undated.size,
+        urgent_complaints: urgent_count,
+        overdue_or_undated: overdue_or_undated_count,
         total_hours_sum: total_hours_sum.round(2)
       }
     end
@@ -275,12 +299,15 @@ module Sheets
       value
     end
 
+    # FORMATTED_VALUE（見 IssueSheetsClient）可能把數字格式化成含千分位逗號的字串（例如
+    # "1,200"），先去除逗號再轉型，避免合法數字被誤判為無法解析（與 305
+    # Sheets::FetchProjectBurndown#safe_float 的處理一致）。
     def safe_float(value)
       return nil if value.nil? || value.to_s.strip.empty?
 
-      Float(value)
+      Float(value.to_s.delete(","))
     rescue ArgumentError, TypeError
-      value
+      nil
     end
   end
 end

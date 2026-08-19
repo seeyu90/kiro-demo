@@ -199,6 +199,37 @@
       loading 動畫實測從快取命中時的 55～92ms 延長到穩定 1046ms（含少量 setTimeout 排程
       誤差），冷快取（真正需要等 API 回應）時不受影響、不會反而變更慢
 
+- [x] 9. 307 燃盡圖右軸顏色實際生效 + 版面微調
+  - 起因：使用者反饋「Y 軸還是看不出來誰是哪個」。追查後發現任務 8.1 當時就已經在
+    `_burndown_combo_chart.html.erb` 對每人的右軸刻度文字寫了 `fill="<%= color %>"`，
+    但套用的 `.trend-axis-label` 共用 class 有 `fill: var(--color-text-muted)` 宣告——
+    CSS 的 `fill` 屬性優先權高於 SVG 元素自己的 `fill` 屬性，即使沒有更高的選擇器特異性，
+    也會把每個人的顏色蓋成同一個灰色。也就是說「每人顏色對應右軸」這個功能從任務 8.1
+    完成以來其實從未真的顯示出來過，任務 8.6 當時的驗證紀錄「307 多軸刻度與圖例顏色
+    一致」只檢查了程式碼有沒有寫 `fill` 屬性，沒有實際截圖確認渲染結果，才沒抓到這個問題
+  - 詢問使用者「保留多軸、把軸上數字改成對應顏色」或「改回單一共用軸」，使用者選擇保留
+    多軸
+  - 右軸刻度數字改用專屬的 `.burndown-axis-label` class（只設 `font-size`，不設 `fill`），
+    inline `fill` 屬性才不會被蓋掉
+  - 額外補上軸線本身的顏色（原本只有數字上色、軸線是純灰）：每人一條彩色 `<line>`，軸線
+    正上方加一個小色塊 `<rect>` 標記——這其實是任務 8.3 說明文字裡本來就寫的行為
+    （「右側每欄軸線顏色對應同色的人（軸線正上方也有色塊標記）」），但同樣從未真的實作，
+    說明文字寫的功能跟畫面實際呈現長期對不上
+  - 使用者反饋數字離軸線太近、色塊離數字太近：`BURNDOWN_PADDING_TOP` 從 16 調大到 28
+    （目前只有燃盡組合圖用到這個常數，調大不影響其他圖表），數字改成離軸線右側 6px、
+    色塊往上多留間距，三層元素（色塊／數字／軸線）才不會糊在一起
+  - `ⓘ` 圖示改成純文字 `i`：原本用 Unicode `ⓘ` 字元本身就自帶一個圓圈，塞進 CSS 的圓形
+    背景會變成圓中圓，不同字型的繪製效果也不一致
+  - 說明文字精簡（原本一長串 6 段文字，補上軸線／色塊視覺化之後不需要再用文字解釋這麼多
+    細節，縮成 4 段）
+  - `app/helpers/burndown_helper.rb`、`app/views/burndown/_burndown_combo_chart.html.erb`、
+    `app/assets/stylesheets/application.css`
+  - 測試：`bundle exec rspec spec/helpers/burndown_helper_spec.rb spec/requests/burndown_spec.rb`
+    29/29 全過。即時真實資料驗證這次改用 curl 直接檢查渲染出的 SVG 屬性（`fill="#60a5fa"`／
+    `<line>`／`<rect>` 座標）確認邏輯正確；過程中一度遇到 Google Sheets API `Net::ReadTimeout`
+    （curl 直連 API 與 OAuth token endpoint 都秒回，推測是這次連續大量重啟 server／連續
+    請求造成的節流，非程式碼問題）
+
 ---
 
 ## Notes

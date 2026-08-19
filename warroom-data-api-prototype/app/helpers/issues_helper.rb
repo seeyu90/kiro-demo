@@ -12,41 +12,82 @@ module IssuesHelper
     ATTRIBUTION_CLASSES[type] || "attribution-other"
   end
 
+  # 「議題資料」分頁目前的篩選狀態，供快捷篩選 Tag 這類需要手動組 issues_path(...) 的連結共用
+  # （分頁連結不需要這個——Pagy 直接沿用當前請求的 query params，見 index.html.erb），
+  # 避免同一組 project／status／q／type／month／breakdown_sort／breakdown_dir 在多處各自重複。
+  def issue_filter_params(overrides = {})
+    {
+      tab: "detail", project: @selected_project, status: @selected_status, q: @selected_q,
+      type: @selected_type, month: @selected_month, breakdown_sort: @breakdown_sort,
+      breakdown_dir: @breakdown_dir
+    }.merge(overrides)
+  end
+
+  # 「是否已完成」直接引用 Actor 的 ISSUE_DONE_STATUS_PATTERN（而不是自己另外寫一份關鍵字），
+  # 確保 badge 顏色、KPI 卡片、時程欄位的「是否已完成」判斷永遠是同一套規則，不會改一邊忘了
+  # 改另一邊。
+  def issue_done_status?(status)
+    status.to_s.match?(Sheets::FetchIssueDashboard::ISSUE_DONE_STATUS_PATTERN)
+  end
+
   # 「狀態」欄位是自由輸入的中文文字（來源是 Redmine，可能出現「新建立」「處理中」「已確認」
-  # 「已解決」「已關閉」等各種寫法），無法窮舉每一種可能值，改用關鍵字比對決定 badge 顏色；
-  # 純文字狀態塞進表格窄欄位、沒有 white-space:nowrap 時，中文字會逐字換行變成直排
+  # 「已解決」「已關閉」「已結束」等各種寫法），無法窮舉每一種可能值，改用關鍵字比對決定 badge
+  # 顏色；純文字狀態塞進表格窄欄位、沒有 white-space:nowrap 時，中文字會逐字換行變成直排
   # （例如「新建立」被拆成三行），包成這個 badge span 就解決了。
   def issue_status_badge_class(status)
-    text = status.to_s
-    if text.match?(/完成|確認|關閉|解決/)
+    if issue_done_status?(status)
       "issue-status-done"
-    elsif text.match?(/處理|進行/)
+    elsif status.to_s.match?(/處理|進行/)
       "issue-status-processing"
-    elsif text.match?(/新建|新增/)
+    elsif status.to_s.match?(/新建|新增/)
       "issue-status-new"
     else
       "issue-status-other"
     end
   end
 
-  # 「開始／到期／工作天數」三個原本各自獨立的欄位合併成一個「時程與天數」欄位：有到期日
-  # 就顯示「開始 ~ 到期」，沒有到期日（議題還在進行、沒填預計完成日）就顯示「開始 ~
-  # 未指定（已開 N 天）」，N 用今天跟開始日期的差算出來；開始日期也缺就顯示 —（比起原本
-  # 三欄各自顯示「—」，這個合併欄位對「沒填日期」的情況一次講清楚，不用同時看三個空欄位）。
+  # 「開始／到期／工作天數」三個原本各自獨立的欄位合併成一個「時程與天數」欄位：日期只顯示
+  # 月-日（同一頁不會橫跨太多年份，年份對這個窄欄位幫助不大，省下的寬度留給後面的天數）；
+  # 沒填到期日時，議題還在進行中就顯示「進行中」（不是「未指定」——議題本來就還沒結束，
+  # 不是資料缺漏，「未指定」這個詞聽起來像漏填東西，容易誤會），只有議題已完成卻沒填到期日
+  # 這種真正的缺漏情況，才顯示「未指定」。有工作天數（來源試算表既有欄位）就附註「工作 N
+  # 天」，避免合併欄位把原本三欄各自顯示的工作天數資料漏掉；沒填工作天數、到期日也還沒到
+  # （議題仍進行中）時，才退而求其次附註「已開 N 天」（今天跟開始日期的差）。開始日期也缺就
+  # 顯示 —。
   def issue_timeline_label(issue)
     start_text = issue[:start_date].presence
     return "—" if start_text.nil?
 
-    return "#{start_text} ~ #{issue[:due_date]}" if issue[:due_date].present?
+    range =
+      if issue[:due_date].present?
+        "#{short_date(start_text)} ~ #{short_date(issue[:due_date])}"
+      else
+        end_label = issue_done_status?(issue[:status]) ? "未指定" : "進行中"
+        "#{short_date(start_text)} ~ #{end_label}"
+      end
 
-    days = issue_open_days(start_text)
-    days ? "#{start_text} ~ 未指定（已開 #{days} 天）" : "#{start_text} ~ 未指定"
+    note = issue_timeline_note(issue)
+    note ? "#{range}（#{note}）" : range
   end
 
   def issue_open_days(start_date_str)
     (Date.current - Date.parse(start_date_str)).to_i
   rescue ArgumentError, TypeError
     nil
+  end
+
+  def issue_timeline_note(issue)
+    return "工作 #{issue[:work_days]} 天" if issue[:work_days].present?
+    return nil if issue[:due_date].present?
+
+    days = issue_open_days(issue[:start_date])
+    days ? "已開 #{days} 天" : nil
+  end
+
+  # 開始／到期日已經是 normalize_date 產出的 YYYY-MM-DD（若來源格式無法辨識則原樣保留），
+  # 只在確實是這個格式時才去掉年份，非標準格式的原始字串不動，避免截錯欄位。
+  def short_date(date_str)
+    date_str.to_s.sub(/\A\d{4}-(\d{2}-\d{2})\z/, '\1')
   end
 
   # 依專案分類表格的可排序欄位標題連結：同一欄位再次點選時反轉方向，切換到不同欄位時預設降冪

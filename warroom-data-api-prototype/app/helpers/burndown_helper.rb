@@ -8,7 +8,10 @@ module BurndownHelper
   # 單軸圖表（左軸長條用）原本的窄右邊界；組合圖表改用 burndown_combo_padding_right 依
   # 人數動態計算（每人一條自己的右軸，見下方常數與方法）。
   BURNDOWN_PADDING_RIGHT = 12
-  BURNDOWN_PADDING_TOP = 16
+  # 組合圖表每人一條右軸，軸線正上方要放色塊標記＋最大值數字（見
+  # _burndown_combo_chart.html.erb），16px 放不下「色塊、間距、數字」三層還會互相貼在一起，
+  # 故留大一點的上邊界。
+  BURNDOWN_PADDING_TOP = 28
   BURNDOWN_PADDING_BOTTOM = 55
   BURNDOWN_Y_TICKS = 3
 

@@ -5,9 +5,9 @@ class IssuesController < ApplicationController
   BREAKDOWN_SORT_KEYS = Sheets::FetchIssueDashboard::BREAKDOWN_SORT_KEYS
   BREAKDOWN_SORT_DIRS = Sheets::FetchIssueDashboard::BREAKDOWN_SORT_DIRS
   DEFAULT_BREAKDOWN_SORT_DIR = "desc".freeze
-  # 「議題資料」分頁的表格分頁大小；分頁純粹是這個 Controller 的呈現方式（對 Actor 回傳的
-  # 完整篩選結果做陣列切片），不是 Actor 的職責——KPI 卡片（見 build_success）需要「分頁前」
-  # 的完整篩選結果才能算對總數。
+  # 「議題資料」分頁的表格分頁大小；分頁本身交給 Pagy 處理（見 build_success 的 pagy 呼叫），
+  # Controller 只需要提供 limit。KPI 卡片（見 build_success）讀 result.issue_kpis，是 Actor
+  # 依「分頁前」的完整篩選結果算好的，不受這裡的分頁影響。
   ISSUE_PAGE_SIZE = 15
 
   def index
@@ -54,11 +54,11 @@ class IssuesController < ApplicationController
     @selected_type = params[:type].presence
     @issue_kpis = result.issue_kpis
 
-    all_issues = IssueBlueprint.render_as_hash(result.filtered_issues)
-    @total_issue_count = all_issues.size
-    @total_pages = [ (@total_issue_count.to_f / ISSUE_PAGE_SIZE).ceil, 1 ].max
-    @page = params[:page].to_i.clamp(1, @total_pages)
-    @issues = all_issues.each_slice(ISSUE_PAGE_SIZE).to_a[@page - 1] || []
+    # 分頁交給 Pagy 處理（Countable 直接支援 Array，不需要額外的 gem extra）：先對 Actor 回傳
+    # 的原始 hash 陣列切出當頁範圍，再只對這一頁呼叫 Blueprint，避免把整批篩選結果都序列化一次
+    # 卻只用其中 15 筆。
+    @pagy, page_issues = pagy(:offset, result.filtered_issues, limit: ISSUE_PAGE_SIZE)
+    @issues = IssueBlueprint.render_as_hash(page_issues)
     @error = nil
   end
 
@@ -79,10 +79,8 @@ class IssuesController < ApplicationController
     @selected_status = DEFAULT_STATUS
     @selected_q = nil
     @selected_type = nil
-    @issue_kpis = { pending: 0, urgent_complaints: 0, overdue_or_undated: 0 }
-    @total_issue_count = 0
-    @total_pages = 1
-    @page = 1
+    @issue_kpis = { pending: 0, urgent_complaints: 0, overdue_or_undated: 0, total_hours_sum: 0 }
+    @pagy = nil
     @issues = []
     @error = message
   end

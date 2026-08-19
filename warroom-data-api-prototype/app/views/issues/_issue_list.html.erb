@@ -33,14 +33,7 @@
           <td>
             <span class="status-badge <%= issue_status_badge_class(issue[:status]) %>"><%= issue[:status] %></span>
           </td>
-          <td>
-            <% if issue[:assigned_to].present? %>
-              <span class="assignee-avatar" aria-hidden="true"><%= issue[:assigned_to].first %></span>
-              <%= issue[:assigned_to] %>
-            <% else %>
-              —
-            <% end %>
-          </td>
+          <td><%= issue[:assigned_to].presence || "—" %></td>
           <td><%= issue_timeline_label(issue) %></td>
           <td>
             <% if issue[:total_hours].to_f.zero? %>

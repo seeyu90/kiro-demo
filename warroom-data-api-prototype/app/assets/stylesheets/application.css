@@ -308,6 +308,28 @@ body {
   outline: none;
 }
 
+/* 搜尋框跟 select 共用同一套外觀（背景／邊框／圓角／字級），避免瀏覽器預設的白底文字輸入框
+   跟深色主題的 select 混在同一排時視覺不一致。 */
+.project-selector input[type="text"] {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border-hover);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  transition: border-color 0.2s;
+}
+
+.project-selector input[type="text"]::placeholder {
+  color: var(--color-text-faint);
+}
+
+.project-selector input[type="text"]:hover,
+.project-selector input[type="text"]:focus {
+  border-color: var(--color-accent);
+  outline: none;
+}
+
 .apply-filters-btn {
   background: var(--color-accent);
   color: var(--btn-text);
@@ -540,7 +562,6 @@ turbo-frame[busy]::after {
 .quick-filters {
   display: flex;
   gap: 0.5rem;
-  margin: 0.75rem 0 0;
 }
 
 .quick-filter-tag {
@@ -580,12 +601,16 @@ turbo-frame[busy]::after {
   color: var(--color-text-faint);
 }
 
-.pagination-pages {
+/* Pagy 的 series_nav 產出 <nav class="pagy series-nav"><a>...</a>...</nav>，目前頁用
+   aria-current="page"、省略號跟停用的上一頁／下一頁用 role="separator"／aria-disabled="true"
+   標記，不是額外的 CSS class，故改用屬性選擇器對應（見 pagy gem 的 series_nav 實作）。 */
+.pagy.series-nav {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.35rem;
 }
 
-.pagination-page {
+.pagy.series-nav a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -599,16 +624,23 @@ turbo-frame[busy]::after {
   text-decoration: none;
 }
 
-.pagination-page:hover {
+.pagy.series-nav a:hover {
   border-color: var(--color-accent);
   color: var(--color-text-strong);
 }
 
-.pagination-page.is-current {
+.pagy.series-nav a[aria-current="page"] {
   background: var(--color-accent);
   border-color: var(--color-accent);
   color: var(--btn-text);
   font-weight: 700;
+}
+
+.pagy.series-nav a[role="separator"],
+.pagy.series-nav a[aria-disabled="true"] {
+  border-color: transparent;
+  color: var(--color-text-faint);
+  cursor: default;
 }
 
 /* ── Tabs（純 CSS，radio + label，無需 JS，Turbo Frame 局部更新後仍可正常運作） ── */
@@ -715,21 +747,6 @@ turbo-frame[busy]::after {
   color: var(--color-text-faint);
 }
 
-.assignee-avatar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.4rem;
-  height: 1.4rem;
-  border-radius: 50%;
-  background: var(--color-accent);
-  color: var(--btn-text);
-  font-size: 0.7rem;
-  font-weight: 700;
-  margin-right: 0.35rem;
-  vertical-align: middle;
-}
-
 .trend-chart-wrap {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -771,6 +788,14 @@ turbo-frame[busy]::after {
   font-size: 10px;
 }
 
+/* 燃盡圖每人一條右軸，軸上數字要對應該人的顏色（見 _burndown_combo_chart.html.erb 的
+   fill="<%= color %>"）：不能沿用 .trend-axis-label，CSS 的 fill 宣告（即使沒有 class
+   選擇器以外的限定）優先權高於 SVG 元素自己的 fill 屬性，套用共用 class 會把每人的顏色
+   蓋成同一個 var(--color-text-muted)，讓所有軸的數字看起來一樣、分不出對應哪個人。 */
+.burndown-axis-label {
+  font-size: 10px;
+}
+
 /* ── 307 燃盡圖（理想線／實際線疊圖） ── */
 
 .burndown-chart-block {
@@ -800,11 +825,18 @@ turbo-frame[busy]::after {
   border-radius: 50%;
   background: var(--color-border-hover);
   color: var(--color-text-strong);
-  font-size: 0.7rem;
-  font-style: normal;
-  font-weight: 700;
   cursor: help;
   flex-shrink: 0;
+}
+
+/* 原本用 Unicode 的 ⓘ（已經內建一個圓圈），塞進 .chart-info 自己的圓形背景裡變成
+   圓中圓，不同字型繪製效果也不一致；改成純文字 "i"，樣式完全由 CSS 控制。 */
+.chart-info-icon {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 0.75rem;
+  font-style: italic;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .chart-info-tooltip {
