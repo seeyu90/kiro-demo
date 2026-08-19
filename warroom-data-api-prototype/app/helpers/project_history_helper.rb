@@ -146,12 +146,12 @@ module ProjectHistoryHelper
         [ due_d, Date.current ].max.iso8601
       end
     actual_x2 = [ gantt_chart_x(actual_end, min_date, max_date) || x1, x1 + 4 ].max
-    actual_width = actual_x2 - x1
+    actual_width = (actual_x2 - x1).round(2)
 
     {
       x: x1.round(2),
       planned_width: (planned_x2 - x1).round(2),
-      actual_width: actual_width.round(2),
+      actual_width: actual_width,
       fill_width: (actual_width * duration_fill_ratio(task)).round(2),
       done: !!task[:done],
       overdue: overdue,

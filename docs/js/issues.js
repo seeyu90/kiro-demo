@@ -134,23 +134,35 @@
   var ISSUE_SLA_DAYS = { Complaint: 2, TestingBug: 0 };
 
   function issueOverdue(issue) {
+    // 用 "YYYY-MM-DD" 字串本身做字典序比較，不經過 Date 物件，避開 new Date(str) 以 UTC
+    // 解析、但今天的日期是本地時區這種時區不一致造成的誤判空間。
     if (issue.due_date) {
-      var due = new Date(issue.due_date);
-      return !isNaN(due.getTime()) && due.getTime() < startOfToday();
+      return issue.due_date < todayLocalDateString();
     }
     var slaDays = ISSUE_SLA_DAYS[issue.type];
     if (slaDays === undefined || !issue.start_date) return false;
-    var start = new Date(issue.start_date);
-    if (isNaN(start.getTime())) return false;
-    var deadline = new Date(start.getTime());
-    deadline.setDate(deadline.getDate() + slaDays);
-    return deadline.getTime() < startOfToday();
+    var deadline = addDaysToDateString(issue.start_date, slaDays);
+    return deadline !== null && deadline < todayLocalDateString();
   }
 
-  function startOfToday() {
-    var d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d.getTime();
+  function todayLocalDateString() {
+    return dateToLocalDateString(new Date());
+  }
+
+  function addDaysToDateString(dateStr, days) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateStr);
+    if (!m) return null;
+    var d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    if (isNaN(d.getTime())) return null;
+    d.setDate(d.getDate() + days);
+    return dateToLocalDateString(d);
+  }
+
+  function dateToLocalDateString(d) {
+    var y = d.getFullYear();
+    var m = String(d.getMonth() + 1).padStart(2, "0");
+    var day = String(d.getDate()).padStart(2, "0");
+    return y + "-" + m + "-" + day;
   }
 
   // KPI 卡片：待處理議題（未完成）／緊急客訴（未完成的客訴且已逾期）／累積總花費工時
