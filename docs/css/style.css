@@ -945,6 +945,26 @@ table.project-tasks tbody tr:hover td {
   border-left: 3px solid var(--overdue-text);
 }
 
+/* ── 專案階段追蹤：甘特圖提前完成色塊
+   語意與 .gantt-task-actual-ontime（既有「消耗人時比例填色」track 用途）不同——這裡是單一實心
+   色塊代表「提前幅度」的視覺標記，沿用同一組 --delay-negative 色票但獨立成一個 class，避免
+   共用既有 class 造成語意混淆。 ── */
+.gantt-task-actual-early {
+  fill: var(--delay-negative);
+}
+
+/* ── 專案階段追蹤：階段列備註（對應 Notion「原因」欄位，非空字串時才顯示） ── */
+.phase-reason-row td {
+  border-bottom: 1px solid var(--table-row-border);
+}
+
+.phase-reason {
+  padding-top: 0;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
 /* ── Tablet ── */
 @media (max-width: 768px) {
   .dashboard-header,
