@@ -8,9 +8,8 @@
   // 模擬資料，不呼叫任何 API。
 
   // 固定順序的 5 個交付階段。真實資料目前只觀察到「開案／開發／測試／發布」4 個值（「需求確認」
-  // 尚未出現過任何紀錄），但使用者確認這代表「目前抽樣剛好沒有」而非「這個階段不會發生」，故
-  // 常數仍保留 5 個值——這份模擬資料刻意示範一筆「需求確認」紀錄，證明畫面撐得住這個階段真的
-  // 出現的情況。
+  // 尚未出現過任何紀錄），這代表目前抽樣剛好沒有，不代表這個階段不會發生，故常數仍保留 5 個
+  // 值——這份模擬資料刻意示範一筆「需求確認」紀錄，證明畫面撐得住這個階段真的出現的情況。
   var STAGE_ORDER = ["需求確認", "開案", "開發", "測試", "發布"];
 
   // 專案層級資料：只有客戶／PM（真實 ProjectProfilesSheetsClient 讀 300_員工專案「專案」分頁的
@@ -27,8 +26,8 @@
   // actual_date, status, reason）。
   //
   // 【關鍵慣例，不得偏離】
-  // - project + issue_id：卡片分組單位（2026-08-25 確認，不是只有 project——同一個 project
-  //   代碼底下常有多個獨立的 issue_id 生命週期，見下方 HRM 出現兩次）。
+  // - project + issue_id：卡片分組單位，不是只有 project——同一個 project 代碼底下常有多個
+  //   獨立的 issue_id 生命週期（見下方 HRM 出現兩次）。
   // - issue_id：議題名稱（如「v2.1調整」）或純 Redmine ID（如「4548」）皆可能出現。
   // - issue_name：只在 issue_id 是純 ID 時才會填人類可讀名稱；issue_id 本身已是描述性名稱時
   //   留空字串。
@@ -41,8 +40,8 @@
   //   下方 JZNPMS／4548 的「開案」刻意示範這個情況。
   var PHASE_RECORDS = [
     // HRM / v2.1調整：issue_id 本身是描述性名稱，issue_name 留空。示範「需求確認」階段真的出現、
-    // 一個延誤、一個提前、一個尚未完成——卡片目前狀態＝測試（未完成），符合預設篩選「狀態：未
-    // 完成」會顯示出來。
+    // 一個延誤、一個提前、一個尚未完成——卡片狀態取自 STAGE_ORDER 由後往前第一個有主要記錄的
+    // 階段，即「發布」（尚無 actual_date）＝未完成，符合預設篩選「狀態：未完成」會顯示出來。
     { project: "HRM", issue_id: "v2.1調整", issue_name: "", stage: "需求確認",
       planned_date: "2026-06-01", actual_date: "2026-06-01", status: "完成", reason: "" },
     { project: "HRM", issue_id: "v2.1調整", issue_name: "", stage: "開案",
@@ -57,9 +56,8 @@
     // JZNPMS / 4548（issue_name：現場報工）：示範 issue_id 是純 Redmine ID 時 issue_name 補上
     // 人類可讀名稱；「開案」示範重新排程（同一 (project, issue_id, stage) 兩筆，較新一筆為主要
     // 呈現，較舊一筆在清單檢視展開後以次要樣式顯示）；「開發」示範 diff_days 剛好等於 0（準時，
-    // 應顯示綠色，不是紅色——2026-08-25 使用者發現並修正的 bug）。卡片目前狀態取自 STAGE_ORDER
-    // 由後往前第一個有主要記錄的階段，即「發布」（尚無 actual_date）＝未完成，預設篩選「未
-    // 完成」就看得到，不需要切換狀態篩選。
+    // 應顯示綠色，不是紅色）。卡片狀態取自 STAGE_ORDER 由後往前第一個有主要記錄的階段，即
+    // 「發布」（尚無 actual_date）＝未完成，預設篩選「未完成」就看得到，不需要切換狀態篩選。
     { project: "JZNPMS", issue_id: "4548", issue_name: "現場報工", stage: "開案",
       planned_date: "2026-01-05", actual_date: null, status: "延誤未完成", reason: "忘記安排" },
     { project: "JZNPMS", issue_id: "4548", issue_name: "現場報工", stage: "開案",
@@ -85,8 +83,8 @@
       planned_date: "2025-12-20", actual_date: "2025-12-20", status: "完成", reason: "" },
 
     // HRM / 5164（issue_name：調整2.0.1）：跟上面的「HRM / v2.1調整」同一個 project 代碼、不同
-    // issue_id，示範同一 project 底下多個獨立生命週期。目前卡在「暫緩」——示範「暫緩不屬於
-    // 未完成」（2026-08-25 使用者確認），預設篩選「未完成」不會顯示這張卡片。
+    // issue_id，示範同一 project 底下多個獨立生命週期。目前卡在「暫緩」，狀態值不等於
+    // 「未完成」，預設篩選「未完成」不會顯示這張卡片。
     { project: "HRM", issue_id: "5164", issue_name: "調整2.0.1", stage: "開案",
       planned_date: "2026-08-01", actual_date: "2026-08-01", status: "完成", reason: "" },
     { project: "HRM", issue_id: "5164", issue_name: "調整2.0.1", stage: "開發",

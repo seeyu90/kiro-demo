@@ -129,8 +129,7 @@ RSpec.describe ProjectPhaseTrackingHelper, type: :helper do
     end
   end
 
-  # 2026-08-25 使用者要求「上面是預計時程下面是實際時程」：原本單軌 phase_gantt_chart_stage_bar
-  # 拆成兩個獨立方法，分別測試（見 ProjectPhaseTrackingHelper 附註）。
+  # 雙軌設計，分兩個獨立方法各自測試（見 ProjectPhaseTrackingHelper 附註）。
   describe "#phase_gantt_chart_planned_segment / #phase_gantt_chart_actual_segment" do
     let(:domain) { { min_date: Date.new(2026, 1, 1), max_date: Date.new(2026, 12, 31) } }
     let(:width) { helper.phase_gantt_chart_svg_width(domain) }
@@ -218,8 +217,8 @@ RSpec.describe ProjectPhaseTrackingHelper, type: :helper do
       end
 
       it "marks :early (not :delayed) when diff_days is exactly 0 — genuinely on time, not late" do
-        # 2026-08-25 使用者發現的 bug：舊版用 diff_days.negative? 判斷，剛好準時（diff_days == 0）
-        # 會落到 else 分支被標成 :delayed（紅色），跟圖例文字「準時／提前完成＝綠色」自相矛盾。
+        # 迴歸測試：`diff_days.negative?` 判斷會讓剛好準時（diff_days == 0）落到 else 分支被標成
+        # :delayed（紅色），跟圖例文字「準時／提前完成＝綠色」自相矛盾。
         stages = [
           stage(planned_date: "2026-02-01", actual_date: "2026-02-01"),
           stage(planned_date: "2026-03-10", actual_date: "2026-03-10")

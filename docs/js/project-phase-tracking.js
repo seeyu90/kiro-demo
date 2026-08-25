@@ -83,7 +83,7 @@
   }
 
   // ── 卡片建構：依 (project, issue_id) 分組，不是只依 project——一個 project 代碼底下有多個
-  // 獨立的 issue_id 生命週期（2026-08-25 確認）。 ──────────────────────────
+  // 獨立的 issue_id 生命週期。 ──────────────────────────────────────
 
   var STAGE_ORDER_INDEX = {};
   STAGE_ORDER.forEach(function (stage, i) { STAGE_ORDER_INDEX[stage] = i; });
@@ -143,8 +143,7 @@
 
       var stages = STAGE_ORDER.map(function (stageName) {
         var stageRecords = records.filter(function (r) { return r.stage === stageName; });
-        // history 由新到舊排列：較新的重排記錄排在較舊的上面，最舊的排在最下面
-        // （2026-08-25 使用者要求：「越舊的應該放下面」）。
+        // history 由新到舊排列：較新的重排記錄排在較舊的上面，最舊的排在最下面。
         var history = stageRecords.slice(0, -1).reverse();
         return { stage: stageName, primary: stageRecords[stageRecords.length - 1] || null, history: history };
       });
@@ -193,9 +192,8 @@
     });
   }
 
-  // 固定依預計完成日期排序，不給使用者選（2026-08-25 使用者要求拿掉排序選單）。缺
-  // planned_completion_date 的排最後；Array.prototype.sort 為現代瀏覽器的穩定排序，鍵值相同時
-  // 自動維持原始相對順序。
+  // 固定依預計完成日期排序，不給使用者選。缺 planned_completion_date 的排最後；
+  // Array.prototype.sort 為現代瀏覽器的穩定排序，鍵值相同時自動維持原始相對順序。
   function applySort(cards) {
     var sorted = cards.slice();
     sorted.sort(function (a, b) {
@@ -426,12 +424,13 @@
     container.appendChild(list);
   }
 
-  // ── 甘特圖：雙軌設計（2026-08-25 使用者要求「上面是預計時程下面是實際時程」）──────
+  // ── 甘特圖：雙軌設計（上面是預計時程、下面是實際時程）──────────────────
   //
   // 上軌＝純粹按「預計」時程排：從上一個有資料階段的 planned_date 銜接到這個階段自己的
-  // planned_date，只要有 planned_date 就畫（不論完成與否），每個階段固定配色＋印階段名稱。
-  // 下軌＝純粹按「實際」時程排：從上一個有 actual_date 階段的 actual_date 銜接到這個階段自己
-  // 的 actual_date，只在這個階段已有 actual_date 時才畫，顏色依準時／延誤決定。
+  // planned_date，只要有 planned_date 就畫（不論完成與否），每個階段固定配色，色塊上不印文字
+  // （對照圖例辨識，hover 才顯示階段名稱）。下軌＝純粹按「實際」時程排：從上一個有 actual_date
+  // 階段的 actual_date 銜接到這個階段自己的 actual_date，只在這個階段已有 actual_date 時才畫，
+  // 顏色依準時／延誤決定。
 
   var GANTT_ROW_HEIGHT = 42;
   var GANTT_LABEL_WIDTH = 152;
@@ -445,7 +444,7 @@
   var GANTT_BAR_GAP = 3;
   var GANTT_ACTUAL_BAR_HEIGHT = 8;
   // 零工期色塊（例如開案當天就完成）clamp 後的最小寬度：2px 配上 1px stroke（置中畫在邊界上，
-  // 兩側各吃掉 0.5px）幾乎把填色吃光，視覺上完全看不出色塊存在（2026-08-25 使用者發現）。
+  // 兩側各吃掉 0.5px）幾乎把填色吃光，視覺上完全看不出色塊存在。
   var GANTT_MIN_SEGMENT_WIDTH = 6;
 
   var STAGE_BLOCK_CLASS = {
@@ -469,7 +468,7 @@
   }
 
   // minMs＝全體有效 planned_date 最小值；maxMs＝（全體有效 actual_date 最大值、今日、minMs）
-  // 三者取最大值，兩端再各外推一個月（2026-08-25 使用者要求「甘特圖能不能多畫前後一個月」）。
+  // 三者取最大值，兩端再各外推一個月，避免資料緊貼圖表邊界看不出前後還有沒有更早／更晚的東西。
   function ganttDomain(cards) {
     var plannedMsList = [];
     var actualMsList = [];
@@ -560,8 +559,7 @@
     var x2 = Math.max(xAt(actualMs, domain, width), x1 + GANTT_MIN_SEGMENT_WIDTH);
 
     // 圖例寫的是「準時／提前完成」＝綠色、「延誤完成」＝紅色：準時（diffDays === 0）跟提前一樣
-    // 算綠色（2026-08-25 使用者發現「開案是紅色延誤完成，不是相差 0 天嗎」的 bug：原本用
-    // `< 0` 判斷，diffDays 剛好等於 0 會被標成紅色，跟圖例文字自相矛盾）。
+    // 算綠色。不能用 `< 0` 判斷，diffDays 剛好等於 0 會被標成紅色，跟圖例文字自相矛盾。
     var rowState = computeRowState(record.planned_date, record.actual_date);
     var variant = rowState.diffDays !== null && rowState.diffDays <= 0 ? "early" : "delayed";
     var diffText = rowState.diffDays === null
@@ -716,8 +714,8 @@
 
       // 依 STAGE_ORDER 反序畫（發布→需求確認）：較早的階段（尤其開案／需求確認）常常跟下一
       // 階段的起點落在同一天，色塊寬度會被 clamp 成最小寬度，緊貼在下一階段色塊的左邊界；若照
-      // 原本順序畫，晚一點畫的較寬色塊會直接蓋在細線上面，細線整個看不見（2026-08-25 使用者
-      // 反饋「LXPMS 的開案怎麼不見了」）。反序後較早、較容易變細線的階段最後畫，疊在最上層。
+      // 原本順序畫，晚一點畫的較寬色塊會直接蓋住細線。反序後較早、較容易變細線的階段最後畫，
+      // 疊在最上層。
       for (var stageIndex = card.stages.length - 1; stageIndex >= 0; stageIndex--) {
         var stage = card.stages[stageIndex];
         if (!stage.primary) continue;

@@ -1190,11 +1190,9 @@ turbo-frame[busy]::after {
 /* ── 專案歷程：甘特圖 ── */
 /* 寬度不再用 width:100% 硬塞縮放——月份多時 SVG 本身比容器寬，交給 .gantt-scroll 左右捲動，
    讓每個月維持一致的可讀寬度（見 ProjectHistoryHelper::GANTT_MONTH_PX）。
-   2026-08-25 修正：原本只設 overflow-x，列數一多（例如專案階段追蹤「全部年度」有 87 列）SVG
-   本身就有 3000px+ 高，容器沒有限制高度時會直接撐開整個頁面，水平捲軸只會出現在這個容器的
-   最底部——使用者得先把整個頁面捲到底才找得到水平捲軸，捲完又要捲回頂端才看得到原本要看的
-   那幾列。加上 max-height + overflow-y，讓水平／垂直捲軸都固定在視窗看得到的範圍內，不必捲動
-   整個頁面。 */
+   列數一多（例如專案階段追蹤「全部年度」有 87 列）SVG 本身就有 3000px+ 高，只設 overflow-x
+   的話容器會直接撐開整個頁面，水平捲軸跑到頁面最底部才看得到。加上 max-height + overflow-y，
+   讓水平／垂直捲軸都固定在視窗看得到的範圍內。 */
 .gantt-scroll {
   overflow-x: auto;
   overflow-y: auto;
@@ -1220,18 +1218,17 @@ turbo-frame[busy]::after {
   stroke-width: 1;
 }
 
-/* 斑馬紋列底色（專案階段追蹤甘特圖專用，2026-08-25 使用者參考截圖要求），只用在偶數列，
-   讓左側專案名稱跟右側色塊比較容易對齊看出屬於同一列。 */
+/* 斑馬紋列底色（專案階段追蹤甘特圖專用），只用在偶數列，讓左側專案名稱跟右側色塊比較容易
+   對齊看出屬於同一列。 */
 .gantt-row-band {
   fill: var(--table-row-hover-bg);
 }
 
-/* 標籤欄固定側欄（2026-08-25 使用者反饋「標題無法固定嗎？而且字被切掉了」——原本標籤是畫在
-   SVG 裡面的 <text>，跟色塊共用同一個水平捲動區域，橫向捲動看後面月份時標籤會一起被捲走、
-   卡在容器邊緣被裁切。改成獨立的 HTML 側欄，position: sticky 固定在 .gantt-scroll 可視區域
-   左側；.gantt-flex 用 flex 讓側欄跟 SVG 並排，兩者一起放進同一個可垂直／水平捲動的
-   .gantt-scroll，垂直捲動時側欄跟著一起動（列數多需要垂直捲動時仍對得上號），水平捲動時只有
-   sticky 的側欄「看起來」固定不動，不需要另外寫 JS 同步兩個捲動位置。 */
+/* 標籤欄固定側欄：獨立的 HTML 側欄，position: sticky 固定在 .gantt-scroll 可視區域左側（不畫
+   在 SVG 裡面，不然橫向捲動看後面月份時標籤會一起被捲走）。.gantt-flex 用 flex 讓側欄跟 SVG
+   並排，兩者一起放進同一個可垂直／水平捲動的 .gantt-scroll，垂直捲動時側欄跟著一起動（列數多
+   時仍對得上號），水平捲動時只有 sticky 的側欄「看起來」固定不動，不需要另外寫 JS 同步兩個
+   捲動位置。 */
 .gantt-flex {
   display: flex;
   position: relative;
@@ -1249,12 +1246,11 @@ turbo-frame[busy]::after {
   border-bottom-left-radius: 8px;
 }
 
-/* 2026-08-25 修正：原本用 justify-content: flex-end 把文字靠右對齊，字數超過欄寬時瀏覽器是把
-   置中/靠右的 flex 內容從「開頭」裁掉（不是從結尾），而且 flex 容器直接裝文字節點時
-   text-overflow: ellipsis 不會生效——結果「HRM - 202608B（5128）」被無聲裁成「RM -
-   202608B（5128）」，看起來像打字打錯專案代碼，完全沒有省略號提示。改成靠左對齊＋文字包一層
-   <span> 套用 ellipsis：專案代碼（開頭、最重要的辨識資訊）永遠完整可見，超長時改從結尾省略並
-   顯示「…」，至少看得出被截斷了（比照既有 .project-card-name 之類文字截斷的一般慣例）。 */
+/* 靠左對齊＋文字包一層 <span> 套用 ellipsis：flex 容器若用 justify-content: flex-end／center
+   置中或靠右，字數超過欄寬時瀏覽器會從「開頭」裁掉內容，而且直接裝文字節點時
+   text-overflow: ellipsis 不會生效——結果最重要的辨識資訊（專案代碼）反而先被裁掉，也沒有
+   省略號提示。改成靠左對齊，專案代碼永遠完整可見，超長時改從結尾省略並顯示「…」（比照既有
+   .project-card-name 之類文字截斷的一般慣例）。 */
 .gantt-label-row {
   display: flex;
   align-items: center;
@@ -1418,8 +1414,8 @@ turbo-frame[busy]::after {
   color: var(--color-accent);
 }
 
-/* 專案階段追蹤的狀態標籤三段配色（使用者反饋原本全部共用 .tag-status 藍色，掃卡片列表分不出
-   哪些需要注意，見 ProjectPhaseTrackingHelper::STATUS_TAG_CLASS）。 */
+/* 專案階段追蹤的狀態標籤三段配色（原本全部共用 .tag-status 藍色，掃卡片列表分不出哪些需要
+   注意，見 ProjectPhaseTrackingHelper::STATUS_TAG_CLASS）。 */
 .tag-status-done {
   color: var(--delay-negative);
 }
@@ -1498,11 +1494,9 @@ turbo-frame[busy]::after {
   fill: var(--delay-negative);
 }
 
-/* 甘特圖雙軌設計（2026-08-25 使用者要求「上面是預計時程下面是實際時程」，取代原本單軌、
-   variant 決定顏色與幾何的設計——上軌固定依階段配色＋印文字，下軌只依準時／延誤上色，兩者
-   職責分開，.gantt-task-incomplete／.legend-swatch-incomplete 這兩個舊 variant 用的 class
-   已經沒有色塊會用到，直接移除，見 ProjectPhaseTrackingHelper#phase_gantt_chart_actual_segment
-   ／#phase_gantt_chart_planned_segment）。
+/* 甘特圖雙軌設計：上軌固定依階段配色（不印文字，對照圖例辨識），下軌只依準時／延誤上色，
+   兩者職責分開（見 ProjectPhaseTrackingHelper#phase_gantt_chart_actual_segment／
+   #phase_gantt_chart_planned_segment）。
 
    上軌「預計時程」色塊：依階段固定配色（見 :root 的 --gantt-stage-* 變數），全部階段共用同一組
    框線樣式，只有顏色不同。這五個 class 同時用在 SVG <rect>（甘特圖本體，需要 fill）與圖例的

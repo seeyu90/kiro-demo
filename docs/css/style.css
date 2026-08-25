@@ -1264,7 +1264,7 @@ table.project-tasks tbody tr:hover td {
 
 /* ── 專案階段追蹤：重排歷史記錄（同一 stage 被取代的舊排程）
    次要樣式，較淡、較小，仍完整顯示不省略——每一筆延誤未完成的舊記錄本身即代表「應完成但未
-   完成」的事實，是使用者要追蹤的重點（2026-08-25 使用者確認）。 ── */
+   完成」的事實，是要追蹤的重點。 ── */
 .phase-history-row {
   opacity: 0.65;
   font-size: 0.85em;
@@ -1275,10 +1275,8 @@ table.project-tasks tbody tr:hover td {
 }
 
 /* ── 專案階段追蹤：狀態標籤三段配色
-   原本全部狀態共用 .tag-status 單一顏色，掃卡片列表時分不出哪些真的需要注意
-   （2026-08-25 使用者反饋）。完成／延誤已完成＝已完成（綠色）；延誤未完成／未完成＝還在等待
-   處理、需要注意（紅色，加粗）；暫緩＝刻意擱置，不是「未完成」，用中性灰跟紅色的「需要注意」
-   區分開來。 ── */
+   完成／延誤已完成＝已完成（綠色）；延誤未完成／未完成＝還在等待處理、需要注意（紅色，
+   加粗）；暫緩＝刻意擱置，用中性灰跟紅色的「需要注意」區分開來。 ── */
 .tag-status-done {
   color: var(--delay-negative);
 }
@@ -1292,11 +1290,11 @@ table.project-tasks tbody tr:hover td {
   color: var(--color-text-muted);
 }
 
-/* ── 專案階段追蹤：甘特圖雙軌設計（2026-08-25 使用者要求「上面是預計時程下面是實際時程」）
+/* ── 專案階段追蹤：甘特圖雙軌設計（上面預計時程、下面實際時程）
    上軌＝預計時程：依 5 個階段固定配色，跟完成狀態顏色是兩套獨立語意（階段名稱不印在色塊上，
-   對照圖例即可，hover 才顯示——2026-08-25 使用者要求）。這五個 class 同時用在 SVG <rect>
-   （甘特圖本體，需要 fill）與圖例的 HTML <span class="legend-swatch...">（需要 background），
-   故兩個屬性都寫。下軌＝實際時程，沿用既有 .gantt-task-actual-delayed／.gantt-task-actual-early。 ── */
+   對照圖例即可，hover 才顯示）。這五個 class 同時用在 SVG <rect>（甘特圖本體，需要 fill）與
+   圖例的 HTML <span class="legend-swatch...">（需要 background），故兩個屬性都寫。下軌＝
+   實際時程，沿用既有 .gantt-task-actual-delayed／.gantt-task-actual-early。 ── */
 :root {
   --gantt-stage-requirement: #90cdf4;
   --gantt-stage-kickoff: #fbb6ce;
@@ -1340,8 +1338,8 @@ table.project-tasks tbody tr:hover td {
   fill: var(--table-row-hover-bg);
 }
 
-/* 標籤欄固定側欄（2026-08-25 使用者反饋「標題無法固定嗎？而且字被切掉了」）：獨立的 HTML
-   側欄，position: sticky 固定在 .gantt-scroll 可視區域左側，橫向捲動只移動右邊的 SVG。 */
+/* 標籤欄固定側欄：獨立的 HTML 側欄，position: sticky 固定在 .gantt-scroll 可視區域左側，
+   橫向捲動只移動右邊的 SVG。 */
 .gantt-flex {
   display: flex;
   position: relative;
@@ -1368,8 +1366,8 @@ table.project-tasks tbody tr:hover td {
 }
 
 /* 靠左對齊＋文字包一層 span 套用 ellipsis：專案代碼（開頭、最重要的辨識資訊）永遠完整可見，
-   超長時改從結尾省略並顯示「…」（2026-08-25 使用者發現原本靠右對齊會從開頭裁字，見
-   Rails app/assets/stylesheets/application.css 的對應修正附註）。 */
+   超長時改從結尾省略並顯示「…」（靠右對齊會從開頭裁字，見 Rails 端 application.css 的對應
+   附註）。 */
 .gantt-label-text {
   min-width: 0;
   overflow: hidden;

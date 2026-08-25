@@ -10,11 +10,9 @@
 # 的甘特圖在執行期靜默壞掉或丟出參數數量錯誤。
 module ProjectPhaseTrackingHelper
   GANTT_ROW_HEIGHT = 42
-  # 專案／議題名稱欄寬度。2026-08-25 使用者反饋「標題無法固定嗎？而且字被切掉了」：原本標籤是
-  # 用 <text> 畫在 SVG 裡面，跟色塊共用同一個水平捲動區域，橫向捲動看後面月份時標籤會跟著被
-  # 捲出畫面、卡在容器邊緣被裁切。改成標籤欄移到 SVG 外面，用獨立的 HTML 側欄
-  # （.gantt-labels，position: sticky; left: 0）固定在可視區域左側，橫向捲動時只有 SVG 本體
-  # （月份格線／色塊）會動，見 _overview_gantt.html.erb。
+  # 專案／議題名稱欄寬度。標籤不畫在 SVG 裡面（不然橫向捲動看後面月份時標籤會跟著被捲出畫面、
+  # 卡在容器邊緣被裁切），改成獨立的 HTML 側欄（.gantt-labels，position: sticky; left: 0）固定
+  # 在可視區域左側，橫向捲動時只有 SVG 本體（月份格線／色塊）會動，見 _overview_gantt.html.erb。
   GANTT_LABEL_WIDTH = 152
   # SVG 內部左邊留白：以前這個常數同時身兼「幫標籤欄留位置」與「色塊起點前的留白」兩個用途
   # （固定 152px）；標籤欄移出 SVG 後，SVG 內部不再需要幫標籤留大空間，只留一點點左邊界即可。
@@ -24,21 +22,18 @@ module ProjectPhaseTrackingHelper
   GANTT_PADDING_BOTTOM = 8
   GANTT_MIN_WIDTH = 900 # 需求 3.5：SVG 最小寬度
   # 原本沿用 static prototype 的 24（單一專案詳細頁用，只需要看幾週）；本頁是多專案橫向總覽，
-  # 常態橫跨一整年甚至「全部年度」，24px/天在可視寬度內只塞得下 1〜2 個月，要一直橫向捲動
-  # 才看得到下一個月（2026-08-25 使用者反饋「不能多顯示幾個月嗎」）。改成 8，同樣可視寬度下
-  # 大約可看到 4〜5 個月。
+  # 常態橫跨一整年甚至「全部年度」，24px/天在可視寬度內只塞得下 1〜2 個月，要一直橫向捲動才
+  # 看得到下一個月。改成 8，同樣可視寬度下大約可看到 4〜5 個月。
   GANTT_PIXELS_PER_DAY = 8
   # 零工期色塊（例如開案當天就完成）clamp 後的最小寬度。原本是 2px：配上 .gantt-stage-block
   # 的 1px stroke（置中畫在邊界上，兩側各吃掉 0.5px）幾乎把整條 2px 寬的填色吃光，視覺上完全
-  # 看不出色塊存在（2026-08-25 使用者反饋「LXPMS 的開案怎麼不見了」，實測資料其實都在，色塊
-  # 幾何也算對了，純粹是細到肉眼／stroke 一起吃掉看不見）。改成 6px，扣掉 stroke 還留有清楚
-  # 可辨識的實色寬度。
+  # 看不出色塊存在。改成 6px，扣掉 stroke 還留有清楚可辨識的實色寬度。
   GANTT_MIN_SEGMENT_WIDTH = 6
 
-  # 雙軌設計（2026-08-25 使用者要求，比照既有 project_history 甘特圖「上面預計、下面實際」
-  # 的既有慣例，見 ProjectHistoryHelper::GANTT_PLANNED_BAR_HEIGHT 等常數）：上軌＝預計時程
-  # （較高，5 階段固定配色，不印文字標籤——階段名稱改由圖例辨識，色塊上只留 hover 提示，
-  # 2026-08-25 使用者要求），下軌＝實際時程（較窄，只在有 actual_date 時才畫）。
+  # 雙軌設計（比照既有 project_history 甘特圖「上面預計、下面實際」的既有慣例，見
+  # ProjectHistoryHelper::GANTT_PLANNED_BAR_HEIGHT 等常數）：上軌＝預計時程（較高，5 階段固定
+  # 配色，不印文字——階段名稱改由圖例辨識，色塊上只留 hover 提示），下軌＝實際時程（較窄，
+  # 只在有 actual_date 時才畫）。
   GANTT_PLANNED_BAR_HEIGHT = 18
   GANTT_BAR_GAP = 3
   GANTT_ACTUAL_BAR_HEIGHT = 8
@@ -86,10 +81,10 @@ module ProjectPhaseTrackingHelper
   # Notion「日期」「實際完成」欄位）。domain 為 { min_date:, max_date: }（Date 物件）。
 
   # min_date＝全體有效 planned_date 最小值；max_date＝（全體有效 actual_date 最大值、今日、
-  # min_date）三者取最大值，兩端再各外推一個月（2026-08-25 使用者要求「甘特圖能不能多畫前後
-  # 一個月」——資料範圍緊貼著圖表左右邊界時，第一筆／最後一筆色塊剛好卡在邊緣，看不出前後還有
-  # 沒有更早／更晚的東西，外推一個月留一點餘裕）。找不到任何有效 planned_date 時回傳 nil
-  # （需求 3.3 empty-state，外推前就短路，避免對不存在的日期做月份運算）。
+  # min_date）三者取最大值，兩端再各外推一個月——資料範圍緊貼著圖表左右邊界時，第一筆／
+  # 最後一筆色塊剛好卡在邊緣，看不出前後還有沒有更早／更晚的東西，外推一個月留一點餘裕。
+  # 找不到任何有效 planned_date 時回傳 nil（需求 3.3 empty-state，外推前就短路，避免對不存在
+  # 的日期做月份運算）。
   def phase_gantt_chart_domain(rows)
     planned_dates = rows.filter_map { |r| parse_date_only(r[:planned_date]) }
     return nil if planned_dates.empty?
@@ -132,13 +127,13 @@ module ProjectPhaseTrackingHelper
     phase_gantt_chart_x(Date.current, domain, width).round(2)
   end
 
-  # 每個階段的「執行時間」在甘特圖上分兩軌畫（2026-08-25 使用者明確要求：「上面是預計時程下面
-  # 是實際時程」，比照既有 project_history 甘特圖「預計／實際」雙軌慣例，但這裡改成依 5 個
-  # STAGE_ORDER 階段分段上色＋印階段名稱，而非單一任務一條軌）：
+  # 每個階段的「執行時間」在甘特圖上分兩軌畫（上面預計時程、下面實際時程，比照既有
+  # project_history 甘特圖「預計／實際」雙軌慣例，但這裡改成依 5 個 STAGE_ORDER 階段分段上色，
+  # 而非單一任務一條軌）：
   #
   # - 上軌（phase_gantt_chart_planned_segment）＝純粹按「預計」時程排：從上一個有資料階段的
   #   planned_date 銜接到這個階段自己的 planned_date，只要有 planned_date 就畫（不論這個階段
-  #   完成與否），每個階段固定配色＋印階段名稱，呈現「整個計畫應該長怎樣」。
+  #   完成與否），每個階段固定配色（不印文字，對照圖例辨識），呈現「整個計畫應該長怎樣」。
   # - 下軌（phase_gantt_chart_actual_segment）＝純粹按「實際」時程排：從上一個有 actual_date
   #   階段的 actual_date 銜接到這個階段自己的 actual_date，**只在這個階段已有 actual_date 時
   #   才畫**（還沒做完的階段下軌沒有東西可畫，這是刻意的——沒發生的事沒有「實際」時程），顏色
@@ -173,10 +168,9 @@ module ProjectPhaseTrackingHelper
     x2 = [ phase_gantt_chart_x(actual, domain, width), x1 + GANTT_MIN_SEGMENT_WIDTH ].max
 
     # 圖例寫的是「準時／提前完成」＝綠色、「延誤完成」＝紅色（見 _gantt_legend.html.erb），
-    # 準時（diff_days == 0）理當跟提前一樣算綠色——2026-08-25 使用者發現「開案是紅色延誤完成，
-    # 不是相差 0 天嗎」：原本用 `.negative?` 判斷，只有嚴格小於 0 才算 :early，diff_days
-    # 剛好等於 0（真正準時，不早不晚）會落到 else 分支被標成 :delayed，跟圖例文字自相矛盾。
-    # 改成「不是正數就算準時／提前」，diff_days <= 0 才是唯一正確的「沒有延誤」判斷式。
+    # 準時（diff_days == 0）理當跟提前一樣算綠色。不能用 `.negative?` 判斷：那只有嚴格小於 0
+    # 才算 :early，diff_days 剛好等於 0（真正準時）會落到 else 分支被標成 :delayed，跟圖例文字
+    # 自相矛盾。`diff_days <= 0`（不是正數就算準時／提前）才是唯一正確的「沒有延誤」判斷式。
     state = compute_row_state(row[:planned_date], row[:actual_date])
     variant = state[:diff_days].present? && !state[:diff_days].positive? ? :early : :delayed
 
@@ -223,12 +217,9 @@ module ProjectPhaseTrackingHelper
     card[:issue_name].present? ? "#{card[:issue_name]}（#{card[:issue_id]}）" : card[:issue_id]
   end
 
-  # 狀態標籤配色（新增，2026-08-25 使用者反饋「配色字不夠明顯」——原本 5 種狀態全部共用同一個
-  # .tag-status 藍色，掃卡片列表時分不出哪些真的需要注意）。三段式：完成／延誤已完成＝已完成
-  # （綠色）；延誤未完成／未完成＝還在等待處理、需要注意（紅色，且加粗）；暫緩＝刻意擱置，不是
-  # 「未完成」（見 ProjectPhaseTrackingController::INCOMPLETE_STATUSES 附註），視覺上刻意跟
-  # 紅色的「需要注意」區分開來，用中性灰。未知狀態值（理論上不會發生，防禦性 fallback）維持
-  # 原本的 .tag-status 藍色。
+  # 狀態標籤配色，三段式：完成／延誤已完成＝已完成（綠色）；延誤未完成／未完成＝還在等待
+  # 處理、需要注意（紅色，且加粗）；暫緩＝刻意擱置，視覺上刻意跟紅色的「需要注意」區分開來，
+  # 用中性灰。未知狀態值（理論上不會發生，防禦性 fallback）維持 .tag-status 藍色。
   STATUS_TAG_CLASS = {
     "完成" => "tag-status-done",
     "延誤已完成" => "tag-status-done",

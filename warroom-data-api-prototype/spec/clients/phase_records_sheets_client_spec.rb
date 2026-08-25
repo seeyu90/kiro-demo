@@ -52,6 +52,4 @@ RSpec.describe PhaseRecordsSheetsClient do
 
     expect(described_class.fetch_rows).to eq([])
   end
-
-  # 2026-08-25 使用者要求比照既有 305/306 快取慣例，見 ProjectProgressSheetsClient 對應測試。
 end

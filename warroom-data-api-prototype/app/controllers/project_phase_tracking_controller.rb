@@ -1,9 +1,8 @@
 class ProjectPhaseTrackingController < ApplicationController
   VIEWS = %w[list gantt].freeze
   DEFAULT_VIEW = "list".freeze
-  # 2026-08-25 使用者要求「狀態不能預設進畫面就是未完成嗎」：預設狀態篩選就是「未完成」，
-  # 使用者能明確選「全部狀態」（比照既有 resolve_year 慣例，以 params.key? 區分「使用者選了
-  # 全部狀態」與「表單根本還沒送出過」）。
+  # 預設狀態篩選就是「未完成」，使用者能明確選「全部狀態」（比照 resolve_year 慣例，以
+  # params.key? 區分「使用者選了全部狀態」與「表單根本還沒送出過」）。
   DEFAULT_STATUS = "未完成".freeze
 
   def index
@@ -60,9 +59,9 @@ class ProjectPhaseTrackingController < ApplicationController
   end
 
   # 議題／專案代碼搜尋：issue_id 有時是描述性名稱（如「202412 優化」），有時是純 Redmine ID
-  # （如「4515」，這種情況 issue_name 會另外補上人類可讀名稱如「現場報工」），使用者要求
-  # 「針對名稱跟 ID」都能搜到，故對 issue_id／issue_name／project 三欄都做不分大小寫的子字串
-  # 比對（不做斷詞或模糊搜尋），符合其一即算命中。
+  # （如「4515」，這種情況 issue_name 會另外補上人類可讀名稱如「現場報工」），故對
+  # issue_id／issue_name／project 三欄都做不分大小寫的子字串比對（不做斷詞或模糊搜尋），
+  # 符合其一即算命中。
   def matches_query?(card, query)
     return true if query.blank?
 
@@ -70,9 +69,8 @@ class ProjectPhaseTrackingController < ApplicationController
     [ card[:issue_id], card[:issue_name], card[:project] ].any? { |v| v.to_s.downcase.include?(needle) }
   end
 
-  # 2026-08-25 使用者要求拿掉排序選單，固定依預計完成日期排序，不給使用者選（原本的
-  # 不排序／依狀態／依客戶選項拿掉）。排序鍵值相同者維持原始相對順序（穩定排序）——明確把
-  # 原始 index 當第二排序鍵，不依賴 sort_by 本身是否穩定。
+  # 固定依預計完成日期排序，不給使用者選。排序鍵值相同者維持原始相對順序（穩定排序）——
+  # 明確把原始 index 當第二排序鍵，不依賴 sort_by 本身是否穩定。
   def sort_by_planned_completion(cards)
     cards.each_with_index.sort_by { |c, i| [ c[:planned_completion_date] || "9999-99-99", i ] }.map(&:first)
   end

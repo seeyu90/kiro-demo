@@ -1,9 +1,7 @@
-<%# 2026-08-25 使用者要求簡化篩選列：拿掉「只顯示未完成」勾選框（狀態下拉已經有「未完成」／
-    「延誤未完成」可選，兩個控制項功能重疊，且狀態下拉現在預設就是「未完成」，見 Controller
-    的 resolve_status）、拿掉排序選單（固定依預計完成日期排序，不給選）、拿掉「重新整理資料」
-    按鈕與資料新鮮度提示（n8n 一天只同步一次，按了也沒用，新鮮度提示也沒有實際參考價值）。
-    拿掉這些之後控制項變少，「套用篩選」自然跟其他欄位排在同一行（.project-selector 本來就是
-    flex-wrap，行數是「內容塞不塞得下」決定的，不是寫死兩行）。 %>
+<%# 沒有「只顯示未完成」勾選框：狀態下拉已有「未完成」／「延誤未完成」可選且預設就是「未
+    完成」（見 Controller 的 resolve_status），跟勾選框功能重疊。沒有排序選單：固定依預計完成
+    日期排序，不給選。沒有「重新整理資料」按鈕：n8n 一天只同步一次，按了也沒用。
+    .project-selector 本身是 flex-wrap，行數由內容塞不塞得下決定，不是寫死兩行。 %>
 <%= form_with url: "/project_phase_tracking", method: :get, class: "project-selector",
               data: { turbo_frame: "project-phase-tracking-content" } do %>
   <%= hidden_field_tag :view, @view %>

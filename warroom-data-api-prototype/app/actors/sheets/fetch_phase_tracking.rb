@@ -40,11 +40,10 @@ module Sheets
     private
 
     # 欄位：project, issue_id, issue_name, stage, planned_date, actual_date, status, reason,
-    # unique_key, sheet_year（已用真實 Sheet 表頭確認，2026-08-25 使用者把原本的 issue 欄拆成
-    # issue_id／issue_name 兩欄）。unique_key／sheet_year 不納入解析後形狀：unique_key 並非
-    # 真的唯一（代表重排程，見前置條件），sheet_year 部分列為空字串不可靠，兩者都不是本 Actor
-    # 需要的欄位。「專案」「議題 ID」欄空白的列整列跳過；「stage」不在 STAGE_ORDER 內的列也
-    # 整列跳過並記錄警告。issue_name 目前只在 issue_id 是純 Redmine ID 時才會填，允許空白。
+    # unique_key, sheet_year。unique_key／sheet_year 不納入解析後形狀：unique_key 並非真的
+    # 唯一（代表重排程，見前置條件），sheet_year 部分列為空字串不可靠。「專案」「議題 ID」欄
+    # 空白的列整列跳過；「stage」不在 STAGE_ORDER 內的列也跳過並記錄警告。issue_name 只在
+    # issue_id 是純 Redmine ID 時才會填，允許空白。
     def parse_records(rows)
       rows.filter_map do |row|
         project, issue_id, issue_name, stage, planned_date, actual_date, status, reason =
