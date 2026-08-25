@@ -16,7 +16,7 @@
   </script>
   <title>戰情室 — 專案階段追蹤（靜態展示版）</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="戰情室專案階段追蹤，使用模擬資料呈現各專案 5 個固定交付階段的預計與實際完成日期，可依客戶、狀態、PM 篩選並排序。">
+  <meta name="description" content="戰情室專案階段追蹤，使用模擬資料呈現各議題 5 個固定交付階段的預計與實際完成日期，可依年度、客戶、狀態、PM 篩選並搜尋議題名稱或 ID。">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -32,22 +32,20 @@
     <section class="issue-section">
       <div class="section-heading-row">
         <h2>專案階段追蹤</h2>
-        <div class="control-group">
-          <label for="filter-customer">依客戶篩選：</label>
+        <div class="control-group project-selector">
+          <label for="filter-year">年度：</label>
+          <select id="filter-year" name="filter-year"></select>
+          <label for="filter-customer">客戶：</label>
           <select id="filter-customer" name="filter-customer"></select>
-          <label for="filter-status">依狀態篩選：</label>
+          <label for="filter-status">狀態：</label>
           <select id="filter-status" name="filter-status"></select>
-          <label for="filter-pm">依 PM 篩選：</label>
+          <label for="filter-pm">PM：</label>
           <select id="filter-pm" name="filter-pm"></select>
-          <label for="sort-select">排序：</label>
-          <select id="sort-select" name="sort-select">
-            <option value="">不排序</option>
-            <option value="planned_date">依預計完成日期</option>
-            <option value="status">依狀態</option>
-            <option value="customer">依客戶</option>
-          </select>
+          <label for="filter-query">議題名稱／ID：</label>
+          <input type="text" id="filter-query" name="filter-query" placeholder="搜尋議題名稱或 ID">
         </div>
       </div>
+      <p class="hint-text">排序固定依預計完成日期，資料僅供展示，非即時更新。</p>
 
       <div class="view-toggle" role="group" aria-label="檢視模式切換">
         <button type="button" id="view-list-btn" class="view-toggle-btn" aria-pressed="true">清單</button>

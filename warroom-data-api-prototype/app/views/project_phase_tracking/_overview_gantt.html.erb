@@ -1,0 +1,90 @@
+<%# 每個 (project, issue) 卡片一列，每列依 STAGE_ORDER 分兩軌畫：上軌＝預計時程（依階段固定
+    配色＋印階段名稱），下軌＝實際時程（只在該階段已有 actual_date 時才畫，紅／綠標示延誤／
+    提前）。重排歷史記錄不畫進甘特圖，只在清單檢視展開後看得到，見需求 4.5 附註。 %>
+<% all_primary_rows = cards.flat_map { |c| c[:stages].filter_map { |s| s[:primary] } } %>
+<% domain = phase_gantt_chart_domain(all_primary_rows) %>
+
+<% if domain.nil? %>
+  <p class="empty-state">目前無可繪製的甘特圖資料</p>
+<% else %>
+  <% width = phase_gantt_chart_svg_width(domain) %>
+  <% height = ProjectPhaseTrackingHelper::GANTT_PADDING_TOP + cards.size * ProjectPhaseTrackingHelper::GANTT_ROW_HEIGHT + ProjectPhaseTrackingHelper::GANTT_PADDING_BOTTOM %>
+  <% rows_bottom = ProjectPhaseTrackingHelper::GANTT_PADDING_TOP + cards.size * ProjectPhaseTrackingHelper::GANTT_ROW_HEIGHT %>
+
+  <%# 標籤欄（.gantt-labels）獨立於 SVG 之外，用 position: sticky; left: 0 固定在 .gantt-scroll
+      可視區域左側——橫向捲動只移動右邊的 SVG，標籤欄本身仍隨 .gantt-scroll 一起垂直捲動（列數
+      多需要垂直捲動時，標籤跟色塊列還是對得上），不需要另外寫 JS 同步兩個捲動位置。 %>
+  <div class="gantt-scroll">
+    <div class="gantt-flex" style="width: <%= ProjectPhaseTrackingHelper::GANTT_LABEL_WIDTH + width %>px; height: <%= height %>px;">
+      <%# padding-top 對齊 SVG 的 GANTT_PADDING_TOP：SVG 的第一列色塊是從 y=GANTT_PADDING_TOP
+          開始畫（上面留給月份格線／文字），標籤欄如果從 y=0 就開始排列，會整體比色塊高
+          GANTT_PADDING_TOP px，看起來每一列的標題跟色塊對不上（2026-08-25 使用者反饋
+          「色塊也沒對上」）。 %>
+      <div class="gantt-labels" style="width: <%= ProjectPhaseTrackingHelper::GANTT_LABEL_WIDTH %>px; height: <%= height %>px; padding-top: <%= ProjectPhaseTrackingHelper::GANTT_PADDING_TOP %>px; box-sizing: border-box;">
+        <% cards.each_with_index do |card, index| %>
+          <div class="gantt-label-row <%= "gantt-label-row-band" if index.odd? %>" style="height: <%= ProjectPhaseTrackingHelper::GANTT_ROW_HEIGHT %>px;" title="<%= card[:project] %> - <%= phase_tracking_issue_label(card) %>">
+            <span class="gantt-label-text"><%= card[:project] %> - <%= phase_tracking_issue_label(card) %></span>
+          </div>
+        <% end %>
+      </div>
+
+      <svg viewBox="0 0 <%= width %> <%= height %>" width="<%= width %>" height="<%= height %>" class="gantt-svg" role="img" aria-label="專案階段追蹤甘特圖">
+        <%# 斑馬紋列底色，跟左側 .gantt-label-row-band 用同一個 index.odd? 判斷，兩邊對齊。 %>
+        <% cards.each_with_index do |_card, index| %>
+          <% next if index.even? %>
+          <% band_y = ProjectPhaseTrackingHelper::GANTT_PADDING_TOP + index * ProjectPhaseTrackingHelper::GANTT_ROW_HEIGHT %>
+          <rect x="0" y="<%= band_y %>" width="<%= width %>" height="<%= ProjectPhaseTrackingHelper::GANTT_ROW_HEIGHT %>" class="gantt-row-band"></rect>
+        <% end %>
+
+        <% phase_gantt_chart_month_ticks(domain, width).each do |tick| %>
+          <line x1="<%= tick[:x] %>" x2="<%= tick[:x] %>" y1="<%= ProjectPhaseTrackingHelper::GANTT_PADDING_TOP %>" y2="<%= rows_bottom %>" class="gantt-month-gridline"></line>
+          <text x="<%= tick[:x] %>" y="16" text-anchor="start" class="gantt-month-label"><%= tick[:label] %></text>
+        <% end %>
+
+        <% today_x = phase_gantt_chart_today_x(domain, width) %>
+        <% if today_x >= ProjectPhaseTrackingHelper::GANTT_PADDING_LEFT && today_x <= width - ProjectPhaseTrackingHelper::GANTT_PADDING_RIGHT %>
+          <line x1="<%= today_x %>" x2="<%= today_x %>" y1="<%= ProjectPhaseTrackingHelper::GANTT_PADDING_TOP %>" y2="<%= rows_bottom %>" class="gantt-today-line"></line>
+        <% end %>
+
+        <% cards.each_with_index do |card, index| %>
+          <% row_y = ProjectPhaseTrackingHelper::GANTT_PADDING_TOP + index * ProjectPhaseTrackingHelper::GANTT_ROW_HEIGHT %>
+          <line x1="0" x2="<%= width - ProjectPhaseTrackingHelper::GANTT_PADDING_RIGHT %>"
+                y1="<%= row_y + ProjectPhaseTrackingHelper::GANTT_ROW_HEIGHT / 2 %>" y2="<%= row_y + ProjectPhaseTrackingHelper::GANTT_ROW_HEIGHT / 2 %>" class="gantt-row-baseline"></line>
+
+          <% planned_y = row_y + 6 %>
+          <% actual_y = planned_y + ProjectPhaseTrackingHelper::GANTT_PLANNED_BAR_HEIGHT + ProjectPhaseTrackingHelper::GANTT_BAR_GAP %>
+
+          <%# 依 STAGE_ORDER 反序畫（發布→需求確認）：較早的階段（尤其開案／需求確認）常常跟
+              下一階段的起點落在同一天（例如開案完成當天就開始開發），色塊寬度會被 clamp 成 2px
+              的細線，緊貼在下一階段色塊的左邊界；若照原本順序（先畫早的、後畫晚的）畫，晚一點
+              畫的較寬色塊會直接蓋在細線上面，細線整個看不見（2026-08-25 使用者反饋「LXPMS 的
+              開案怎麼不見了」——資料其實都在，只是被蓋住）。反序後較早、較容易變細線的階段最後
+              畫、疊在最上層，不會被蓋住。 %>
+          <% card[:stages].each_with_index.to_a.reverse_each do |stage, stage_index| %>
+            <% next if stage[:primary].nil? %>
+
+            <% planned = phase_gantt_chart_planned_segment(card[:stages], stage_index, domain, width) %>
+            <% if planned %>
+              <% stage_class = phase_gantt_chart_stage_class(stage[:stage]) %>
+              <rect x="<%= planned[:x] %>" y="<%= planned_y %>" width="<%= planned[:width] %>" height="<%= ProjectPhaseTrackingHelper::GANTT_PLANNED_BAR_HEIGHT %>" rx="2" class="gantt-stage-block <%= stage_class %>">
+                <title><%= stage[:stage] %>（預計）｜<%= stage[:primary][:planned_date] %></title>
+              </rect>
+              <%# 色塊夠寬才印文字，避免短色塊的字溢出蓋到隔壁階段。粗估每個全形字約 13px + 8px 左右內距。 %>
+              <% if planned[:width] >= (stage[:stage].length * 13 + 8) %>
+                <text x="<%= planned[:x] + planned[:width] / 2 %>" y="<%= planned_y + ProjectPhaseTrackingHelper::GANTT_PLANNED_BAR_HEIGHT / 2 + 4 %>" text-anchor="middle" class="gantt-stage-label" pointer-events="none"><%= stage[:stage] %></text>
+              <% end %>
+            <% end %>
+
+            <% actual = phase_gantt_chart_actual_segment(card[:stages], stage_index, domain, width) %>
+            <% if actual %>
+              <% diff_text = actual[:diff_days].nil? ? "" : "｜差異 #{actual[:diff_days] > 0 ? "+" : ""}#{actual[:diff_days]} 天" %>
+              <rect x="<%= actual[:x] %>" y="<%= actual_y %>" width="<%= actual[:width] %>" height="<%= ProjectPhaseTrackingHelper::GANTT_ACTUAL_BAR_HEIGHT %>" rx="2" class="gantt-task-actual-<%= actual[:variant] %>">
+                <title><%= stage[:stage] %>（實際）｜<%= stage[:primary][:actual_date] %><%= diff_text %></title>
+              </rect>
+            <% end %>
+          <% end %>
+        <% end %>
+      </svg>
+    </div>
+  </div>
+<% end %>

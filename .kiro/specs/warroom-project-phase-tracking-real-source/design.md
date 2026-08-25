@@ -2,205 +2,215 @@
 
 ## 概述
 
-本設計文件與既有 real-source spec 的設計文件性質不同：既有的（例如
-`warroom-project-history-real-source`）在規劃階段就已經有可用的 Google Service Account，設計文件
-可以直接針對真實試算表結構定案，只在少數細節上「邊做邊修正」。本 spec **目前完全沒有 Notion API
-存取權**（見 requirements.md「前置條件」），因此本文件的定位是：
+**架構決策（2026-08-20）**：原規劃是 Rails 直接接 Notion API（見 git 歷史），已改為 n8n workflow
+先把 Notion「階段紀錄」資料庫同步進 Google Sheet，Rails 端比照既有 305/306/307 模式讀取該 Sheet
+（理由見 requirements.md「簡介」）。
 
-1. 把**不依賴真實 schema** 的架構骨架（憑證模組、通用 HTTP client、錯誤碼對應、純邏輯 Ruby 移植）
-   先定案，現在就可以動工。
-2. 把「拿到 token 之後，該按什麼順序去確認、實作、驗證」明確排出來（見下方「分階段實作與確認
-   順序」），讓後續開發不是一次性補完整份文件，而是每完成一個階段就回來更新對應章節，逐步把 ⚠️
-   標記換成確認過的真實內容。
-3. 凡是本文件中標記 ⚠️ 的段落，皆為**依 static prototype 假設寫成的佔位設計**，正式實作該段落前
-   SHALL 先完成對應階段的真實 API 探索，不得直接套用。
+**階段 0／1 已於 2026-08-25 確認完成**：n8n workflow 已建立並實際同步中，目標 Sheet
+（spreadsheet ID `1YQp4f-5v985W4EV59jhSAdhTKMn2Mc-0PW-qYc6vKpU`，標題「專案進度」）已直接讀取確認
+欄位配置。詳見 requirements.md「前置條件」。確認過程衍生出三個比原本「等 schema」更複雜的問題，
+**均已與使用者確認解決**：
 
----
+1. `unique_key`（`project|issue|stage`）非唯一——代表同一 stage 的「重排程」，非資料錯誤。呈現規則
+   已確認（見 requirements.md 需求 4.5）：最新一筆為主要呈現，其餘以次要樣式顯示於展開卡片。
+2. **卡片分組單位確認為 `(project, issue_id)`**，不是 `project`——真實 Sheet 顯示一個 `project`
+   代碼底下有多個獨立的 `issue` 生命週期，與 static prototype「一專案一卡片」假設不符。此決策已
+   寫入 requirements.md 需求 4.3。
+3. 三個年度區塊（`sheet_year` = 2024／2025／2026）確認為**同一份資料依時間分年度**，非三種不同
+   來源——`PhaseRecordsSheetsClient` 讀出並合併全部三區塊。使用者也因此要求新增**年度篩選**功能
+   （見 requirements.md 需求 4.6，比照既有 `project_history_controller` 慣例）。三個區塊在 Sheet
+   裡實際是三個獨立分頁（分頁名稱就是年度字串本身），非同分頁內的三個表格（已用真實 Service
+   Account 憑證直接查詢確認）。
 
-## 分階段實作與確認順序（本 spec 的核心工作方法）
-
-| 階段 | 做什麼 | 需要什麼 | 完成後更新／解鎖 |
-|---|---|---|---|
-| 0 | 取得 Notion Integration token 與 database ID(s) | requirements.md 前置條件清單交給資料庫擁有者 workspace 執行 | 解鎖階段 1 |
-| 1 | 呼叫 Notion **Retrieve a data source**（`GET /v1/data_sources/{id}`）取得「階段紀錄」資料庫真實 schema | 階段 0 的 token／database ID | 把下方「資料庫實際欄位」章節的 ⚠️ 換成真實 property 名稱／型別／選項清單；同時確認需求 3 的情境 (a)/(b)/(c) |
-| 2 | 呼叫 Notion **Query a data source**（`POST /v1/data_sources/{id}/query`），抓 5〜10 筆真實資料列 | 階段 1 的 schema | 人工核對筆數／內容是否符合截圖印象；記下邊界案例（空值、多選、缺欄位、`類型` 是否真的只有 5 種）餵給 Client parser 的測試 |
-| 3 | 實作 `NotionCredentials`＋通用 Notion HTTP client（見下方，不依賴 schema） | 無（可與階段 0〜2 平行進行） | Client 基礎設施就緒 |
-| 4 | 依階段 1/2 結果實作 `PhaseRecordsNotionClient`（分頁＋property parser） | 階段 1、2、3 | 可讀出真實 `PHASE_RECORDS` 形狀資料 |
-| 5 | 依需求 3 確認結果（見 requirements.md 情境 a/b/c）實作對應 Client，或改接既有 `Sheets::FetchProjectRoster` | 階段 1 | 可讀出真實 `PROJECT_PROFILES` 形狀資料 |
-| 6 | 實作 `Notion::FetchPhaseTracking` Actor，彙總階段 4/5 輸出 | 階段 4、5 | Actor 對外輸出穩定的 `PROJECT_PROFILES`／`PHASE_RECORDS` 陣列 |
-| 7 | Ruby 版 `compute_row_state`／`diff_days`／甘特圖幾何（純邏輯移植，見下方） | 無（可提前做，static prototype 規則已定案） | 可與階段 6 平行進行 |
-| 8 | Controller＋View（篩選／排序／清單／甘特圖，沿用 static prototype 規則） | 階段 6、7 | 頁面可運作 |
-| 9 | 錯誤處理與降級（需求 5） | 階段 4〜6 | 單一來源失敗不拖垮整頁 |
-| 10 | 真實環境驗證，記錄「真實資料串接時發現的重大修正」（比照既有 real-source spec 慣例） | 階段 8、9 完成 | spec 狀態轉為「已完成」 |
-
-**分階段的意義**：階段 3、7 完全不依賴真實 schema，建議先做（見下方設計），把等待階段 0 的時間拿來
-把這兩塊寫好、寫測試；階段 1、2 是唯一真正「卡住」的地方，一旦解鎖，4〜6 可以很快接上已經備好的
-3、7、8 骨架。
+**全部階段（0〜8）已於 2026-08-25 實作完成**，見下方「分階段實作與確認順序」表與「真實資料串接時
+發現的重大修正」章節。不依賴 Sheet 結構的部分（純邏輯 Ruby 移植）與需要真實 Sheet 存取的部分
+（Client／Actor／Controller／View）皆已完成並通過測試。
 
 ---
 
-## 架構（可先行部分）
+## 分階段實作與確認順序
+
+| 階段 | 做什麼 | 狀態 |
+|---|---|---|
+| 0 | n8n workflow 建立完成，取得目標 Sheet 的 spreadsheet ID／分頁名稱 | ✅ 已完成 |
+| 1 | 打開實際 Sheet，核對真實欄位配置、卡片分組單位、重排程記錄呈現規則、年度篩選需求 | ✅ 已完成 |
+| 2 | 純邏輯 Ruby 移植（`ProjectPhaseTrackingHelper`：`compute_row_state`／`diff_days`／甘特圖幾何） | ✅ 已完成（2026-08-19） |
+| 3 | 實作 `PhaseRecordsSheetsClient`，含重排程記錄的「最新為主、其餘次要」分組邏輯 | ✅ 已完成 |
+| 4 | 實作 `ProjectProfilesSheetsClient`（讀 `300_員工專案`「專案」分頁） | ✅ 已完成 |
+| 5 | 實作 `Sheets::FetchPhaseTracking` Actor，彙總階段 3/4 輸出，依 `(project, issue_id)` 分組 | ✅ 已完成 |
+| 6 | Controller＋View（篩選／排序／清單／甘特圖／年度篩選／議題名稱-ID 搜尋） | ✅ 已完成 |
+| 7 | 錯誤處理與降級（需求 5，沿用既有 Sheets 錯誤碼慣例） | ✅ 已完成 |
+| 8 | 真實環境驗證，記錄「真實資料串接時發現的重大修正」 | ✅ 已完成，見下方章節 |
+
+---
+
+## 架構
 
 ```
 warroom-data-api-prototype/
 ├── app/clients/
-│   ├── notion_credentials.rb              ← 新：階段 3
-│   ├── notion_api_client.rb               ← 新：階段 3（通用 HTTP client 基底）
-│   ├── phase_records_notion_client.rb     ← 新：階段 4（⚠️ 待階段 1/2）
-│   └── project_profiles_notion_client.rb  ← 新：階段 5，僅情境(a)成立時需要（⚠️ 待需求 3 確認）
-├── app/actors/notion/
-│   └── fetch_phase_tracking.rb            ← 新：階段 6
+│   ├── phase_records_sheets_client.rb     ← 讀「專案進度」試算表 2024/2025/2026 三分頁並合併
+│   └── project_profiles_sheets_client.rb  ← 讀 300_員工專案試算表「專案」分頁（客戶／PM）
+├── app/actors/sheets/
+│   └── fetch_phase_tracking.rb            ← Sheets::FetchPhaseTracking：分組、重排程、狀態推導
 ├── app/helpers/
-│   └── project_phase_tracking_helper.rb   ← 新：階段 7（甘特圖 SVG 幾何，比照既有
-│                                              project_history_helper.rb 的角色）
+│   └── project_phase_tracking_helper.rb   ← 階段 2：甘特圖 SVG 幾何＋完成狀態計算
 ├── app/blueprints/
-│   ├── project_profile_blueprint.rb       ← 新：階段 6
-│   └── phase_record_blueprint.rb          ← 新：階段 6
+│   └── phase_tracking_card_blueprint.rb   ← 單一 Blueprint 涵蓋整張卡片形狀（比照
+│                                              ProjectHistoryRowBlueprint 慣例，不拆兩個 Blueprint）
 ├── app/controllers/
-│   └── project_phase_tracking_controller.rb ← 新：階段 8
+│   └── project_phase_tracking_controller.rb ← 篩選／排序／年度／搜尋
 ├── app/views/project_phase_tracking/
-│   └── index.html.erb（＋ partials）        ← 新：階段 8
-└── config/routes.rb                        ← 新增 `get "/project_phase_tracking", to: "project_phase_tracking#index"`
+│   ├── index.html.erb
+│   ├── _overview.html.erb        ← 篩選表單＋清單/甘特圖切換
+│   ├── _overview_list.html.erb   ← 卡片＋階段表＋重排歷史次要列
+│   ├── _overview_gantt.html.erb  ← SVG 甘特圖
+│   └── _gantt_legend.html.erb
+└── config/routes.rb                        ← `get "/project_phase_tracking", to: "project_phase_tracking#index"`
 ```
 
-不修改任何既有 305/306/307／`project_history` 檔案（同既有慣例）。
+不修改任何既有 305/306/307／`project_history` 檔案（同既有慣例）。**沒有新的憑證模組**——
+`PhaseRecordsSheetsClient`／`ProjectProfilesSheetsClient` 直接 `include GoogleSheetsCredentials`，
+比照 `ProjectRosterSheetsClient`。兩個 Client 的 `SPREADSHEET_ID` 皆為程式碼常數（不用
+`ENV.fetch` 包一層預設值）——比照既有 `ProjectRosterSheetsClient` 的實際慣例（規劃階段設想的
+`ENV.fetch("...", 常數)` 寫法其實只是既有慣例的誤記，既有 Client 是直接寫死常數，沒有走
+環境變數覆寫）。
+
+`PhaseRecordsSheetsClient#fetch_rows` 對 `TABS = %w[2024 2025 2026]` 逐一呼叫
+`get_spreadsheet_values("#{tab}!A1:J2000")`（A~J 十欄，2026-08-25 因 `issue_id`／`issue_name`
+拆欄從九欄變十欄），各自丟掉第一列（該分頁自己的表頭）後合併成單一
+陣列回傳，呼叫端（Actor）不需要知道背後其實是三個分頁。`ProjectProfilesSheetsClient` 讀
+`300_員工專案`（spreadsheet ID `101fF0GlW2iwjC6TNQnNgKjUrxJg-3Ia5nCYox6haTNM`，與既有
+`ProjectRosterSheetsClient` 同一份，不同分頁）的「專案」分頁（`SHEET_NAME` 可用
+`PROJECT_PROFILES_SHEET_NAME` 環境變數覆寫，比照既有慣例），只解析
+`Github/Notion, _, _, 客戶, PM, _` 六欄中的代碼／客戶／PM 三欄，不解析「303 專案」與「狀態」
+（維運狀態，非本頁的議題狀態）。
+
+`Sheets::FetchPhaseTracking` 比照 `Sheets::FetchProjectRoster` 的錯誤處理與 `filter_map`／
+欄位跳過慣例；`ProjectProfilesSheetsClient` 讀取失敗時降級（`profiles_unavailable`），不擋整頁。
 
 ---
 
-## `NotionCredentials`（階段 3，可先行定案）
+## Sheet 實際欄位（已確認，2026-08-25）
 
-比照既有 `GoogleSheetsCredentials`：
+spreadsheet ID `1YQp4f-5v985W4EV59jhSAdhTKMn2Mc-0PW-qYc6vKpU`（標題「專案進度」）表頭：
 
-```ruby
-# app/clients/notion_credentials.rb
-module NotionCredentials
-  private
-
-  def notion_token
-    token = rails_credentials_token || env_credentials_token
-    raise "找不到 Notion Integration Token，請設定 Rails credentials 或環境變數 NOTION_INTEGRATION_TOKEN" if token.nil?
-    token
-  end
-
-  def rails_credentials_token
-    raw = Rails.application.credentials.dig(:notion, :integration_token)
-    raw.present? ? raw.to_s : nil
-  rescue => _e
-    nil
-  end
-
-  def env_credentials_token
-    token = ENV["NOTION_INTEGRATION_TOKEN"]
-    token.presence
-  end
-end
-```
-
-## 通用 Notion HTTP Client（階段 3，可先行定案）
-
-Notion API 是單純 REST／JSON，且 `faraday` 已透過既有 gem 相依鏈存在於 `Gemfile.lock`（見探索結果），
-**不需要新增 Gemfile 項目**：
-
-```ruby
-# app/clients/notion_api_client.rb
-class NotionApiClient
-  include NotionCredentials
-
-  BASE_URL = "https://api.notion.com/v1"
-  # 固定版本字串，避免 Notion 端無感更新 API 版本造成欄位格式非預期變動；升級須是刻意決策。
-  NOTION_VERSION = "2022-06-28"
-
-  def initialize
-    @conn = Faraday.new(url: BASE_URL) do |f|
-      f.request :json
-      f.response :json, content_type: /\bjson$/
-      f.adapter Faraday.default_adapter
-    end
-  end
-
-  def query_data_source(data_source_id, start_cursor: nil)
-    @conn.post("/data_sources/#{data_source_id}/query", { start_cursor: start_cursor }.compact, headers)
-  end
-
-  def retrieve_data_source(data_source_id)
-    @conn.get("/data_sources/#{data_source_id}", nil, headers)
-  end
-
-  private
-
-  def headers
-    {
-      "Authorization" => "Bearer #{notion_token}",
-      "Notion-Version" => NOTION_VERSION,
-      "Content-Type" => "application/json"
-    }
-  end
-end
-```
-
-`PhaseRecordsNotionClient`／`ProjectProfilesNotionClient`（階段 4／5）皆會 `include` 或委派給這個
-基底 client，並各自處理 `has_more`／`next_cursor` 分頁與 property parser——parser 的實際內容待階段
-1／2 確認 schema 後才能寫，此處不預先假設。
-
----
-
-## 資料庫實際欄位（⚠️ 全部待階段 1／2 確認，以下為 static prototype 依單一截圖寫的佔位假設）
-
-| Notion property（截圖顯示名稱） | 對應內部欄位 | 假設型別 | 確認狀態 |
+| Notion 原始欄位（截圖顯示名稱） | 對應內部欄位 | n8n 同步後的 Sheet 欄名 | 備註 |
 |---|---|---|---|
-| 日期 | `planned_date` | `date` ⚠️ | 未確認 |
-| 實際完成 | `actual_date` | `date` ⚠️ | 未確認 |
-| 專案 | `project` | `relation` ⚠️（也可能是 `rich_text`／`title`，見需求 3） | 未確認 |
-| 議題 | （目前 static prototype 不使用此欄位） | `title`／`rich_text` ⚠️ | 未確認 |
-| 類型 | `stage` | `select` ⚠️（也可能是 `status`） | 未確認，且僅觀察過 4／5 個合法值中的 4 個 |
-| 狀態 | `status` | `select`／`status` ⚠️ | 未確認 |
-| 原因 | `reason` | `rich_text` ⚠️ | 未確認 |
+| 日期 | `planned_date` | `planned_date` | 已確認 |
+| 實際完成 | `actual_date` | `actual_date` | 已確認 |
+| 專案 | `project` | `project` | 已確認，為純文字代碼（如 `HRM`／`JZNPMS`），非 Notion relation 物件 |
+| （新，static prototype 沒有的欄位） | `issue_id` | `issue_id` | 議題名稱或純 Redmine ID，與 `project` 共同組成一個獨立階段追蹤生命週期＝卡片分組單位。原本是單一 `issue` 欄，2026-08-25 使用者拆分後改名 |
+| （新，2026-08-25 使用者新增） | `issue_name` | `issue_name` | 議題人類可讀名稱，只在 `issue_id` 是純 Redmine ID 時才會填，僅供顯示／搜尋，不是分組鍵 |
+| 類型 | `stage` | `stage` | 已確認，但真實資料只觀察到 4／5 個合法值（缺 `需求確認`）；`STAGE_ORDER` 仍保留 5 個值 |
+| 狀態 | `status` | `status` | 已確認，觀察到值：`完成`／`延誤已完成`／`延誤未完成`／`暫緩`／`未完成`（比 static prototype 假設的更多，Blueprint／View 不應假設只有 `完成` 一種） |
+| 原因 | `reason` | `reason` | 已確認 |
+| （新） | 不納入 `PHASE_RECORDS` 形狀 | `unique_key` | `project|issue_id|stage` 組成，⚠️ **非唯一**（代表重排程，不去重，見前置條件） |
+| （新） | 不納入 `PHASE_RECORDS` 形狀 | `sheet_year` | 部分列為空字串，不可靠，不作為年度篩選依據 |
 
-階段 1 完成後，本表 SHALL 整表替換為真實 `Retrieve a data source` API 回應內容，不得保留任何 ⚠️。
+三個年度區塊（2024／2025／2026）在 Sheet 裡是**三個獨立分頁**（分頁名稱就是年度字串本身），非
+同分頁內的三個表格；`PhaseRecordsSheetsClient` 讀出三個分頁後合併為單一陣列。
+
+另有兩個實作階段才發現、原規劃沒預期到的欄位語意問題（皆已修正）：
+
+1. **`status` 不是卡片的「狀態」欄位資料來源**：一開始誤把 `ProjectProfilesSheetsClient`「專案」
+   分頁的「狀態」欄（值如「維護」，專案層級維運狀態）當成卡片的 `status`。使用者指正後改為：
+   卡片 `status` = 依 `STAGE_ORDER` 由後往前找到的第一個有記錄的階段（即議題目前推進到的最新
+   階段）之 `status` 欄位（來自階段紀錄 Sheet 本身，即上表的 `status` 欄——值域是
+   `完成`／`延誤已完成`／`延誤未完成`／`暫緩`／`未完成`），與 `ProjectProfilesSheetsClient` 完全
+   無關。`ProjectProfilesSheetsClient` 只提供客戶／PM，不再解析「狀態」欄。
+2. **新增議題名稱／ID 搜尋（`q` 參數）**：真實 `issue_id` 值有時是描述性名稱（「202412 優化」），
+   有時是純 Redmine ID（「4515」），對 `issue_id`／`issue_name`／`project` 三欄做不分大小寫子
+   字串比對。此需求提出時 Sheet 還只有單一 `issue` 欄，`issue_name` 是後來才拆出來的新欄
+   （見上表），拆分後 `matches_query?` 自動涵蓋。
 
 ---
 
-## 純邏輯 Ruby 移植（階段 7，可先行定案，不依賴 schema）
+## 純邏輯 Ruby 移植（階段 2，已完成，與資料來源無關）
 
 `docs/js/project-phase-tracking.js` 的 `parseDateOnly`／`diffDays`／`computeRowState`／甘特圖
-`stageBar` 幾何計算，其規則已在 static prototype 三輪審閱定案，與資料來源無關，可直接移植為 Ruby
-（放在 `ProjectPhaseTrackingHelper`，比照既有 `ProjectHistoryHelper` 的角色）：
+`stageBar` 幾何計算，其規則已在 static prototype 三輪審閱定案，與資料來源無關，已移植為 Ruby
+（`ProjectPhaseTrackingHelper`，比照既有 `ProjectHistoryHelper` 的角色）：
 
 - `parse_date_only(date_str)`：Ruby `Date.iso8601` 搭配 `rescue` 回傳 `nil`（等同 JS 版
   `parseDateOnly` 的容錯行為），不需要手刻 `Date.UTC` 等價邏輯——Ruby `Date` 物件本身無時區概念，
-  直接比較日期部分即可，天生比 JS `Date` 安全，但**仍須以 `Date.iso8601` 嚴格解析**，不得用
-  `Date.parse`（`Date.parse` 對不合法格式的容錯行為與 `Date.iso8601` 不同，可能誤判格式錯誤的
-  字串為合法日期）。
-- `diff_days(actual_date, planned_date)`：`(actual - planned).to_i`（Ruby `Date` 相減直接得到
-  `Rational` 天數，取整數即可，不需要毫秒／86400000 換算）。
+  直接比較日期部分即可，天生比 JS `Date` 安全，但仍以 `Date.iso8601` 嚴格解析（不用 `Date.parse`，
+  其對不合法格式的容錯行為與 `Date.iso8601` 不同，可能誤判格式錯誤的字串為合法日期）。
+- `diff_days(actual_date, planned_date)`：`(actual - planned).to_i`。
 - `compute_row_state(planned_date, actual_date)`：與 JS 版邏輯一致的四狀態組合判斷（見 static
   prototype design.md）。
 - 甘特圖幾何：比照既有 `project_history_helper.rb` 的 `xAt`／`monthTicks`／SVG padding 常數手法，
   改用 static prototype 已定案的錨點規則（`planned_date` 為左端點、提前完成畫「提前幅度」視覺
   標記、SVG 最小寬度 900px）。
 
+**實作已完成（2026-08-19）**：`ProjectPhaseTrackingHelper` 已建立，`parse_date_only`／
+`diff_days`／`compute_row_state` 與規劃一致；RSpec unit test（`spec/helpers/
+project_phase_tracking_helper_spec.rb`，20 cases）已通過。
+
+**實作與規劃的一處差異（發現於實作階段，非規劃階段可預見）**：甘特圖幾何方法一律加上 `phase_`
+前綴（`phase_gantt_chart_domain`／`phase_gantt_chart_svg_width`／`phase_gantt_chart_x`／
+`phase_gantt_chart_month_ticks`／`phase_gantt_chart_today_x`／`phase_gantt_chart_stage_bar`），
+未依原規劃直接使用與 `project_history_helper.rb` 相同的 `gantt_chart_*` 命名。原因：Rails
+`ActionController::Base` 預設 `include_all_helpers = true`，`app/helpers/` 下所有 helper module
+會被混入同一個 view/helper context；`ProjectHistoryHelper` 已定義簽名不同的
+`gantt_chart_domain(rows)`／`gantt_chart_svg_width(min_date, max_date)`／`gantt_chart_x(date_str,
+min_date, max_date)`／`gantt_chart_month_ticks(min_date, max_date)`／`gantt_chart_today_x(min_date,
+max_date)`，同名但簽名不同會依 module include 順序互相覆蓋，導致其中一頁的甘特圖在執行期靜默壞掉
+或丟出 `ArgumentError`（實測：加入未加前綴版本後，`project_history_spec.rb` 的甘特圖相關測試從
+全數通過變成 6 個失敗，`project_history_helper_spec.rb` 另外 7 個失敗）。加前綴後兩組 helper
+互不干擾，`bundle exec rspec`（386 examples）僅剩 1 個與本次變更無關的既有浮點捨入 flaky test
+（`project_history_helper_spec.rb:91`，非本次引入）。後續階段 6（Controller／View）串接時，
+View 需呼叫 `phase_gantt_chart_*` 而非 `gantt_chart_*`。
+
 ---
 
 ## 錯誤處理
 
-沿用需求 1.4／需求 5 的錯誤碼對應（`access_denied`＝401、`sheet_not_found`＝404 語意重新詮釋為
-「database ID 錯誤或未分享給 Integration」、`internal_error`＝其餘）。額外規則：
-
-- Notion API 回傳 `429 Too Many Requests` 時，THE `NotionApiClient` SHALL 讀取回應的
-  `Retry-After` 標頭並重試一次（Notion API 有速率限制，單一 Integration 平均約每秒 3 次請求，本頁
-  單次載入僅需個位數次請求，正常情況不會觸發，僅作為防禦）；重試後仍失敗則以 `internal_error`
-  回傳，不得無限重試。
-- 分頁游標（`next_cursor`）處理中途失敗時，THE Client SHALL 視為整體讀取失敗（`internal_error`），
-  不回傳部分資料（避免顯示不完整、使用者誤判資料已讀取完畢）。
+沿用既有 `Sheets::FetchProjectRoster` 的 `Google::Apis::ClientError` 處理慣例（見 requirements.md
+需求 5）：404 或訊息含 `"Unable to parse range"` → `sheet_not_found`；403 → `access_denied`；其餘
+→ `internal_error`。不需要 Notion 專屬的 429 重試邏輯——Google Sheets API 既有 Client 慣例已涵蓋
+配額錯誤（回傳 403，走既有 `access_denied` 分支）。
 
 ---
 
-## 測試策略
+## 測試策略（已完成）
 
-- 階段 3、7（憑證模組、通用 client、純邏輯 Ruby 移植）**可在階段 0 解鎖前先寫好對應的 RSpec unit
-  test**（`diff_days`／`compute_row_state` 用已知輸入輸出組合驗證，不需要真實 API）。
-- 階段 1、2、4、5、6、8、9 需要真實 Notion API 存取，無法在拿到 token 前驗證，**不得**用臆測的
-  schema 先寫死 parser 邏輯後才驗證——依「分階段實作與確認順序」表，先探索（階段 1／2）再實作
-  （階段 4／5）。
-- 階段 10：比照既有 `warroom-project-history-real-source` 慣例，於真實串接完成後，在本文件補上
-  「真實資料串接時發現的重大修正」章節，記錄規劃假設與實際狀況的落差，供未來同類 spec 借鏡。
+- 階段 2（純邏輯 Ruby 移植）：`spec/helpers/project_phase_tracking_helper_spec.rb`（20 cases）。
+- Client（`spec/clients/phase_records_sheets_client_spec.rb`／
+  `spec/clients/project_profiles_sheets_client_spec.rb`）：`double` stub
+  `Google::Apis::SheetsV4::SheetsService`，比照既有 `project_roster_sheets_client_spec.rb`
+  慣例，驗證真實欄位配置（不是臆測的假設值）。
+- Actor（`spec/actors/sheets/fetch_phase_tracking_spec.rb`，15 cases）：`(project, issue_id)` 分組、
+  重排程 primary／history 分組與排序、`STAGE_ORDER` 過濾、狀態推導（從階段紀錄而非 Roster）、
+  年度篩選、Roster 失敗降級、三種錯誤碼對應。
+- Controller／View 沒有另外寫 RSpec（比照既有 `project_history` 慣例，該頁面也沒有 controller
+  spec），改用 `RAILS_ENV=development` 搭配真實 Service Account 憑證直接啟動伺服器 smoke test
+  （`curl` 確認 HTTP 200、卡片數量、無錯誤訊息、清單／甘特圖／篩選／搜尋皆正常）。
+- 全套 `bundle exec rspec`（405 examples）與 `rubocop`（本次新增／修改的檔案）皆通過；唯一失敗
+  是 `fetch_project_history_spec.rb` 一個與本次變更無關、日期相依的既有 flaky test（`due_date`
+  隨系統時間推進而由未逾期變逾期，非本次引入）。
+
+---
+
+## 真實資料串接時發現的重大修正（階段 8，比照既有 real-source spec 慣例）
+
+規劃階段的假設與實際串接後的落差，供未來同類 spec 借鏡：
+
+1. **架構決策本身錯了一次，之後才修正**：最初規劃是 Rails 直接接 Notion API；後來發現 n8n 早已
+   把資料同步進 Google Sheets，改為沿用既有 Sheets 慣例，前置條件大幅減輕（見概述）。
+2. **三個「情境」的猜測有落差**：規劃階段列了「客戶／PM／狀態」資料來源的三種可能情境
+   （獨立 Sheet／階段紀錄自帶欄位／複用既有 `ProjectRosterSheetsClient`），實際情況是第四種：
+   同一份既有 `300_員工專案` 試算表裡有一個先前沒發現的「專案」分頁，用完全不同的鍵（`Github/
+   Notion` 代碼）對應——不屬於規劃時列出的任三種情境之一。
+3. **`unique_key` 不唯一，且不是資料錯誤**：一開始以為是資料品質問題，後來確認是「重新排程」的
+   正常語意（同一階段被延誤時新增一筆而非覆蓋），連帶影響卡片呈現規則（最新為主、其餘次要顯示，
+   且要新舊排序）。
+4. **卡片分組單位整個錯了**：規劃／static prototype 都假設「一個 `project` 一張卡片」，實際
+   `project` 底下有多個獨立 `issue`，正確單位是 `(project, issue_id)`。
+5. **「狀態」欄位語意搞錯一次**：第一版實作把專案層級的維運狀態（「維護」）當成卡片狀態，使用者
+   實際看畫面後才發現不對，改為議題目前所在階段的完成狀態。**教訓**：即使欄位名稱字面相同
+   （Roster 的「狀態」vs 議題的「完成狀態」），語意可能完全不同，光靠欄名配對容易誤判，
+   應該先確認資料的實際業務意涵，而非假設「有欄位就是要用的那個」。
+6. **只讀真實資料還不夠，要看使用者怎麼用畫面**：搜尋欄位（議題名稱／ID）、重排歷史排序（新到舊）
+   這兩項都是使用者實際看到跑起來的畫面後才提出的需求，static prototype／規劃階段完全沒設想到，
+   因為單看 Sheet 資料本身看不出使用情境上的需要。

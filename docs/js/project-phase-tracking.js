@@ -3,30 +3,29 @@
 
   var svgNS = "http://www.w3.org/2000/svg";
 
-  // 完全獨立實作，不與既有專案歷程（project-history-*.js）共用程式碼（同既有慣例）。
-  // 資料來源改為 Notion（見 PROJECT_PROFILES／PHASE_RECORDS／STAGE_ORDER，project-phase-tracking-data.js）。
+  // 完全獨立實作，不與既有專案歷程（project-history-*.js）共用程式碼（同既有慣例）。2026-08-25
+  // 隨 Rails 真實資料串接（warroom-project-phase-tracking-real-source）大幅調整過設計，這份
+  // 靜態展示版同步更新，邏輯對照 warroom-data-api-prototype/app/helpers/
+  // project_phase_tracking_helper.rb、app/actors/sheets/fetch_phase_tracking.rb、
+  // app/controllers/project_phase_tracking_controller.rb。
 
-  // 三個篩選條件（客戶／狀態／PM）皆不篩選＝全部；同時選取時取交集。排序預設「不排序」。
-  // editedActualDates：使用者互動編輯「實際完成日期」的暫存值，key 為 `${project_name}::${stage}`，
-  // 與 PHASE_RECORDS 完全分離，不得寫回 PHASE_RECORDS（見需求 4.9）。
+  // 篩選預設：狀態＝未完成、年度＝今年（比照 Rails Controller 的 resolve_status／resolve_year
+  // 慣例），使用者可明確選「全部」。本頁唯讀，沒有排序選單（固定依預計完成日期排序）、沒有
+  // 「只顯示未完成」勾選框（狀態下拉已經有「未完成」可選，功能重疊）。
   var state = {
-    filters: { customer: null, status: null, pm: null },
-    sort: null,
-    viewMode: "list",
-    editedActualDates: {}
+    filters: { customer: null, status: "未完成", pm: null, year: String(new Date().getFullYear()) },
+    query: "",
+    viewMode: "list"
   };
 
   // ── 共用小工具 ──────────────────────────────────────────────
 
-  function uniqueValues(records, key) {
-    var values = [];
-    records.forEach(function (r) {
-      if (values.indexOf(r[key]) === -1) values.push(r[key]);
-    });
-    return values;
+  function formatValue(value) {
+    if (value === null || value === undefined || value === "") return "—";
+    return String(value);
   }
 
-  function populateSelect(select, values, allLabel) {
+  function populateSelect(select, values, allLabel, selectedValue) {
     select.innerHTML = "";
     var allOption = document.createElement("option");
     allOption.value = "";
@@ -38,18 +37,14 @@
       option.textContent = value;
       select.appendChild(option);
     });
+    select.value = selectedValue || "";
   }
 
-  function formatValue(value) {
-    if (value === null || value === undefined || value === "") return "—";
-    return String(value);
-  }
+  // ── 日期與完成狀態計算（清單／甘特圖共用，同 Ruby 版 ProjectPhaseTrackingHelper 不變式：
+  // 兩處皆呼叫本組函式，不得各自重新實作完成狀態或差異判斷邏輯） ──────────────
 
-  // ── 日期與完成狀態計算（清單／甘特圖共用，見需求 4.5、3.3 的不變式） ──────
-
-  // 拆解 "YYYY-MM-DD" 年/月/日以 Date.UTC 建構，避免直接 new Date(str) 受瀏覽器時區影響
-  // （需求 4.4）。格式不合法或缺失（含 "2026/08/20"、"2026-99-99" 等 truthy 但不合法的字串）
-  // 一律回傳 null。
+  // 拆解 "YYYY-MM-DD" 年/月/日以 Date.UTC 建構，避免直接 new Date(str) 受瀏覽器時區影響。
+  // 格式不合法或缺失一律回傳 null。
   function parseDateOnly(dateStr) {
     if (typeof dateStr !== "string") return null;
     var match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
@@ -78,8 +73,7 @@
   }
 
   // 依 plannedDate／actualDate 是否存在（parseDateOnly 驗證通過視為存在）的組合判斷，回傳
-  // { completionLabel, diffDays }。renderStageTable／renderGanttChart 皆呼叫本函式，不得各自
-  // 重新實作，避免規則修改時兩處不一致（需求 4.5）。
+  // { completionLabel, diffDays }。
   function computeRowState(plannedDate, actualDate) {
     var hasPlanned = parseDateOnly(plannedDate) !== null;
     if (actualDate !== null) {
@@ -88,39 +82,164 @@
     return { completionLabel: hasPlanned ? "未完成" : "—", diffDays: null };
   }
 
-  // 依 STAGE_ORDER 從 PHASE_RECORDS 找出該專案對應紀錄；找不到時回傳缺失列（需求 4.6）。
-  // 若 state.editedActualDates 有對應 key，覆寫該列 actual_date（不修改 PHASE_RECORDS 本身，需求 4.9）。
-  function buildStageRows(projectName) {
-    return STAGE_ORDER.map(function (stage) {
-      var record = null;
-      for (var i = 0; i < PHASE_RECORDS.length; i++) {
-        if (PHASE_RECORDS[i].project === projectName && PHASE_RECORDS[i].stage === stage) {
-          record = PHASE_RECORDS[i];
-          break;
-        }
-      }
-      var row = record
-        ? { stage: stage, planned_date: record.planned_date, actual_date: record.actual_date, reason: record.reason }
-        : { stage: stage, planned_date: null, actual_date: null, reason: "" };
+  // ── 卡片建構：依 (project, issue_id) 分組，不是只依 project——一個 project 代碼底下有多個
+  // 獨立的 issue_id 生命週期（2026-08-25 確認）。 ──────────────────────────
 
-      var editKey = projectName + "::" + stage;
-      if (Object.prototype.hasOwnProperty.call(state.editedActualDates, editKey)) {
-        row.actual_date = state.editedActualDates[editKey];
+  var STAGE_ORDER_INDEX = {};
+  STAGE_ORDER.forEach(function (stage, i) { STAGE_ORDER_INDEX[stage] = i; });
+
+  function issueLabel(card) {
+    return card.issue_name ? card.issue_name + "（" + card.issue_id + "）" : card.issue_id;
+  }
+
+  function profilesByProject() {
+    var map = {};
+    PROJECT_PROFILES.forEach(function (p) { map[p.project] = p; });
+    return map;
+  }
+
+  // 「狀態」指議題目前所在階段的完成狀態，不是專案層級的維運狀態（PROJECT_PROFILES 沒有狀態
+  // 欄位）。取 STAGE_ORDER 由後往前第一個有主要記錄的階段之 status 欄位；完全沒有任何階段
+  // 記錄時回傳 null（實務上不會發生，group_by 產生的卡片一定至少有一筆記錄）。
+  function computeIssueStatus(stages) {
+    for (var i = stages.length - 1; i >= 0; i--) {
+      if (stages[i].primary) return stages[i].primary.status;
+    }
+    return null;
+  }
+
+  // 沒有獨立的「專案層級預計完成日期」欄位，改用終點階段（發布）的預計完成日期近似；「發布」
+  // 缺紀錄時退回所有階段裡最晚的 planned_date。
+  function computePlannedCompletionDate(stages) {
+    var release = stages[STAGE_ORDER_INDEX["發布"]];
+    if (release.primary && release.primary.planned_date) return release.primary.planned_date;
+    var dates = stages
+      .filter(function (s) { return s.primary && s.primary.planned_date; })
+      .map(function (s) { return s.primary.planned_date; });
+    if (dates.length === 0) return null;
+    return dates.reduce(function (max, d) { return d > max ? d : max; });
+  }
+
+  function buildCards() {
+    var groups = {};
+    var order = [];
+    PHASE_RECORDS.forEach(function (record) {
+      var key = record.project + "|" + record.issue_id;
+      if (!Object.prototype.hasOwnProperty.call(groups, key)) {
+        groups[key] = [];
+        order.push(key);
       }
-      return row;
+      groups[key].push(record);
+    });
+
+    var profiles = profilesByProject();
+
+    return order.map(function (key) {
+      var records = groups[key];
+      var project = records[0].project;
+      var issueId = records[0].issue_id;
+      // 同一 issue_id 底下各列理論上共用同一個 issue_name，取第一筆非空值。
+      var issueName = records.map(function (r) { return r.issue_name; }).filter(Boolean)[0] || "";
+
+      var stages = STAGE_ORDER.map(function (stageName) {
+        var stageRecords = records.filter(function (r) { return r.stage === stageName; });
+        // history 由新到舊排列：較新的重排記錄排在較舊的上面，最舊的排在最下面
+        // （2026-08-25 使用者要求：「越舊的應該放下面」）。
+        var history = stageRecords.slice(0, -1).reverse();
+        return { stage: stageName, primary: stageRecords[stageRecords.length - 1] || null, history: history };
+      });
+
+      var profile = profiles[project] || {};
+      var recordYears = records
+        .map(function (r) { return parseDateOnly(r.planned_date); })
+        .filter(function (ms) { return ms !== null; })
+        .map(function (ms) { return String(new Date(ms).getUTCFullYear()); });
+
+      return {
+        project: project,
+        issue_id: issueId,
+        issue_name: issueName,
+        customer: profile.customer || null,
+        pm: profile.pm || null,
+        status: computeIssueStatus(stages),
+        planned_completion_date: computePlannedCompletionDate(stages),
+        stages: stages,
+        record_years: recordYears
+      };
     });
   }
 
   // ── 篩選／排序 ──────────────────────────────────────────────
 
-  function initFilters() {
+  // 議題／專案代碼搜尋：issue_id 有時是描述性名稱，有時是純 Redmine ID（這種情況 issue_name
+  // 會補上人類可讀名稱），對 issue_id／issue_name／project 三欄都做不分大小寫的子字串比對，
+  // 符合其一即算命中。
+  function matchesQuery(card, query) {
+    if (!query) return true;
+    var needle = query.toLowerCase();
+    return [card.issue_id, card.issue_name, card.project].some(function (v) {
+      return String(v || "").toLowerCase().indexOf(needle) !== -1;
+    });
+  }
+
+  function applyFilters(cards) {
+    return cards.filter(function (card) {
+      if (state.filters.customer && card.customer !== state.filters.customer) return false;
+      if (state.filters.status && card.status !== state.filters.status) return false;
+      if (state.filters.pm && card.pm !== state.filters.pm) return false;
+      if (state.filters.year && card.record_years.indexOf(state.filters.year) === -1) return false;
+      if (!matchesQuery(card, state.query)) return false;
+      return true;
+    });
+  }
+
+  // 固定依預計完成日期排序，不給使用者選（2026-08-25 使用者要求拿掉排序選單）。缺
+  // planned_completion_date 的排最後；Array.prototype.sort 為現代瀏覽器的穩定排序，鍵值相同時
+  // 自動維持原始相對順序。
+  function applySort(cards) {
+    var sorted = cards.slice();
+    sorted.sort(function (a, b) {
+      var aKey = a.planned_completion_date || "9999-99-99";
+      var bKey = b.planned_completion_date || "9999-99-99";
+      if (aKey < bKey) return -1;
+      if (aKey > bKey) return 1;
+      return 0;
+    });
+    return sorted;
+  }
+
+  // ── 狀態標籤配色（三段式，見 docs/css/style.css .tag-status-*） ──────────────
+
+  var STATUS_TAG_CLASS = {
+    "完成": "tag-status-done",
+    "延誤已完成": "tag-status-done",
+    "延誤未完成": "tag-status-pending",
+    "未完成": "tag-status-pending",
+    "暫緩": "tag-status-paused"
+  };
+
+  function statusTagClass(status) {
+    return STATUS_TAG_CLASS[status] || "tag-status";
+  }
+
+  // ── 篩選列初始化 ──────────────────────────────────────────────
+
+  function initFilters(allCards) {
     var customerSelect = document.getElementById("filter-customer");
     var statusSelect = document.getElementById("filter-status");
     var pmSelect = document.getElementById("filter-pm");
+    var yearSelect = document.getElementById("filter-year");
+    var querySelect = document.getElementById("filter-query");
 
-    populateSelect(customerSelect, uniqueValues(PROJECT_PROFILES, "customer"), "全部客戶");
-    populateSelect(statusSelect, uniqueValues(PROJECT_PROFILES, "status"), "全部狀態");
-    populateSelect(pmSelect, uniqueValues(PROJECT_PROFILES, "pm"), "全部 PM");
+    var customers = uniqueValues(allCards, "customer");
+    var statuses = uniqueValues(allCards, "status");
+    var pms = uniqueValues(allCards, "pm");
+    var years = uniqueSortedYears(allCards);
+
+    populateSelect(customerSelect, customers, "全部客戶", state.filters.customer);
+    populateSelect(statusSelect, statuses, "全部狀態", state.filters.status);
+    populateSelect(pmSelect, pms, "全部 PM", state.filters.pm);
+    populateSelect(yearSelect, years, "全部年度", state.filters.year);
 
     customerSelect.addEventListener("change", function () {
       state.filters.customer = customerSelect.value || null;
@@ -134,58 +253,48 @@
       state.filters.pm = pmSelect.value || null;
       renderContent();
     });
-  }
-
-  function initSort() {
-    var sortSelect = document.getElementById("sort-select");
-    sortSelect.addEventListener("change", function () {
-      state.sort = sortSelect.value || null;
+    yearSelect.addEventListener("change", function () {
+      state.filters.year = yearSelect.value || null;
+      renderContent();
+    });
+    querySelect.addEventListener("input", function () {
+      state.query = querySelect.value.trim();
       renderContent();
     });
   }
 
-  function applyFilters(profiles) {
-    return profiles.filter(function (profile) {
-      if (state.filters.customer && profile.customer !== state.filters.customer) return false;
-      if (state.filters.status && profile.status !== state.filters.status) return false;
-      if (state.filters.pm && profile.pm !== state.filters.pm) return false;
-      return true;
+  function uniqueValues(cards, key) {
+    var values = [];
+    cards.forEach(function (c) {
+      if (c[key] && values.indexOf(c[key]) === -1) values.push(c[key]);
     });
+    return values;
   }
 
-  // 依需求 2.3 表格排序；不排序時維持原始順序。Array.prototype.sort 為現代瀏覽器的穩定排序，
-  // 鍵值相同時自動維持原始相對順序（需求 2.4），不需額外 index 比較。
-  function applySort(profiles) {
-    var sorted = profiles.slice();
-    if (state.sort === "planned_date") {
-      sorted.sort(function (a, b) {
-        var aMs = parseDateOnly(a.planned_completion_date);
-        var bMs = parseDateOnly(b.planned_completion_date);
-        if (aMs === null && bMs === null) return 0;
-        if (aMs === null) return 1;
-        if (bMs === null) return -1;
-        return aMs - bMs;
+  // 年度下拉選單的選項固定依全部資料算出，不受目前篩選影響（同既有 project_history 慣例），
+  // 新到舊排序。
+  function uniqueSortedYears(cards) {
+    var years = [];
+    cards.forEach(function (c) {
+      c.record_years.forEach(function (y) {
+        if (years.indexOf(y) === -1) years.push(y);
       });
-    } else if (state.sort === "status") {
-      sorted.sort(function (a, b) { return String(a.status).localeCompare(String(b.status), "zh-Hant"); });
-    } else if (state.sort === "customer") {
-      sorted.sort(function (a, b) { return String(a.customer).localeCompare(String(b.customer), "zh-Hant"); });
-    }
-    return sorted;
+    });
+    return years.sort().reverse();
   }
 
-  // ── 清單檢視（專案卡片原地展開，<details>/<summary>） ──────────────
+  // ── 清單檢視（卡片原地展開，<details>/<summary>） ──────────────────
 
-  function diffCell(rowState) {
+  function diffCell(diffDaysValue) {
     var td = document.createElement("td");
     td.setAttribute("data-label", "差異");
-    if (rowState.diffDays === null) {
+    if (diffDaysValue === null) {
       td.textContent = "—";
-    } else if (rowState.diffDays > 0) {
-      td.textContent = "+" + rowState.diffDays;
+    } else if (diffDaysValue > 0) {
+      td.textContent = "+" + diffDaysValue;
       td.className = "delay-positive";
-    } else if (rowState.diffDays < 0) {
-      td.textContent = String(rowState.diffDays);
+    } else if (diffDaysValue < 0) {
+      td.textContent = String(diffDaysValue);
       td.className = "delay-negative";
     } else {
       td.textContent = "0";
@@ -193,58 +302,50 @@
     return td;
   }
 
-  function renderStageRows(tbody, projectName) {
-    tbody.innerHTML = "";
-    buildStageRows(projectName).forEach(function (row) {
-      var tr = document.createElement("tr");
-
-      var stageTd = document.createElement("td");
-      stageTd.setAttribute("data-label", "階段");
-      stageTd.textContent = row.stage;
-      tr.appendChild(stageTd);
-
-      var plannedTd = document.createElement("td");
-      plannedTd.setAttribute("data-label", "預計完成日期");
-      plannedTd.textContent = parseDateOnly(row.planned_date) !== null ? row.planned_date : "—";
-      tr.appendChild(plannedTd);
-
-      var actualTd = document.createElement("td");
-      actualTd.setAttribute("data-label", "實際完成日期");
-      var input = document.createElement("input");
-      input.type = "date";
-      input.value = parseDateOnly(row.actual_date) !== null ? row.actual_date : "";
-      input.addEventListener("change", function () {
-        var key = projectName + "::" + row.stage;
-        state.editedActualDates[key] = input.value || null;
-        renderStageRows(tbody, projectName);
-      });
-      actualTd.appendChild(input);
-      tr.appendChild(actualTd);
-
-      var rowState = computeRowState(row.planned_date, row.actual_date);
-      tr.appendChild(diffCell(rowState));
-
-      var statusTd = document.createElement("td");
-      statusTd.setAttribute("data-label", "完成狀態");
-      statusTd.textContent = rowState.completionLabel;
-      tr.appendChild(statusTd);
-
-      tbody.appendChild(tr);
-
-      if (row.reason) {
-        var reasonTr = document.createElement("tr");
-        reasonTr.className = "phase-reason-row";
-        var reasonTd = document.createElement("td");
-        reasonTd.colSpan = 5;
-        reasonTd.className = "phase-reason";
-        reasonTd.textContent = "備註：" + row.reason;
-        reasonTr.appendChild(reasonTd);
-        tbody.appendChild(reasonTr);
-      }
-    });
+  function appendReasonRow(tbody, reason, historyClass) {
+    if (!reason) return;
+    var reasonTr = document.createElement("tr");
+    reasonTr.className = historyClass ? "phase-history-row phase-reason-row" : "phase-reason-row";
+    var reasonTd = document.createElement("td");
+    reasonTd.colSpan = 5;
+    reasonTd.className = "phase-reason";
+    reasonTd.textContent = "備註：" + reason;
+    reasonTr.appendChild(reasonTd);
+    tbody.appendChild(reasonTr);
   }
 
-  function buildStageTable(projectName) {
+  function appendStageRow(tbody, stageName, record, historyClass) {
+    var tr = document.createElement("tr");
+    if (historyClass) tr.className = "phase-history-row";
+
+    var stageTd = document.createElement("td");
+    stageTd.setAttribute("data-label", "階段");
+    stageTd.textContent = historyClass ? "↳ " + stageName + "（曾經延誤的舊排程）" : stageName;
+    tr.appendChild(stageTd);
+
+    var plannedTd = document.createElement("td");
+    plannedTd.setAttribute("data-label", "預計完成日期");
+    plannedTd.textContent = record ? formatValue(record.planned_date) : "—";
+    tr.appendChild(plannedTd);
+
+    var actualTd = document.createElement("td");
+    actualTd.setAttribute("data-label", "實際完成日期");
+    actualTd.textContent = record ? formatValue(record.actual_date) : "—";
+    tr.appendChild(actualTd);
+
+    var rowState = record ? computeRowState(record.planned_date, record.actual_date) : { completionLabel: "—", diffDays: null };
+    tr.appendChild(diffCell(rowState.diffDays));
+
+    var statusTd = document.createElement("td");
+    statusTd.setAttribute("data-label", "完成狀態");
+    statusTd.textContent = rowState.completionLabel;
+    tr.appendChild(statusTd);
+
+    tbody.appendChild(tr);
+    if (record) appendReasonRow(tbody, record.reason, historyClass);
+  }
+
+  function buildStageTable(card) {
     var table = document.createElement("table");
     table.className = "project-tasks";
 
@@ -260,13 +361,18 @@
     table.appendChild(thead);
 
     var tbody = document.createElement("tbody");
+    card.stages.forEach(function (stage) {
+      appendStageRow(tbody, stage.stage, stage.primary, false);
+      stage.history.forEach(function (record) {
+        appendStageRow(tbody, stage.stage, record, true);
+      });
+    });
     table.appendChild(tbody);
-    renderStageRows(tbody, projectName);
 
     return table;
   }
 
-  function buildProjectCard(profile) {
+  function buildProjectCard(card) {
     var details = document.createElement("details");
     details.className = "project-card";
 
@@ -275,16 +381,16 @@
 
     var name = document.createElement("span");
     name.className = "project-card-name";
-    name.textContent = profile.project_name;
+    name.textContent = card.project + " — " + issueLabel(card);
     summary.appendChild(name);
 
     var tags = document.createElement("span");
     tags.className = "project-card-tags";
     [
-      [null, formatValue(profile.customer)],
-      [null, formatValue(profile.pm)],
-      ["tag-status", formatValue(profile.status)],
-      [null, "預計完成：" + formatValue(profile.planned_completion_date)]
+      [null, formatValue(card.customer)],
+      [null, formatValue(card.pm)],
+      [statusTagClass(card.status), formatValue(card.status)],
+      [null, "預計完成：" + formatValue(card.planned_completion_date)]
     ].forEach(function (pair) {
       var tag = document.createElement("span");
       tag.className = "tag" + (pair[0] ? " " + pair[0] : "");
@@ -296,17 +402,17 @@
 
     var body = document.createElement("div");
     body.className = "project-card-body";
-    body.appendChild(buildStageTable(profile.project_name));
+    body.appendChild(buildStageTable(card));
     details.appendChild(body);
 
     return details;
   }
 
-  function renderProjectCards(profiles) {
+  function renderProjectCards(cards) {
     var container = document.getElementById("phase-tracking-content");
     container.innerHTML = "";
 
-    if (profiles.length === 0) {
+    if (cards.length === 0) {
       var empty = document.createElement("p");
       empty.className = "empty-state";
       empty.textContent = "目前無符合條件的專案";
@@ -316,20 +422,39 @@
 
     var list = document.createElement("div");
     list.className = "project-card-list";
-    profiles.forEach(function (profile) { list.appendChild(buildProjectCard(profile)); });
+    cards.forEach(function (card) { list.appendChild(buildProjectCard(card)); });
     container.appendChild(list);
   }
 
-  // ── 甘特圖（階段進度差異圖：以 planned_date 為錨點，非傳統起訖排程甘特圖） ──────
+  // ── 甘特圖：雙軌設計（2026-08-25 使用者要求「上面是預計時程下面是實際時程」）──────
+  //
+  // 上軌＝純粹按「預計」時程排：從上一個有資料階段的 planned_date 銜接到這個階段自己的
+  // planned_date，只要有 planned_date 就畫（不論完成與否），每個階段固定配色＋印階段名稱。
+  // 下軌＝純粹按「實際」時程排：從上一個有 actual_date 階段的 actual_date 銜接到這個階段自己
+  // 的 actual_date，只在這個階段已有 actual_date 時才畫，顏色依準時／延誤決定。
 
   var GANTT_ROW_HEIGHT = 42;
-  var GANTT_PADDING_LEFT = 152;
+  var GANTT_LABEL_WIDTH = 152;
+  var GANTT_PADDING_LEFT = 12;
   var GANTT_PADDING_RIGHT = 16;
   var GANTT_PADDING_TOP = 28;
   var GANTT_PADDING_BOTTOM = 8;
-  var GANTT_MIN_WIDTH = 900; // 需求 3.5：SVG 最小寬度
-  var GANTT_PIXELS_PER_DAY = 24;
-  var GANTT_BAR_HEIGHT = 14;
+  var GANTT_MIN_WIDTH = 900;
+  var GANTT_PIXELS_PER_DAY = 8;
+  var GANTT_PLANNED_BAR_HEIGHT = 18;
+  var GANTT_BAR_GAP = 3;
+  var GANTT_ACTUAL_BAR_HEIGHT = 8;
+  // 零工期色塊（例如開案當天就完成）clamp 後的最小寬度：2px 配上 1px stroke（置中畫在邊界上，
+  // 兩側各吃掉 0.5px）幾乎把填色吃光，視覺上完全看不出色塊存在（2026-08-25 使用者發現）。
+  var GANTT_MIN_SEGMENT_WIDTH = 6;
+
+  var STAGE_BLOCK_CLASS = {
+    "需求確認": "gantt-stage-requirement",
+    "開案": "gantt-stage-kickoff",
+    "開發": "gantt-stage-development",
+    "測試": "gantt-stage-testing",
+    "發布": "gantt-stage-release"
+  };
 
   function svgEl(tag, attrs) {
     var el = document.createElementNS(svgNS, tag);
@@ -343,23 +468,29 @@
     el.appendChild(title);
   }
 
-  // minDateMs＝全體有效 planned_date 最小值；maxDateMs＝（全體有效 actual_date 最大值、今日、
-  // minDateMs）三者取最大值。找不到任何有效 planned_date 時回傳 null（需求 3.3 empty-state）。
-  function ganttDomain(profiles) {
+  // minMs＝全體有效 planned_date 最小值；maxMs＝（全體有效 actual_date 最大值、今日、minMs）
+  // 三者取最大值，兩端再各外推一個月（2026-08-25 使用者要求「甘特圖能不能多畫前後一個月」）。
+  function ganttDomain(cards) {
     var plannedMsList = [];
     var actualMsList = [];
-    profiles.forEach(function (profile) {
-      buildStageRows(profile.project_name).forEach(function (row) {
-        var plannedMs = parseDateOnly(row.planned_date);
+    cards.forEach(function (card) {
+      card.stages.forEach(function (stage) {
+        if (!stage.primary) return;
+        var plannedMs = parseDateOnly(stage.primary.planned_date);
         if (plannedMs !== null) plannedMsList.push(plannedMs);
-        var actualMs = parseDateOnly(row.actual_date);
+        var actualMs = parseDateOnly(stage.primary.actual_date);
         if (actualMs !== null) actualMsList.push(actualMs);
       });
     });
     if (plannedMsList.length === 0) return null;
     var minMs = Math.min.apply(null, plannedMsList);
     var maxMs = Math.max.apply(null, actualMsList.concat([todayUtcMs(), minMs]));
-    return { minMs: minMs, maxMs: maxMs };
+    return { minMs: addMonthsUtc(minMs, -1), maxMs: addMonthsUtc(maxMs, 1) };
+  }
+
+  function addMonthsUtc(ms, months) {
+    var d = new Date(ms);
+    return Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + months, d.getUTCDate());
   }
 
   function ganttSvgWidth(domain) {
@@ -390,57 +521,86 @@
     return ticks;
   }
 
-  function barTitle(row, rowState) {
+  // 由 stageIndex 往前找上一個「有主要記錄、且 dateKey 這個日期欄位有值」的階段，回傳該日期
+  // （中間跳過的階段視為不存在，不當作邊界）；一路往前都找不到時回傳 null（呼叫端退回用自己的
+  // 日期，色塊寬度為 0，clamp 成最小可視寬度）。
+  function previousBoundary(stages, stageIndex, dateKey) {
+    for (var i = stageIndex - 1; i >= 0; i--) {
+      var record = stages[i].primary;
+      if (!record) continue;
+      var ms = parseDateOnly(record[dateKey]);
+      if (ms !== null) return ms;
+    }
+    return null;
+  }
+
+  function plannedSegment(stages, stageIndex, domain, width) {
+    var record = stages[stageIndex].primary;
+    if (!record) return null;
+    var plannedMs = parseDateOnly(record.planned_date);
+    if (plannedMs === null) return null;
+
+    var startMs = previousBoundary(stages, stageIndex, "planned_date");
+    if (startMs === null) startMs = plannedMs;
+    var x1 = xAt(startMs, domain, width);
+    var x2 = Math.max(xAt(plannedMs, domain, width), x1 + GANTT_MIN_SEGMENT_WIDTH);
+
+    return { x: x1, width: x2 - x1, stage: stages[stageIndex].stage };
+  }
+
+  function actualSegment(stages, stageIndex, domain, width) {
+    var record = stages[stageIndex].primary;
+    if (!record || record.actual_date === null) return null;
+    var actualMs = parseDateOnly(record.actual_date);
+    if (actualMs === null) return null;
+
+    var startMs = previousBoundary(stages, stageIndex, "actual_date");
+    if (startMs === null) startMs = actualMs;
+    var x1 = xAt(startMs, domain, width);
+    var x2 = Math.max(xAt(actualMs, domain, width), x1 + GANTT_MIN_SEGMENT_WIDTH);
+
+    // 圖例寫的是「準時／提前完成」＝綠色、「延誤完成」＝紅色：準時（diffDays === 0）跟提前一樣
+    // 算綠色（2026-08-25 使用者發現「開案是紅色延誤完成，不是相差 0 天嗎」的 bug：原本用
+    // `< 0` 判斷，diffDays 剛好等於 0 會被標成紅色，跟圖例文字自相矛盾）。
+    var rowState = computeRowState(record.planned_date, record.actual_date);
+    var variant = rowState.diffDays !== null && rowState.diffDays <= 0 ? "early" : "delayed";
     var diffText = rowState.diffDays === null
       ? ""
       : "｜差異 " + (rowState.diffDays > 0 ? "+" : "") + rowState.diffDays + " 天";
-    return row.stage + "（" + rowState.completionLabel + "）｜預計 " + formatValue(row.planned_date) +
-      " → 實際 " + formatValue(row.actual_date) + diffText;
+    var title = stages[stageIndex].stage + "（實際）｜" + formatValue(record.actual_date) + diffText;
+
+    return { x: x1, width: x2 - x1, variant: variant, title: title };
   }
-
-  // 每個階段色塊左端點固定為 planned_date；依需求 3.3 規則決定右端點與樣式。planned_date
-  // 缺失或格式不合法時無法定位左端點，不繪製色塊（回傳 null），但該階段的資料邏輯仍照常存在
-  // （清單檢視仍會顯示該列「—」）。
-  function stageBar(row, domain, width) {
-    var plannedMs = parseDateOnly(row.planned_date);
-    if (plannedMs === null) return null;
-
-    var rowState = computeRowState(row.planned_date, row.actual_date);
-    var x1 = xAt(plannedMs, domain, width);
-
-    if (row.actual_date !== null && rowState.diffDays !== null) {
-      if (rowState.diffDays >= 0) {
-        var actualMs = parseDateOnly(row.actual_date);
-        var x2 = Math.max(xAt(actualMs, domain, width), x1 + 2);
-        return { x: x1, width: x2 - x1, variant: "delayed", title: barTitle(row, rowState) };
-      }
-      // 提前完成：不畫「預計→實際」的真實日期區間（那會產生反向色塊），改以提前天數的絕對值
-      // 等比例延伸，代表「提前幅度」的視覺標記，並非該階段的實際完成日期區間。
-      var earlyEndMs = plannedMs + Math.abs(rowState.diffDays) * 86400000;
-      var earlyX2 = Math.max(xAt(earlyEndMs, domain, width), x1 + 2);
-      return { x: x1, width: earlyX2 - x1, variant: "early", title: barTitle(row, rowState) };
-    }
-
-    // 未完成：延伸至今日
-    var todayX = Math.max(xAt(todayUtcMs(), domain, width), x1 + 2);
-    return { x: x1, width: todayX - x1, variant: "incomplete", title: barTitle(row, rowState) };
-  }
-
-  var GANTT_VARIANT_CLASS = {
-    delayed: "gantt-task-actual-delayed",
-    early: "gantt-task-actual-early",
-    incomplete: "gantt-task-planned"
-  };
 
   function renderGanttLegend(container) {
     var legend = document.createElement("div");
     legend.className = "gantt-legend";
     legend.setAttribute("role", "note");
     legend.setAttribute("aria-label", "甘特圖圖例");
+
+    var plannedLabel = document.createElement("span");
+    plannedLabel.className = "legend-item";
+    plannedLabel.textContent = "上軌＝預計時程：";
+    legend.appendChild(plannedLabel);
+
+    STAGE_ORDER.forEach(function (stageName) {
+      var item = document.createElement("span");
+      item.className = "legend-item";
+      var swatch = document.createElement("span");
+      swatch.className = "legend-swatch " + STAGE_BLOCK_CLASS[stageName];
+      item.appendChild(swatch);
+      item.appendChild(document.createTextNode(stageName));
+      legend.appendChild(item);
+    });
+
+    var actualLabel = document.createElement("span");
+    actualLabel.className = "legend-item";
+    actualLabel.textContent = "下軌＝實際時程：";
+    legend.appendChild(actualLabel);
+
     [
-      ["legend-swatch-delayed", "已完成（延伸至實際完成日期）"],
-      ["legend-swatch-ontime", "提前完成（色塊寬度＝提前天數，非真實日期區間）"],
-      ["legend-swatch-planned", "未完成（延伸至今日）"]
+      ["legend-swatch-ontime", "準時／提前完成"],
+      ["legend-swatch-delayed", "延誤完成"]
     ].forEach(function (pair) {
       var item = document.createElement("span");
       item.className = "legend-item";
@@ -450,22 +610,23 @@
       item.appendChild(document.createTextNode(pair[1]));
       legend.appendChild(item);
     });
+
     container.appendChild(legend);
   }
 
-  function renderGanttChart(profiles) {
+  function renderGanttChart(cards) {
     var container = document.getElementById("phase-tracking-content");
     container.innerHTML = "";
 
-    if (profiles.length === 0) {
-      var emptyProfiles = document.createElement("p");
-      emptyProfiles.className = "empty-state";
-      emptyProfiles.textContent = "目前無符合條件的專案";
-      container.appendChild(emptyProfiles);
+    if (cards.length === 0) {
+      var emptyCards = document.createElement("p");
+      emptyCards.className = "empty-state";
+      emptyCards.textContent = "目前無符合條件的專案";
+      container.appendChild(emptyCards);
       return;
     }
 
-    var domain = ganttDomain(profiles);
+    var domain = ganttDomain(cards);
     if (!domain) {
       var emptyDomain = document.createElement("p");
       emptyDomain.className = "empty-state";
@@ -477,11 +638,38 @@
     renderGanttLegend(container);
 
     var width = ganttSvgWidth(domain);
-    var height = GANTT_PADDING_TOP + profiles.length * GANTT_ROW_HEIGHT + GANTT_PADDING_BOTTOM;
-    var rowsBottom = GANTT_PADDING_TOP + profiles.length * GANTT_ROW_HEIGHT;
+    var height = GANTT_PADDING_TOP + cards.length * GANTT_ROW_HEIGHT + GANTT_PADDING_BOTTOM;
+    var rowsBottom = GANTT_PADDING_TOP + cards.length * GANTT_ROW_HEIGHT;
 
     var scrollWrap = document.createElement("div");
     scrollWrap.className = "gantt-scroll";
+
+    var flex = document.createElement("div");
+    flex.className = "gantt-flex";
+    flex.style.width = (GANTT_LABEL_WIDTH + width) + "px";
+    flex.style.height = height + "px";
+
+    // 標籤欄：獨立於 SVG 之外，position: sticky 固定在可視區域左側。padding-top 對齊 SVG 的
+    // GANTT_PADDING_TOP（上面留給月份格線／文字），不然每一列的標題會跟色塊對不上。
+    var labels = document.createElement("div");
+    labels.className = "gantt-labels";
+    labels.style.width = GANTT_LABEL_WIDTH + "px";
+    labels.style.height = height + "px";
+    labels.style.paddingTop = GANTT_PADDING_TOP + "px";
+    labels.style.boxSizing = "border-box";
+
+    cards.forEach(function (card, index) {
+      var row = document.createElement("div");
+      row.className = "gantt-label-row" + (index % 2 === 1 ? " gantt-label-row-band" : "");
+      row.style.height = GANTT_ROW_HEIGHT + "px";
+      row.title = card.project + " - " + issueLabel(card);
+      var textSpan = document.createElement("span");
+      textSpan.className = "gantt-label-text";
+      textSpan.textContent = card.project + " - " + issueLabel(card);
+      row.appendChild(textSpan);
+      labels.appendChild(row);
+    });
+    flex.appendChild(labels);
 
     var svg = svgEl("svg", {
       viewBox: "0 0 " + width + " " + height,
@@ -490,6 +678,13 @@
       "class": "gantt-svg",
       role: "img",
       "aria-label": "專案階段追蹤甘特圖"
+    });
+
+    // 斑馬紋列底色，跟左側 .gantt-label-row-band 用同一個 index % 2 判斷，兩邊對齊。
+    cards.forEach(function (_card, index) {
+      if (index % 2 === 0) return;
+      var bandY = GANTT_PADDING_TOP + index * GANTT_ROW_HEIGHT;
+      svg.appendChild(svgEl("rect", { x: 0, y: bandY, width: width, height: GANTT_ROW_HEIGHT, "class": "gantt-row-band" }));
     });
 
     monthTicks(domain, width).forEach(function (tick) {
@@ -508,45 +703,73 @@
       }));
     }
 
-    profiles.forEach(function (profile, rowIndex) {
+    cards.forEach(function (card, rowIndex) {
       var rowY = GANTT_PADDING_TOP + rowIndex * GANTT_ROW_HEIGHT;
 
-      var label = svgEl("text", {
-        x: GANTT_PADDING_LEFT - 8, y: rowY + GANTT_ROW_HEIGHT / 2 + 4, "text-anchor": "end", "class": "gantt-row-label"
-      });
-      label.textContent = profile.project_name;
-      svg.appendChild(label);
-
       svg.appendChild(svgEl("line", {
-        x1: GANTT_PADDING_LEFT, x2: width - GANTT_PADDING_RIGHT,
+        x1: 0, x2: width - GANTT_PADDING_RIGHT,
         y1: rowY + GANTT_ROW_HEIGHT / 2, y2: rowY + GANTT_ROW_HEIGHT / 2, "class": "gantt-row-baseline"
       }));
 
-      var barY = rowY + (GANTT_ROW_HEIGHT - GANTT_BAR_HEIGHT) / 2;
-      buildStageRows(profile.project_name).forEach(function (row) {
-        var bar = stageBar(row, domain, width);
-        if (!bar) return;
-        var rect = svgEl("rect", {
-          x: bar.x, y: barY, width: bar.width, height: GANTT_BAR_HEIGHT, rx: 2,
-          "class": GANTT_VARIANT_CLASS[bar.variant]
-        });
-        appendTitle(rect, bar.title);
-        svg.appendChild(rect);
-      });
+      var plannedY = rowY + 6;
+      var actualY = plannedY + GANTT_PLANNED_BAR_HEIGHT + GANTT_BAR_GAP;
+
+      // 依 STAGE_ORDER 反序畫（發布→需求確認）：較早的階段（尤其開案／需求確認）常常跟下一
+      // 階段的起點落在同一天，色塊寬度會被 clamp 成最小寬度，緊貼在下一階段色塊的左邊界；若照
+      // 原本順序畫，晚一點畫的較寬色塊會直接蓋在細線上面，細線整個看不見（2026-08-25 使用者
+      // 反饋「LXPMS 的開案怎麼不見了」）。反序後較早、較容易變細線的階段最後畫，疊在最上層。
+      for (var stageIndex = card.stages.length - 1; stageIndex >= 0; stageIndex--) {
+        var stage = card.stages[stageIndex];
+        if (!stage.primary) continue;
+
+        var planned = plannedSegment(card.stages, stageIndex, domain, width);
+        if (planned) {
+          var stageClass = STAGE_BLOCK_CLASS[stage.stage];
+          var rect = svgEl("rect", {
+            x: planned.x, y: plannedY, width: planned.width, height: GANTT_PLANNED_BAR_HEIGHT, rx: 2,
+            "class": "gantt-stage-block " + stageClass
+          });
+          appendTitle(rect, stage.stage + "（預計）｜" + formatValue(stage.primary.planned_date));
+          svg.appendChild(rect);
+
+          // 色塊夠寬才印文字，避免短色塊的字溢出蓋到隔壁階段。粗估每個全形字約 13px + 8px 左右內距。
+          if (planned.width >= stage.stage.length * 13 + 8) {
+            var text = svgEl("text", {
+              x: planned.x + planned.width / 2, y: plannedY + GANTT_PLANNED_BAR_HEIGHT / 2 + 4,
+              "text-anchor": "middle", "class": "gantt-stage-label", "pointer-events": "none"
+            });
+            text.textContent = stage.stage;
+            svg.appendChild(text);
+          }
+        }
+
+        var actual = actualSegment(card.stages, stageIndex, domain, width);
+        if (actual) {
+          var actualRect = svgEl("rect", {
+            x: actual.x, y: actualY, width: actual.width, height: GANTT_ACTUAL_BAR_HEIGHT, rx: 2,
+            "class": "gantt-task-actual-" + actual.variant
+          });
+          appendTitle(actualRect, actual.title);
+          svg.appendChild(actualRect);
+        }
+      }
     });
 
-    scrollWrap.appendChild(svg);
+    flex.appendChild(svg);
+    scrollWrap.appendChild(flex);
     container.appendChild(scrollWrap);
   }
 
   // ── 檢視切換與初始化 ──────────────────────────────────────────
 
+  var allCards = [];
+
   function renderContent() {
-    var profiles = applySort(applyFilters(PROJECT_PROFILES));
+    var cards = applySort(applyFilters(allCards));
     if (state.viewMode === "gantt") {
-      renderGanttChart(profiles);
+      renderGanttChart(cards);
     } else {
-      renderProjectCards(profiles);
+      renderProjectCards(cards);
     }
   }
 
@@ -611,8 +834,8 @@
   }
 
   document.addEventListener("DOMContentLoaded", function () {
-    initFilters();
-    initSort();
+    allCards = buildCards();
+    initFilters(allCards);
     initViewToggle();
     renderContent();
 

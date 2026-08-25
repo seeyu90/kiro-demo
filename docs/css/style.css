@@ -119,6 +119,12 @@ main {
   font-size: 0.9rem;
 }
 
+.hint-text {
+  margin: 0.25rem 0 1rem;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
 .theme-toggle {
   background: var(--color-surface);
   color: var(--color-text);
@@ -1026,6 +1032,8 @@ table.project-tasks tbody tr:hover td {
    寬度，不會把色塊壓到看不出寬度差異。 */
 .gantt-scroll {
   overflow-x: auto;
+  overflow-y: auto;
+  max-height: 70vh;
   border: 1px solid var(--color-border);
   border-radius: 8px;
   background: var(--color-surface);
@@ -1046,13 +1054,14 @@ table.project-tasks tbody tr:hover td {
 }
 
 .gantt-month-gridline {
-  stroke: var(--color-border);
+  stroke: var(--color-border-hover);
   stroke-width: 1;
 }
 
 .gantt-month-label {
   fill: var(--color-text-muted);
   font-size: 12px;
+  font-weight: 600;
 }
 
 .gantt-today-line {
@@ -1251,6 +1260,132 @@ table.project-tasks tbody tr:hover td {
   font-size: 0.8rem;
   color: var(--color-text-muted);
   font-style: italic;
+}
+
+/* ── 專案階段追蹤：重排歷史記錄（同一 stage 被取代的舊排程）
+   次要樣式，較淡、較小，仍完整顯示不省略——每一筆延誤未完成的舊記錄本身即代表「應完成但未
+   完成」的事實，是使用者要追蹤的重點（2026-08-25 使用者確認）。 ── */
+.phase-history-row {
+  opacity: 0.65;
+  font-size: 0.85em;
+}
+
+.phase-history-row td {
+  font-style: italic;
+}
+
+/* ── 專案階段追蹤：狀態標籤三段配色
+   原本全部狀態共用 .tag-status 單一顏色，掃卡片列表時分不出哪些真的需要注意
+   （2026-08-25 使用者反饋）。完成／延誤已完成＝已完成（綠色）；延誤未完成／未完成＝還在等待
+   處理、需要注意（紅色，加粗）；暫緩＝刻意擱置，不是「未完成」，用中性灰跟紅色的「需要注意」
+   區分開來。 ── */
+.tag-status-done {
+  color: var(--delay-negative);
+}
+
+.tag-status-pending {
+  color: var(--delay-positive);
+  font-weight: 700;
+}
+
+.tag-status-paused {
+  color: var(--color-text-muted);
+}
+
+/* ── 專案階段追蹤：甘特圖雙軌設計（2026-08-25 使用者要求「上面是預計時程下面是實際時程」）
+   上軌＝預計時程：依 5 個階段固定配色＋印階段名稱，跟完成狀態顏色是兩套獨立語意。這五個
+   class 同時用在 SVG <rect>（甘特圖本體，需要 fill）與圖例的 HTML <span class="legend-swatch
+   ...">（需要 background），故兩個屬性都寫。下軌＝實際時程，沿用既有
+   .gantt-task-actual-delayed／.gantt-task-actual-early。 ── */
+:root {
+  --gantt-stage-requirement: #90cdf4;
+  --gantt-stage-kickoff: #fbb6ce;
+  --gantt-stage-development: #faf089;
+  --gantt-stage-testing: #d6bcfa;
+  --gantt-stage-release: #9decf9;
+  --gantt-stage-label-text: #1a202c;
+}
+
+.gantt-stage-block {
+  stroke: var(--color-surface);
+  stroke-width: 1;
+}
+
+.gantt-stage-requirement {
+  fill: var(--gantt-stage-requirement);
+  background: var(--gantt-stage-requirement);
+}
+
+.gantt-stage-kickoff {
+  fill: var(--gantt-stage-kickoff);
+  background: var(--gantt-stage-kickoff);
+}
+
+.gantt-stage-development {
+  fill: var(--gantt-stage-development);
+  background: var(--gantt-stage-development);
+}
+
+.gantt-stage-testing {
+  fill: var(--gantt-stage-testing);
+  background: var(--gantt-stage-testing);
+}
+
+.gantt-stage-release {
+  fill: var(--gantt-stage-release);
+  background: var(--gantt-stage-release);
+}
+
+.gantt-stage-label {
+  fill: var(--gantt-stage-label-text);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* 斑馬紋列底色，只用在偶數列，讓左側議題名稱跟右側色塊比較容易對齊看出屬於同一列。 */
+.gantt-row-band {
+  fill: var(--table-row-hover-bg);
+}
+
+/* 標籤欄固定側欄（2026-08-25 使用者反饋「標題無法固定嗎？而且字被切掉了」）：獨立的 HTML
+   側欄，position: sticky 固定在 .gantt-scroll 可視區域左側，橫向捲動只移動右邊的 SVG。 */
+.gantt-flex {
+  display: flex;
+  position: relative;
+}
+
+.gantt-labels {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  flex-shrink: 0;
+  background: var(--color-surface);
+  border-top-left-radius: 8px;
+  border-bottom-left-radius: 8px;
+}
+
+.gantt-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0 8px 0 4px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  box-sizing: border-box;
+}
+
+/* 靠左對齊＋文字包一層 span 套用 ellipsis：專案代碼（開頭、最重要的辨識資訊）永遠完整可見，
+   超長時改從結尾省略並顯示「…」（2026-08-25 使用者發現原本靠右對齊會從開頭裁字，見
+   Rails app/assets/stylesheets/application.css 的對應修正附註）。 */
+.gantt-label-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gantt-label-row-band {
+  background: var(--table-row-hover-bg);
 }
 
 /* ── Tablet ── */
