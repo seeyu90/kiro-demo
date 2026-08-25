@@ -26,10 +26,8 @@ module ProjectPhaseTrackingHelper
   # 原本沿用 static prototype 的 24（單一專案詳細頁用，只需要看幾週）；本頁是多專案橫向總覽，
   # 常態橫跨一整年甚至「全部年度」，24px/天在可視寬度內只塞得下 1〜2 個月，要一直橫向捲動
   # 才看得到下一個月（2026-08-25 使用者反饋「不能多顯示幾個月嗎」）。改成 8，同樣可視寬度下
-  # 大約可看到 4〜5 個月；仍保留足夠密度讓「開發」這類通常橫跨數週的階段色塊還印得下文字標籤
-  # （見 phase_gantt_chart_planned_segment 呼叫端的最小寬度判斷）。
+  # 大約可看到 4〜5 個月。
   GANTT_PIXELS_PER_DAY = 8
-  GANTT_BAR_HEIGHT = 14 # 舊版單軌設計遺留常數，_overview_gantt.html.erb 不再使用，保留避免動到既有 spec 常數引用
   # 零工期色塊（例如開案當天就完成）clamp 後的最小寬度。原本是 2px：配上 .gantt-stage-block
   # 的 1px stroke（置中畫在邊界上，兩側各吃掉 0.5px）幾乎把整條 2px 寬的填色吃光，視覺上完全
   # 看不出色塊存在（2026-08-25 使用者反饋「LXPMS 的開案怎麼不見了」，實測資料其實都在，色塊
@@ -39,7 +37,8 @@ module ProjectPhaseTrackingHelper
 
   # 雙軌設計（2026-08-25 使用者要求，比照既有 project_history 甘特圖「上面預計、下面實際」
   # 的既有慣例，見 ProjectHistoryHelper::GANTT_PLANNED_BAR_HEIGHT 等常數）：上軌＝預計時程
-  # （較高，容納階段名稱文字標籤），下軌＝實際時程（較窄，只在有 actual_date 時才畫）。
+  # （較高，5 階段固定配色，不印文字標籤——階段名稱改由圖例辨識，色塊上只留 hover 提示，
+  # 2026-08-25 使用者要求），下軌＝實際時程（較窄，只在有 actual_date 時才畫）。
   GANTT_PLANNED_BAR_HEIGHT = 18
   GANTT_BAR_GAP = 3
   GANTT_ACTUAL_BAR_HEIGHT = 8

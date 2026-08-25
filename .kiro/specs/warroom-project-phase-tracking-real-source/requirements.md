@@ -286,12 +286,16 @@ Google Sheet，而非硬編碼模擬資料或直接的 Notion API）
 
 ## 不納入範圍
 
-- 修改既有 `docs/project-phase-tracking.html`（static prototype 頁面）或既有 305/306/307／專案歷程
-  Rails 功能
+- 既有 305/306/307／專案歷程 Rails 功能
 - n8n workflow 本身的建立與維護（Notion → Google Sheets 同步邏輯，屬於另外的 n8n 開發任務，不在本
   spec 範圍）
 - 資料寫回 Notion 或 Sheet（唯讀）
 - 工時（預估／實際）欄位（static prototype 已明確排除，本 spec 不重新引入）
 - JSON API endpoint（比照既有 307／`project_history` 慣例，先做 HTML 頁面）
-- Rails 端額外快取（每次請求即時讀取 Sheet 當下內容，同步延遲完全由 n8n 排程決定；若後續發現效能
-  問題另立 spec，比照既有 `warroom-sheets-fetch-performance` 的先例）
+
+> 以下兩項原列於不納入範圍，實作過程中經使用者要求已納入並完成，故從此列表移除（2026-08-25）：
+> - **同步調整 `docs/project-phase-tracking.html`**：使用者要求「docs 也需要一併調整」並選擇
+>   「完整同步」，static prototype（`docs/project-phase-tracking.html`／`docs/js/
+>   project-phase-tracking*.js`／`docs/css/style.css`）已改版至與 Rails 頁面一致（已實作）。
+> - **Rails 端快取**：使用者要求「加上跟 305/306 一樣的 5 分鐘快取」，`PhaseRecordsSheetsClient`／
+>   `ProjectProfilesSheetsClient` 皆已改用 `Rails.cache.fetch(..., expires_in: 5.minutes)`（已實作）。
