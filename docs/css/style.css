@@ -119,6 +119,12 @@ main {
   font-size: 0.9rem;
 }
 
+.hint-text {
+  margin: 0.25rem 0 1rem;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
 .theme-toggle {
   background: var(--color-surface);
   color: var(--color-text);
@@ -200,6 +206,7 @@ main {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  flex-wrap: wrap;
 }
 
 .scope-filter,
@@ -1025,6 +1032,8 @@ table.project-tasks tbody tr:hover td {
    寬度，不會把色塊壓到看不出寬度差異。 */
 .gantt-scroll {
   overflow-x: auto;
+  overflow-y: auto;
+  max-height: 70vh;
   border: 1px solid var(--color-border);
   border-radius: 8px;
   background: var(--color-surface);
@@ -1045,13 +1054,14 @@ table.project-tasks tbody tr:hover td {
 }
 
 .gantt-month-gridline {
-  stroke: var(--color-border);
+  stroke: var(--color-border-hover);
   stroke-width: 1;
 }
 
 .gantt-month-label {
   fill: var(--color-text-muted);
   font-size: 12px;
+  font-weight: 600;
 }
 
 .gantt-today-line {
@@ -1232,6 +1242,143 @@ table.project-tasks tbody tr:hover td {
   border-left: 3px solid var(--overdue-text);
 }
 
+/* ── 專案階段追蹤：甘特圖提前完成色塊
+   語意與 .gantt-task-actual-ontime（既有「消耗人時比例填色」track 用途）不同——這裡是單一實心
+   色塊代表「提前幅度」的視覺標記，沿用同一組 --delay-negative 色票但獨立成一個 class，避免
+   共用既有 class 造成語意混淆。 ── */
+.gantt-task-actual-early {
+  fill: var(--delay-negative);
+}
+
+/* ── 專案階段追蹤：階段列備註（對應 Notion「原因」欄位，非空字串時才顯示） ── */
+.phase-reason-row td {
+  border-bottom: 1px solid var(--table-row-border);
+}
+
+.phase-reason {
+  padding-top: 0;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+/* ── 專案階段追蹤：重排歷史記錄（同一 stage 被取代的舊排程）
+   次要樣式，較淡、較小，仍完整顯示不省略——每一筆延誤未完成的舊記錄本身即代表「應完成但未
+   完成」的事實，是要追蹤的重點。 ── */
+.phase-history-row {
+  opacity: 0.65;
+  font-size: 0.85em;
+}
+
+.phase-history-row td {
+  font-style: italic;
+}
+
+/* ── 專案階段追蹤：狀態標籤三段配色
+   完成／延誤已完成＝已完成（綠色）；延誤未完成／未完成＝還在等待處理、需要注意（紅色，
+   加粗）；暫緩＝刻意擱置，用中性灰跟紅色的「需要注意」區分開來。 ── */
+.tag-status-done {
+  color: var(--delay-negative);
+}
+
+.tag-status-pending {
+  color: var(--delay-positive);
+  font-weight: 700;
+}
+
+.tag-status-paused {
+  color: var(--color-text-muted);
+}
+
+/* ── 專案階段追蹤：甘特圖雙軌設計（上面預計時程、下面實際時程）
+   上軌＝預計時程：依 5 個階段固定配色，跟完成狀態顏色是兩套獨立語意（階段名稱不印在色塊上，
+   對照圖例即可，hover 才顯示）。這五個 class 同時用在 SVG <rect>（甘特圖本體，需要 fill）與
+   圖例的 HTML <span class="legend-swatch...">（需要 background），故兩個屬性都寫。下軌＝
+   實際時程，沿用既有 .gantt-task-actual-delayed／.gantt-task-actual-early。 ── */
+:root {
+  --gantt-stage-requirement: #90cdf4;
+  --gantt-stage-kickoff: #fbb6ce;
+  --gantt-stage-development: #faf089;
+  --gantt-stage-testing: #d6bcfa;
+  --gantt-stage-release: #9decf9;
+}
+
+.gantt-stage-block {
+  stroke: var(--color-surface);
+  stroke-width: 1;
+}
+
+.gantt-stage-requirement {
+  fill: var(--gantt-stage-requirement);
+  background: var(--gantt-stage-requirement);
+}
+
+.gantt-stage-kickoff {
+  fill: var(--gantt-stage-kickoff);
+  background: var(--gantt-stage-kickoff);
+}
+
+.gantt-stage-development {
+  fill: var(--gantt-stage-development);
+  background: var(--gantt-stage-development);
+}
+
+.gantt-stage-testing {
+  fill: var(--gantt-stage-testing);
+  background: var(--gantt-stage-testing);
+}
+
+.gantt-stage-release {
+  fill: var(--gantt-stage-release);
+  background: var(--gantt-stage-release);
+}
+
+/* 斑馬紋列底色，只用在偶數列，讓左側議題名稱跟右側色塊比較容易對齊看出屬於同一列。 */
+.gantt-row-band {
+  fill: var(--table-row-hover-bg);
+}
+
+/* 標籤欄固定側欄：獨立的 HTML 側欄，position: sticky 固定在 .gantt-scroll 可視區域左側，
+   橫向捲動只移動右邊的 SVG。 */
+.gantt-flex {
+  display: flex;
+  position: relative;
+}
+
+.gantt-labels {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  flex-shrink: 0;
+  background: var(--color-surface);
+  border-top-left-radius: 8px;
+  border-bottom-left-radius: 8px;
+}
+
+.gantt-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0 8px 0 4px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  box-sizing: border-box;
+}
+
+/* 靠左對齊＋文字包一層 span 套用 ellipsis：專案代碼（開頭、最重要的辨識資訊）永遠完整可見，
+   超長時改從結尾省略並顯示「…」（靠右對齊會從開頭裁字，見 Rails 端 application.css 的對應
+   附註）。 */
+.gantt-label-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gantt-label-row-band {
+  background: var(--table-row-hover-bg);
+}
+
 /* ── Tablet ── */
 @media (max-width: 768px) {
   .dashboard-header,
@@ -1255,6 +1402,12 @@ table.project-tasks tbody tr:hover td {
     flex-direction: column;
     align-items: stretch;
     gap: 0.75rem;
+  }
+
+  .control-group {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
   }
 
   .scope-filter {

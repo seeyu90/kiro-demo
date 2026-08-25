@@ -1,0 +1,75 @@
+<div class="project-card-list">
+  <% cards.each do |card| %>
+    <details class="project-card">
+      <summary class="project-card-summary">
+        <span class="project-card-name"><%= card[:project] %> — <%= phase_tracking_issue_label(card) %></span>
+        <span class="project-card-tags">
+          <span class="tag"><%= card[:customer] || "—" %></span>
+          <span class="tag"><%= card[:pm] || "—" %></span>
+          <span class="tag <%= phase_tracking_status_class(card[:status]) %>"><%= card[:status] || "—" %></span>
+          <span class="tag">預計完成：<%= card[:planned_completion_date] || "—" %></span>
+        </span>
+      </summary>
+
+      <div class="project-card-body">
+        <table class="project-tasks">
+          <thead>
+            <tr>
+              <th scope="col">階段</th>
+              <th scope="col">預計完成日期</th>
+              <th scope="col">實際完成日期</th>
+              <th scope="col">差異</th>
+              <th scope="col">完成狀態</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% card[:stages].each do |stage| %>
+              <% primary = stage[:primary] %>
+              <% if primary.nil? %>
+                <tr>
+                  <td data-label="階段"><%= stage[:stage] %></td>
+                  <td data-label="預計完成日期">—</td>
+                  <td data-label="實際完成日期">—</td>
+                  <td data-label="差異">—</td>
+                  <td data-label="完成狀態">—</td>
+                </tr>
+              <% else %>
+                <% state = compute_row_state(primary[:planned_date], primary[:actual_date]) %>
+                <tr>
+                  <td data-label="階段"><%= stage[:stage] %></td>
+                  <td data-label="預計完成日期"><%= primary[:planned_date] || "—" %></td>
+                  <td data-label="實際完成日期"><%= primary[:actual_date] || "—" %></td>
+                  <td data-label="差異" class="<%= state[:diff_days].to_i.positive? ? "delay-positive" : (state[:diff_days].to_i.negative? ? "delay-negative" : "") %>">
+                    <%= state[:diff_days].nil? ? "—" : (state[:diff_days] > 0 ? "+#{state[:diff_days]}" : state[:diff_days].to_s) %>
+                  </td>
+                  <td data-label="完成狀態"><%= state[:completion_label] %></td>
+                </tr>
+                <% if primary[:reason].present? %>
+                  <tr class="phase-reason-row">
+                    <td colspan="5" class="phase-reason">備註：<%= primary[:reason] %></td>
+                  </tr>
+                <% end %>
+              <% end %>
+
+              <% stage[:history].each do |old_record| %>
+                <% old_state = compute_row_state(old_record[:planned_date], old_record[:actual_date]) %>
+                <tr class="phase-history-row">
+                  <td data-label="階段">↳ <%= stage[:stage] %>（曾經延誤的舊排程）</td>
+                  <td data-label="預計完成日期"><%= old_record[:planned_date] || "—" %></td>
+                  <td data-label="實際完成日期"><%= old_record[:actual_date] || "—" %></td>
+                  <td data-label="差異"><%= old_state[:diff_days].nil? ? "—" : (old_state[:diff_days] > 0 ? "+#{old_state[:diff_days]}" : old_state[:diff_days].to_s) %></td>
+                  <td data-label="完成狀態"><%= old_state[:completion_label] %></td>
+                </tr>
+                <% if old_record[:reason].present? %>
+                  <tr class="phase-history-row phase-reason-row">
+                    <td colspan="5" class="phase-reason">備註：<%= old_record[:reason] %></td>
+                  </tr>
+                <% end %>
+              <% end %>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    </details>
+  <% end %>
+</div>

@@ -1,0 +1,9 @@
+<div class="gantt-legend" role="note" aria-label="甘特圖圖例">
+  <span class="legend-item">上軌＝預計時程：</span>
+  <% ProjectPhaseTrackingHelper::STAGE_BLOCK_CLASS.each do |stage_name, css_class| %>
+    <span class="legend-item"><span class="legend-swatch <%= css_class %>"></span><%= stage_name %></span>
+  <% end %>
+  <span class="legend-item">下軌＝實際時程：</span>
+  <span class="legend-item"><span class="legend-swatch legend-swatch-ontime"></span>準時／提前完成</span>
+  <span class="legend-item"><span class="legend-swatch legend-swatch-delayed"></span>延誤完成</span>
+</div>

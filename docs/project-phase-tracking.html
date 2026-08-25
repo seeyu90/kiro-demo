@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem("warroom-theme");
+        if (saved === "light") {
+          document.documentElement.setAttribute("data-theme", "light");
+        }
+      } catch (e) {
+        // localStorage 不可用：靜默忽略，維持預設深色
+      }
+    })();
+  </script>
+  <title>戰情室 — 專案階段追蹤（靜態展示版）</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="戰情室專案階段追蹤，使用模擬資料呈現各議題 5 個固定交付階段的預計與實際完成日期，可依年度、客戶、狀態、PM 篩選並搜尋議題名稱或 ID。">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="dashboard-header">
+    <div class="header-titles">
+      <h1 class="dashboard-title">戰情室 <span>— 專案階段追蹤</span></h1>
+      <p class="subtitle">靜態展示版（模擬資料） · <a class="back-link" href="index.html">返回入口頁</a></p>
+    </div>
+    <button type="button" id="theme-toggle" class="theme-toggle" aria-label="切換至淺色模式">🌙 深色</button>
+  </header>
+
+  <main>
+    <section class="issue-section">
+      <div class="section-heading-row">
+        <h2>專案階段追蹤</h2>
+        <div class="control-group project-selector">
+          <label for="filter-year">年度：</label>
+          <select id="filter-year" name="filter-year"></select>
+          <label for="filter-customer">客戶：</label>
+          <select id="filter-customer" name="filter-customer"></select>
+          <label for="filter-status">狀態：</label>
+          <select id="filter-status" name="filter-status"></select>
+          <label for="filter-pm">PM：</label>
+          <select id="filter-pm" name="filter-pm"></select>
+          <label for="filter-query">議題名稱／ID：</label>
+          <input type="text" id="filter-query" name="filter-query" placeholder="搜尋議題名稱或 ID">
+        </div>
+      </div>
+      <p class="hint-text">排序固定依預計完成日期，資料僅供展示，非即時更新。</p>
+
+      <div class="view-toggle" role="group" aria-label="檢視模式切換">
+        <button type="button" id="view-list-btn" class="view-toggle-btn" aria-pressed="true">清單</button>
+        <button type="button" id="view-gantt-btn" class="view-toggle-btn" aria-pressed="false">甘特圖</button>
+      </div>
+
+      <div id="phase-tracking-content" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <script src="js/project-phase-tracking-data.js"></script>
+  <script src="js/project-phase-tracking.js"></script>
+</body>
+</html>

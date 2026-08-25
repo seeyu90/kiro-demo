@@ -39,6 +39,15 @@
   --error-text: #feb2b2;
 
   --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23a0aec0' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+
+  /* 專案階段追蹤甘特圖：5 個階段的分類色（跟完成狀態顏色是兩套獨立語意，不隨淺色／深色主題
+     切換——比照 Notion 分類標籤色塊的慣例，固定飽和度夠高的色塊，兩種主題背景下都讀得清楚，
+     不需要像 --color-text 那樣為了跟頁面背景對比而換色）。 */
+  --gantt-stage-requirement: #90cdf4;
+  --gantt-stage-kickoff: #fbb6ce;
+  --gantt-stage-development: #faf089;
+  --gantt-stage-testing: #d6bcfa;
+  --gantt-stage-release: #9decf9;
 }
 
 /* ── 主題變數：淺色 ── */
@@ -1180,9 +1189,14 @@ turbo-frame[busy]::after {
 
 /* ── 專案歷程：甘特圖 ── */
 /* 寬度不再用 width:100% 硬塞縮放——月份多時 SVG 本身比容器寬，交給 .gantt-scroll 左右捲動，
-   讓每個月維持一致的可讀寬度（見 ProjectHistoryHelper::GANTT_MONTH_PX）。 */
+   讓每個月維持一致的可讀寬度（見 ProjectHistoryHelper::GANTT_MONTH_PX）。
+   列數一多（例如專案階段追蹤「全部年度」有 87 列）SVG 本身就有 3000px+ 高，只設 overflow-x
+   的話容器會直接撐開整個頁面，水平捲軸跑到頁面最底部才看得到。加上 max-height + overflow-y，
+   讓水平／垂直捲軸都固定在視窗看得到的範圍內。 */
 .gantt-scroll {
   overflow-x: auto;
+  overflow-y: auto;
+  max-height: 70vh;
   border: 1px solid var(--color-border);
   border-radius: 8px;
   background: var(--color-surface);
@@ -1204,13 +1218,69 @@ turbo-frame[busy]::after {
   stroke-width: 1;
 }
 
+/* 斑馬紋列底色（專案階段追蹤甘特圖專用），只用在偶數列，讓左側專案名稱跟右側色塊比較容易
+   對齊看出屬於同一列。 */
+.gantt-row-band {
+  fill: var(--table-row-hover-bg);
+}
+
+/* 標籤欄固定側欄：獨立的 HTML 側欄，position: sticky 固定在 .gantt-scroll 可視區域左側（不畫
+   在 SVG 裡面，不然橫向捲動看後面月份時標籤會一起被捲走）。.gantt-flex 用 flex 讓側欄跟 SVG
+   並排，兩者一起放進同一個可垂直／水平捲動的 .gantt-scroll，垂直捲動時側欄跟著一起動（列數多
+   時仍對得上號），水平捲動時只有 sticky 的側欄「看起來」固定不動，不需要另外寫 JS 同步兩個
+   捲動位置。 */
+.gantt-flex {
+  display: flex;
+  position: relative;
+}
+
+.gantt-labels {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  flex-shrink: 0;
+  background: var(--color-surface);
+  /* 跟既有 .gantt-scroll 的 border-radius 呼應：側欄疊在 SVG 上面時，左上/左下角要跟外層容器
+     圓角對齊，不然側欄的直角邊會蓋出一角方形突出在圓角外。 */
+  border-top-left-radius: 8px;
+  border-bottom-left-radius: 8px;
+}
+
+/* 靠左對齊＋文字包一層 <span> 套用 ellipsis：flex 容器若用 justify-content: flex-end／center
+   置中或靠右，字數超過欄寬時瀏覽器會從「開頭」裁掉內容，而且直接裝文字節點時
+   text-overflow: ellipsis 不會生效——結果最重要的辨識資訊（專案代碼）反而先被裁掉，也沒有
+   省略號提示。改成靠左對齊，專案代碼永遠完整可見，超長時改從結尾省略並顯示「…」（比照既有
+   .project-card-name 之類文字截斷的一般慣例）。 */
+.gantt-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0 8px 0 4px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  box-sizing: border-box;
+}
+
+.gantt-label-text {
+  min-width: 0; /* flex item 預設 min-width: auto 會擋掉 text-overflow，需要明確歸零 */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gantt-label-row-band {
+  background: var(--table-row-hover-bg);
+}
+
 .gantt-month-gridline {
-  stroke: var(--color-border);
+  stroke: var(--color-border-hover);
   stroke-width: 1;
 }
 
 .gantt-month-label {
+  fill: var(--color-text-muted);
   font-size: 12px;
+  font-weight: 600;
 }
 
 .gantt-today-line {
@@ -1344,6 +1414,21 @@ turbo-frame[busy]::after {
   color: var(--color-accent);
 }
 
+/* 專案階段追蹤的狀態標籤三段配色（原本全部共用 .tag-status 藍色，掃卡片列表分不出哪些需要
+   注意，見 ProjectPhaseTrackingHelper::STATUS_TAG_CLASS）。 */
+.tag-status-done {
+  color: var(--delay-negative);
+}
+
+.tag-status-pending {
+  color: var(--delay-positive);
+  font-weight: 700;
+}
+
+.tag-status-paused {
+  color: var(--color-text-muted);
+}
+
 .tag-hours {
   font-variant-numeric: tabular-nums;
 }
@@ -1390,4 +1475,82 @@ turbo-frame[busy]::after {
 .project-card-body {
   border-top: 1px solid var(--color-border);
   padding: 0.5rem 1rem 1rem;
+}
+
+/* ── 專案階段追蹤（warroom-project-phase-tracking-real-source） ───────────────── */
+
+/* 差異天數（清單檢視「差異」欄）：字面 class（非既有 --delay-positive/--delay-negative
+   CSS 變數，也非既有 .delay-days.delayed/.on-time），沿用 static prototype 已定案的命名。 */
+.delay-positive {
+  color: var(--delay-positive);
+}
+
+.delay-negative {
+  color: var(--delay-negative);
+}
+
+/* 甘特圖「提前完成」色塊：既有 .gantt-task-actual-delayed 已可沿用，僅缺這一個 variant。 */
+.gantt-task-actual-early {
+  fill: var(--delay-negative);
+}
+
+/* 甘特圖雙軌設計：上軌固定依階段配色（不印文字，對照圖例辨識），下軌只依準時／延誤上色，
+   兩者職責分開（見 ProjectPhaseTrackingHelper#phase_gantt_chart_actual_segment／
+   #phase_gantt_chart_planned_segment）。
+
+   上軌「預計時程」色塊：依階段固定配色（見 :root 的 --gantt-stage-* 變數），全部階段共用同一組
+   框線樣式，只有顏色不同。這五個 class 同時用在 SVG <rect>（甘特圖本體，需要 fill）與圖例的
+   HTML <span class="legend-swatch ..."> （需要 background），故兩個屬性都寫，瀏覽器各自忽略
+   不適用的那個，不需要為圖例另外重複一組 class。 */
+.gantt-stage-block {
+  stroke: var(--color-surface);
+  stroke-width: 1;
+}
+
+.gantt-stage-requirement {
+  fill: var(--gantt-stage-requirement);
+  background: var(--gantt-stage-requirement);
+}
+
+.gantt-stage-kickoff {
+  fill: var(--gantt-stage-kickoff);
+  background: var(--gantt-stage-kickoff);
+}
+
+.gantt-stage-development {
+  fill: var(--gantt-stage-development);
+  background: var(--gantt-stage-development);
+}
+
+.gantt-stage-testing {
+  fill: var(--gantt-stage-testing);
+  background: var(--gantt-stage-testing);
+}
+
+.gantt-stage-release {
+  fill: var(--gantt-stage-release);
+  background: var(--gantt-stage-release);
+}
+
+/* 階段列備註（對應 Sheet「原因」欄位，非空字串時才顯示）。 */
+.phase-reason-row td {
+  border-bottom: 1px solid var(--table-row-border);
+}
+
+.phase-reason {
+  padding-top: 0;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+/* 重排歷史記錄（同一 stage 被取代的舊排程）：次要樣式，較淡、較小，仍完整顯示不省略
+   （需求 4.5——每一筆延誤未完成的舊記錄本身即代表「應完成但未完成」的事實）。 */
+.phase-history-row {
+  opacity: 0.65;
+  font-size: 0.85em;
+}
+
+.phase-history-row td {
+  font-style: italic;
 }
