@@ -41,14 +41,13 @@
   --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23a0aec0' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
 
   /* 專案階段追蹤甘特圖：5 個階段的分類色（跟完成狀態顏色是兩套獨立語意，不隨淺色／深色主題
-     切換——比照 Notion 分類標籤色塊的慣例，固定飽和度夠高的色塊＋固定深色文字，兩種主題背景
-     下都讀得清楚，不需要像 --color-text 那樣為了跟頁面背景對比而換色）。 */
+     切換——比照 Notion 分類標籤色塊的慣例，固定飽和度夠高的色塊，兩種主題背景下都讀得清楚，
+     不需要像 --color-text 那樣為了跟頁面背景對比而換色）。 */
   --gantt-stage-requirement: #90cdf4;
   --gantt-stage-kickoff: #fbb6ce;
   --gantt-stage-development: #faf089;
   --gantt-stage-testing: #d6bcfa;
   --gantt-stage-release: #9decf9;
-  --gantt-stage-label-text: #1a202c;
 }
 
 /* ── 主題變數：淺色 ── */
@@ -1537,14 +1536,6 @@ turbo-frame[busy]::after {
 .gantt-stage-release {
   fill: var(--gantt-stage-release);
   background: var(--gantt-stage-release);
-}
-
-/* 色塊夠寬時印在色塊裡的階段名稱：固定深色文字，色塊本身飽和度夠高，兩種主題背景下都讀得清楚
-   （不用 --color-text，那個會隨主題切換成淺色，在這些淺色色塊上會讀不清楚）。 */
-.gantt-stage-label {
-  fill: var(--gantt-stage-label-text);
-  font-size: 11px;
-  font-weight: 600;
 }
 
 /* 階段列備註（對應 Sheet「原因」欄位，非空字串時才顯示）。 */

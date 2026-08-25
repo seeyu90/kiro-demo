@@ -729,18 +729,9 @@
             x: planned.x, y: plannedY, width: planned.width, height: GANTT_PLANNED_BAR_HEIGHT, rx: 2,
             "class": "gantt-stage-block " + stageClass
           });
+          // 階段名稱不印在色塊上（配色已對照上方圖例），只保留 hover 提示。
           appendTitle(rect, stage.stage + "（預計）｜" + formatValue(stage.primary.planned_date));
           svg.appendChild(rect);
-
-          // 色塊夠寬才印文字，避免短色塊的字溢出蓋到隔壁階段。粗估每個全形字約 13px + 8px 左右內距。
-          if (planned.width >= stage.stage.length * 13 + 8) {
-            var text = svgEl("text", {
-              x: planned.x + planned.width / 2, y: plannedY + GANTT_PLANNED_BAR_HEIGHT / 2 + 4,
-              "text-anchor": "middle", "class": "gantt-stage-label", "pointer-events": "none"
-            });
-            text.textContent = stage.stage;
-            svg.appendChild(text);
-          }
         }
 
         var actual = actualSegment(card.stages, stageIndex, domain, width);

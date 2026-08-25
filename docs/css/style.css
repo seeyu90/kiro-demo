@@ -1293,17 +1293,16 @@ table.project-tasks tbody tr:hover td {
 }
 
 /* ── 專案階段追蹤：甘特圖雙軌設計（2026-08-25 使用者要求「上面是預計時程下面是實際時程」）
-   上軌＝預計時程：依 5 個階段固定配色＋印階段名稱，跟完成狀態顏色是兩套獨立語意。這五個
-   class 同時用在 SVG <rect>（甘特圖本體，需要 fill）與圖例的 HTML <span class="legend-swatch
-   ...">（需要 background），故兩個屬性都寫。下軌＝實際時程，沿用既有
-   .gantt-task-actual-delayed／.gantt-task-actual-early。 ── */
+   上軌＝預計時程：依 5 個階段固定配色，跟完成狀態顏色是兩套獨立語意（階段名稱不印在色塊上，
+   對照圖例即可，hover 才顯示——2026-08-25 使用者要求）。這五個 class 同時用在 SVG <rect>
+   （甘特圖本體，需要 fill）與圖例的 HTML <span class="legend-swatch...">（需要 background），
+   故兩個屬性都寫。下軌＝實際時程，沿用既有 .gantt-task-actual-delayed／.gantt-task-actual-early。 ── */
 :root {
   --gantt-stage-requirement: #90cdf4;
   --gantt-stage-kickoff: #fbb6ce;
   --gantt-stage-development: #faf089;
   --gantt-stage-testing: #d6bcfa;
   --gantt-stage-release: #9decf9;
-  --gantt-stage-label-text: #1a202c;
 }
 
 .gantt-stage-block {
@@ -1334,12 +1333,6 @@ table.project-tasks tbody tr:hover td {
 .gantt-stage-release {
   fill: var(--gantt-stage-release);
   background: var(--gantt-stage-release);
-}
-
-.gantt-stage-label {
-  fill: var(--gantt-stage-label-text);
-  font-size: 11px;
-  font-weight: 600;
 }
 
 /* 斑馬紋列底色，只用在偶數列，讓左側議題名稱跟右側色塊比較容易對齊看出屬於同一列。 */

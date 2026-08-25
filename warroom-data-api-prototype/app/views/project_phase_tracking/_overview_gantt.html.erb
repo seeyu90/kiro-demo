@@ -66,13 +66,10 @@
             <% planned = phase_gantt_chart_planned_segment(card[:stages], stage_index, domain, width) %>
             <% if planned %>
               <% stage_class = phase_gantt_chart_stage_class(stage[:stage]) %>
+              <%# 階段名稱不印在色塊上（配色已對照上方圖例），只保留 hover 提示。 %>
               <rect x="<%= planned[:x] %>" y="<%= planned_y %>" width="<%= planned[:width] %>" height="<%= ProjectPhaseTrackingHelper::GANTT_PLANNED_BAR_HEIGHT %>" rx="2" class="gantt-stage-block <%= stage_class %>">
                 <title><%= stage[:stage] %>（預計）｜<%= stage[:primary][:planned_date] %></title>
               </rect>
-              <%# 色塊夠寬才印文字，避免短色塊的字溢出蓋到隔壁階段。粗估每個全形字約 13px + 8px 左右內距。 %>
-              <% if planned[:width] >= (stage[:stage].length * 13 + 8) %>
-                <text x="<%= planned[:x] + planned[:width] / 2 %>" y="<%= planned_y + ProjectPhaseTrackingHelper::GANTT_PLANNED_BAR_HEIGHT / 2 + 4 %>" text-anchor="middle" class="gantt-stage-label" pointer-events="none"><%= stage[:stage] %></text>
-              <% end %>
             <% end %>
 
             <% actual = phase_gantt_chart_actual_segment(card[:stages], stage_index, domain, width) %>
