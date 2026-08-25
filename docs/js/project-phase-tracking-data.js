@@ -57,8 +57,9 @@
     // JZNPMS / 4548（issue_name：現場報工）：示範 issue_id 是純 Redmine ID 時 issue_name 補上
     // 人類可讀名稱；「開案」示範重新排程（同一 (project, issue_id, stage) 兩筆，較新一筆為主要
     // 呈現，較舊一筆在清單檢視展開後以次要樣式顯示）；「開發」示範 diff_days 剛好等於 0（準時，
-    // 應顯示綠色，不是紅色——2026-08-25 使用者發現並修正的 bug）。卡片目前狀態＝測試（延誤已
-    // 完成），預設篩選「未完成」不會顯示，切到「全部狀態」才看得到。
+    // 應顯示綠色，不是紅色——2026-08-25 使用者發現並修正的 bug）。卡片目前狀態取自 STAGE_ORDER
+    // 由後往前第一個有主要記錄的階段，即「發布」（尚無 actual_date）＝未完成，預設篩選「未
+    // 完成」就看得到，不需要切換狀態篩選。
     { project: "JZNPMS", issue_id: "4548", issue_name: "現場報工", stage: "開案",
       planned_date: "2026-01-05", actual_date: null, status: "延誤未完成", reason: "忘記安排" },
     { project: "JZNPMS", issue_id: "4548", issue_name: "現場報工", stage: "開案",
