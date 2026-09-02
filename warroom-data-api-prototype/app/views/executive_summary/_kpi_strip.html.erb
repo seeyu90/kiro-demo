@@ -1,0 +1,45 @@
+<div class="summary-bar executive-kpi-row" style="--kpi-columns: 4">
+  <div class="stat-item">
+    <span class="stat-value"><%= @portfolio[:project_count] %></span>
+    <span class="stat-label">專案總數</span>
+  </div>
+  <div class="stat-item stat-overdue">
+    <span class="stat-value"><%= @portfolio[:red_count] %></span>
+    <span class="stat-label">🔴 需立即關注</span>
+  </div>
+  <div class="stat-item stat-warning">
+    <span class="stat-value"><%= @portfolio[:yellow_count] %></span>
+    <span class="stat-label">🟡 觀察中</span>
+  </div>
+  <div class="stat-item">
+    <span class="stat-value"><%= @portfolio[:green_count] %></span>
+    <span class="stat-label">🟢 正常</span>
+  </div>
+</div>
+
+<div class="summary-bar executive-kpi-row" style="--kpi-columns: 6">
+  <div class="stat-item stat-overdue">
+    <span class="stat-value"><%= @portfolio[:overdue_task_total] %></span>
+    <span class="stat-label">逾期任務總數</span>
+  </div>
+  <div class="stat-item">
+    <span class="stat-value"><%= @portfolio[:month_complaint_count] || "—" %></span>
+    <span class="stat-label">本月客訴</span>
+  </div>
+  <div class="stat-item">
+    <span class="stat-value"><%= @portfolio[:sla_rate].present? ? "#{@portfolio[:sla_rate]}%" : "—" %></span>
+    <span class="stat-label">SLA 達標率</span>
+  </div>
+  <div class="stat-item <%= "stat-overdue" if @portfolio[:urgent_complaint_count].to_i.positive? %>">
+    <span class="stat-value"><%= @portfolio[:urgent_complaint_count] || "—" %></span>
+    <span class="stat-label">緊急客訴（未結＋已逾期）</span>
+  </div>
+  <div class="stat-item <%= "stat-warning" if @portfolio[:phase_pending_count].positive? %>">
+    <span class="stat-value"><%= @portfolio[:phase_pending_count] %></span>
+    <span class="stat-label">階段延誤／未完成</span>
+  </div>
+  <div class="stat-item">
+    <span class="stat-value"><%= @portfolio[:phase_paused_count] %></span>
+    <span class="stat-label">階段暫緩</span>
+  </div>
+</div>

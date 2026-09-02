@@ -1,0 +1,39 @@
+<details class="project-card<%= " project-card-overdue" if project[:health] == :critical %>">
+  <summary class="project-card-summary">
+    <span class="project-card-name"><%= project[:project_name] %></span>
+    <span class="project-card-tags">
+      <span class="tag status-badge <%= executive_health_badge_class(project[:health]) %>"><%= executive_health_label(project[:health]) %></span>
+      <span class="tag"><%= project[:customer] || "—" %></span>
+    </span>
+  </summary>
+
+  <div class="project-card-body">
+    <p><strong><%= executive_project_reason_line(project) %></strong></p>
+    <p class="freshness-label">
+      PM：<%= project[:pm] || "—" %>　完成率：<%= project[:task_completion_percent].present? ? "#{project[:task_completion_percent]}%" : "—" %>
+      <% if project[:complaint_count].present? %>　本月客訴：<%= project[:complaint_count] %><% end %>
+    </p>
+
+    <% if project[:overdue_tasks].any? %>
+      <details>
+        <summary>逾期任務清單（<%= project[:overdue_tasks].size %>）</summary>
+        <ul>
+          <% project[:overdue_tasks].each do |task| %>
+            <li><%= task[:task_name] %>（負責人：<%= task[:owner] || "—" %>，延誤 <%= task[:delay_days] || "—" %> 天）</li>
+          <% end %>
+        </ul>
+      </details>
+    <% end %>
+
+    <% if project[:at_risk_burndown_issues].any? %>
+      <details>
+        <summary>燃盡略慢／超支議題（<%= project[:at_risk_burndown_issues].size %>）</summary>
+        <ul>
+          <% project[:at_risk_burndown_issues].each do |issue| %>
+            <li><%= issue[:issue_title] %>（<%= Array(issue[:assignees]).join("、").presence || "—" %>）— <%= issue[:burndown_label] %></li>
+          <% end %>
+        </ul>
+      </details>
+    <% end %>
+  </div>
+</details>

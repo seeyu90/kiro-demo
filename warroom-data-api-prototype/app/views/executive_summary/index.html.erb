@@ -1,0 +1,59 @@
+<% content_for :title, "戰情室 — 專案週報" %>
+
+<header class="dashboard-header">
+  <div class="header-top">
+    <h1 class="dashboard-title">戰情室 <span>— 專案週報</span></h1>
+    <button type="button" id="theme-toggle" class="theme-toggle" aria-label="切換至淺色模式">🌙 深色</button>
+  </div>
+</header>
+
+<p class="breadcrumb">
+  <%= link_to "入口頁", "/", class: "back-link" %>
+  <span class="breadcrumb-sep">›</span>
+  <span class="breadcrumb-current">專案週報</span>
+</p>
+
+<% if @error.present? %>
+  <div class="error-message">
+    <strong>錯誤：</strong><%= @error %>
+  </div>
+<% else %>
+  <% if @roster_unavailable || @burndown_unavailable || @issues_unavailable || @phase_tracking_unavailable %>
+    <p class="freshness-label">
+      部分資料來源目前無法讀取，以下數字可能不完整：
+      <%= [
+        (@roster_unavailable ? "專案名冊（客戶／PM）" : nil),
+        (@burndown_unavailable ? "人時燃盡" : nil),
+        (@issues_unavailable ? "臭蟲議題" : nil),
+        (@phase_tracking_unavailable ? "專案階段追蹤" : nil)
+      ].compact.join("、") %>
+    </p>
+  <% end %>
+
+  <%= render partial: "last_week_summary" %>
+
+  <section class="issue-section">
+    <h2>本週應追蹤項目</h2>
+
+    <%= render partial: "kpi_strip" %>
+
+    <% attention_projects = @projects.reject { |p| p[:health] == :on_track } %>
+    <% on_track_projects = @projects.select { |p| p[:health] == :on_track } %>
+
+    <% if attention_projects.empty? %>
+      <p class="empty-state">目前無需要注意的專案。</p>
+    <% else %>
+      <div class="project-card-list">
+        <% attention_projects.each do |project| %>
+          <%= render partial: "project_card", locals: { project: project } %>
+        <% end %>
+      </div>
+    <% end %>
+
+    <% if on_track_projects.any? %>
+      <p class="freshness-label executive-ontrack-line">🟢 正常：<%= on_track_projects.map { |p| p[:project_name] }.join("、") %></p>
+    <% end %>
+
+    <%= render partial: "phase_exceptions" %>
+  </section>
+<% end %>
