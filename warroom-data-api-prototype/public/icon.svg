@@ -1,3 +1,18 @@
-<svg width="512" height="512" xmlns="http://www.w3.org/2000/svg">
-  <circle cx="256" cy="256" r="256" fill="red"/>
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- 深色底，呼應戰情室 dashboard 的深色主題（--color-surface）。 -->
+  <circle cx="256" cy="256" r="256" fill="#151a24"/>
+
+  <!-- 單圈雷達環：線寬加粗，確保縮到瀏覽器分頁的 16px favicon 仍看得出是個環。 -->
+  <circle cx="256" cy="256" r="176" fill="none" stroke="#63b3ed" stroke-width="22"/>
+
+  <!-- 四個角落的準星刻度，跟環之間留出明顯間距，避免小尺寸下糊成一片。 -->
+  <g stroke="#63b3ed" stroke-width="20" stroke-linecap="round">
+    <line x1="256" y1="28" x2="256" y2="78" />
+    <line x1="256" y1="434" x2="256" y2="484" />
+    <line x1="28" y1="256" x2="78" y2="256" />
+    <line x1="434" y1="256" x2="484" y2="256" />
+  </g>
+
+  <!-- 中心紅點：正在追蹤的警示／議題，呼應原本的紅點但賦予明確意義——整張圖唯一的高彩度焦點。 -->
+  <circle cx="256" cy="256" r="74" fill="#fc5a5a"/>
 </svg>
