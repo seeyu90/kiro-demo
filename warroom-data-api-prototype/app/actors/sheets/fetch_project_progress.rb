@@ -7,6 +7,11 @@ module Sheets
     input :task_types, default: nil
     input :scope, default: "due_this_week"
     input :incomplete_only, default: true
+    # 起訖日期區間篩選（作用於 planned_completion_date），與 scope 是獨立的兩個篩選軸，
+    # 同時套用（AND）。305 資料源本身鎖在單一年度試算表（見 ProjectProgressSheetsClient
+    # 的 SPREADSHEET_ID 註解），無法跨年查詢，這裡的區間篩選只能篩「當年度已載入的資料」。
+    input :planned_from, default: nil
+    input :planned_to, default: nil
     output :grouped_data
     output :project_names
     output :task_types_available
@@ -47,7 +52,7 @@ module Sheets
       self.summary = compute_summary(scoped_tasks)
 
       display_project_names = project.presence ? [ project ] : project_names
-      filtered = filter_tasks(all_tasks, project, selected_types, scope, incomplete_only)
+      filtered = filter_tasks(all_tasks, project, selected_types, scope, incomplete_only, planned_from, planned_to)
       grouped_filtered = filtered.group_by { |t| t[:project_name] }
       self.display_data = display_project_names.index_with { |name| sort_overdue_first(grouped_filtered[name] || []) }
     rescue Google::Apis::ClientError => e
@@ -154,7 +159,7 @@ module Sheets
       true
     end
 
-    def filter_tasks(tasks, selected_project, selected_types, selected_scope, incomplete_only_flag)
+    def filter_tasks(tasks, selected_project, selected_types, selected_scope, incomplete_only_flag, from, to)
       week_range = self.class.week_range(Date.current)
 
       tasks.select do |t|
@@ -162,9 +167,22 @@ module Sheets
         next false if incomplete_only_flag && COMPLETED_STATUSES.include?(t[:status])
         next false if selected_scope == "overdue" && !self.class.overdue?(t)
         next false if selected_scope == "due_this_week" && !due_by_this_week_end?(t, week_range)
+        next false unless within_planned_range?(t, from, to)
 
         true
       end
+    end
+
+    # from／to 皆為 nil（沒篩選）時一律視為符合；planned_completion_date 本身無法解析
+    # （空白或格式錯誤）時，只要有設定任一邊界就視為不符合——不確定日期落在哪裡，不該被
+    # 一個「起訖日期」篩選誤放行。
+    def within_planned_range?(task, from, to)
+      return true if from.blank? && to.blank?
+
+      date = self.class.parse_date(task[:planned_completion_date])
+      return false if date.nil?
+
+      (from.blank? || date >= from) && (to.blank? || date <= to)
     end
 
     # 本週到期＝不晚於本週週日，不限下界，涵蓋所有已逾期任務（不論逾期發生於本週內或更早）。

@@ -488,5 +488,49 @@ RSpec.describe Sheets::FetchProjectProgress do
         end
       end
     end
+
+    # 任務：新增 planned_from／planned_to 起訖日期區間篩選，與 scope 是獨立的兩個篩選軸。
+    context "planned_from/planned_to date range filtering" do
+      let(:rows_for_range) do
+        [
+          [ "專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延遲天數", "類型" ],
+          [ "Project A", "Task Early", "未完成", "Alice", "2026-01-10", "", "", "功能" ],
+          [ "Project A", "Task Mid", "未完成", "Bob", "2026-06-15", "", "", "功能" ],
+          [ "Project A", "Task Late", "未完成", "Carol", "2026-12-20", "", "", "功能" ]
+        ]
+      end
+
+      before { allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_return(rows_for_range) }
+
+      def task_names_for(**inputs)
+        r = described_class.result(scope: "all", **inputs)
+        r.display_data.values.flatten.map { |t| t[:task_name] }
+      end
+
+      it "does not restrict tasks when both bounds are nil (default, backward compatible)" do
+        expect(task_names_for).to contain_exactly("Task Early", "Task Mid", "Task Late")
+      end
+
+      it "keeps only tasks on/after planned_from when only the lower bound is given" do
+        expect(task_names_for(planned_from: Date.new(2026, 6, 1))).to contain_exactly("Task Mid", "Task Late")
+      end
+
+      it "keeps only tasks on/before planned_to when only the upper bound is given" do
+        expect(task_names_for(planned_to: Date.new(2026, 6, 30))).to contain_exactly("Task Early", "Task Mid")
+      end
+
+      it "keeps only tasks within [planned_from, planned_to] when both bounds are given" do
+        expect(
+          task_names_for(planned_from: Date.new(2026, 2, 1), planned_to: Date.new(2026, 11, 1))
+        ).to contain_exactly("Task Mid")
+      end
+
+      it "excludes tasks with an unparsable planned_completion_date when a bound is given" do
+        rows = rows_for_range + [ [ "Project A", "Task Undated", "未完成", "Dan", "TBD", "", "", "功能" ] ]
+        allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_return(rows)
+
+        expect(task_names_for(planned_from: Date.new(2026, 1, 1))).not_to include("Task Undated")
+      end
+    end
   end
 end

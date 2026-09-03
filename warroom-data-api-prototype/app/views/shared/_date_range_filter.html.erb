@@ -1,0 +1,11 @@
+<%# 305／306／307 共用的起訖日期區間篩選欄位：留白＝不限制。呼叫端在自己的 form_with 區塊內
+    render，並傳入 from:／to:（Date 或 nil），選填 min:／max:（Date，用已知資料範圍當
+    guardrail，避免使用者選到明知沒有資料的日期）。 %>
+<div class="control-group">
+  <label for="from">起始日期：</label>
+  <%= date_field_tag :from, from&.iso8601, min: min&.iso8601, max: max&.iso8601 %>
+</div>
+<div class="control-group">
+  <label for="to">結束日期：</label>
+  <%= date_field_tag :to, to&.iso8601, min: min&.iso8601, max: max&.iso8601 %>
+</div>

@@ -51,6 +51,9 @@
       <label><%= radio_button_tag :scope, "overdue", @scope == "overdue" %> 已逾期</label>
     </fieldset>
 
+    <%# 依預計完成日期篩選，跟上面的「範圍」是兩個獨立篩選軸，同時套用；留白＝不限制。 %>
+    <%= render "shared/date_range_filter", from: @selected_from, to: @selected_to, min: nil, max: nil %>
+
     <label class="incomplete-toggle">
       <%# 隱藏欄位：確保取消勾選時仍會送出 incomplete_only=0，
           Controller 用「是否等於 "0"」判斷，需仰賴此欄位才會被明確覆蓋為 false %>

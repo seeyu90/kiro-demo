@@ -148,4 +148,41 @@ RSpec.describe "Dashboard", type: :request do
       expect(response.body).to include("重新整理資料")
     end
   end
+
+  describe "GET /dashboard with from/to date range filter" do
+    it "does not restrict tasks when from/to are absent (default, backward compatible)" do
+      get "/dashboard", params: { scope: "all", incomplete_only: "0", "task_type[]" => [ "功能", "PR", "調整" ] }
+
+      expect(response.body).to include("Task Alpha 1")
+      expect(response.body).to include("Task Beta 1")
+      expect(response.body).to include("Task Beta 2")
+    end
+
+    it "keeps only tasks whose planned_completion_date falls within [from, to]" do
+      get "/dashboard", params: {
+        scope: "all", incomplete_only: "0", "task_type[]" => [ "功能", "PR", "調整" ],
+        from: "2026-02-01", to: "2026-02-28"
+      }
+
+      expect(response.body).to include("Task Beta 1")
+      expect(response.body).not_to include("Task Alpha 1")
+      expect(response.body).not_to include("Task Beta 2")
+    end
+
+    it "renders the selected from/to values back into the date inputs" do
+      get "/dashboard", params: { from: "2026-02-01", to: "2026-02-28" }
+
+      expect(response.body).to include(%(value="2026-02-01"))
+      expect(response.body).to include(%(value="2026-02-28"))
+    end
+
+    it "ignores an unparsable date and falls back to no restriction on that bound" do
+      get "/dashboard", params: {
+        scope: "all", incomplete_only: "0", "task_type[]" => [ "功能", "PR", "調整" ], from: "not-a-date"
+      }
+
+      expect(response).to have_http_status(200)
+      expect(response.body).to include("Task Alpha 1")
+    end
+  end
 end
