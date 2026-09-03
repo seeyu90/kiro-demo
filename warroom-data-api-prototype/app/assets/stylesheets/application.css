@@ -4,6 +4,10 @@
 
 /* ── 主題變數：深色（預設） ── */
 :root {
+  /* 讓瀏覽器原生元件（目前只有 input[type=date] 的月曆圖示）跟著主題切換，避免深色主題下
+     圖示維持淺色配色、跟深色背景對比不足看不清楚。 */
+  color-scheme: dark;
+
   --color-bg: #0f1117;
   --color-surface: #1a202c;
   --color-border: #2d3748;
@@ -52,6 +56,8 @@
 
 /* ── 主題變數：淺色 ── */
 html[data-theme="light"] {
+  color-scheme: light;
+
   --color-bg: #f7fafc;
   --color-surface: #ffffff;
   --color-border: #cbd5e0;
@@ -362,9 +368,10 @@ a.stat-item:focus {
   outline: none;
 }
 
-/* 搜尋框跟 select 共用同一套外觀（背景／邊框／圓角／字級），避免瀏覽器預設的白底文字輸入框
-   跟深色主題的 select 混在同一排時視覺不一致。 */
-.project-selector input[type="text"] {
+/* 搜尋框／起訖日期輸入框跟 select 共用同一套外觀（背景／邊框／圓角／字級），避免瀏覽器
+   預設的白底輸入框跟深色主題的 select 混在同一排時視覺不一致。 */
+.project-selector input[type="text"],
+.project-selector input[type="date"] {
   background: var(--color-surface);
   color: var(--color-text);
   border: 1px solid var(--color-border-hover);
@@ -379,7 +386,9 @@ a.stat-item:focus {
 }
 
 .project-selector input[type="text"]:hover,
-.project-selector input[type="text"]:focus {
+.project-selector input[type="text"]:focus,
+.project-selector input[type="date"]:hover,
+.project-selector input[type="date"]:focus {
   border-color: var(--color-accent);
   outline: none;
 }

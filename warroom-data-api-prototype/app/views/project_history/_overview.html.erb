@@ -1,11 +1,7 @@
 <%= form_with url: "/project_history", method: :get, class: "project-selector",
               data: { turbo_frame: "project-history-content" } do %>
   <%= hidden_field_tag :view, @view %>
-  <div class="control-group">
-    <label for="year">年度：</label>
-    <%= select_tag :year,
-                   options_for_select([ [ "全部年度", "" ] ] + @available_years.map { |y| [ y, y ] }, @selected_year) %>
-  </div>
+  <%= render "shared/year_select_field", available_years: @available_years, selected_year: @selected_year %>
   <div class="control-group">
     <label for="status">狀態：</label>
     <%= select_tag :status,

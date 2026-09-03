@@ -1,4 +1,6 @@
 class ProjectHistoryController < ApplicationController
+  include YearFilterable
+
   VIEWS = %w[list gantt].freeze
   DEFAULT_VIEW = "list".freeze
 
@@ -13,15 +15,6 @@ class ProjectHistoryController < ApplicationController
   end
 
   private
-
-  # 年度篩選預設「今年」，但使用者能透過下拉選單明確選「全部年度」（表單一律送出 year
-  # 參數，即使值是空字串，用 `params.key?` 區分「使用者選了全部年度」與「表單根本還沒
-  # 送出過」這兩種情況，只有後者才套用今年當預設值）。
-  def resolve_year
-    return params[:year].presence if params.key?(:year)
-
-    Date.current.year.to_s
-  end
 
   def build_success(result, year)
     all_rows = ProjectHistoryRowBlueprint.render_as_hash(result.overview_rows)

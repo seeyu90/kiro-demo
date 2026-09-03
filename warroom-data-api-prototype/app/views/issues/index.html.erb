@@ -39,16 +39,14 @@
           <%= hidden_field_tag :status, @selected_status %>
           <%= hidden_field_tag :q, @selected_q %>
           <%= hidden_field_tag :type, @selected_type %>
-          <div class="control-group">
-            <label for="month">月份：</label>
-            <%= select_tag :month, options_for_select(@available_months, @selected_month) %>
-          </div>
+          <% min_date, max_date = available_month_bounds %>
+          <%= render "shared/date_range_filter", from: @selected_from, to: @selected_to, min: min_date, max: max_date %>
           <%= submit_tag "套用篩選", class: "apply-filters-btn" %>
         <% end %>
 
         <section class="issue-section">
           <h2>月度 KPI</h2>
-          <p class="section-note">月度 KPI 為月結數字，當月進行中尚未結算；每日趨勢與依專案分類統計則依此處所選月份即時呈現；「議題資料」分頁的議題明細不受月份篩選影響（顯示全部議題）</p>
+          <p class="section-note">月度 KPI 為月結數字，當月進行中尚未結算；每日趨勢與依專案分類統計則依此處所選期間即時呈現；「議題資料」分頁的議題明細不受期間篩選影響（顯示全部議題）<% if @matched_month_count > 1 %>；目前彙總 <%= @matched_month_count %> 個月，攔截率／平均天數／SLA達標率無法跨月合併，顯示「－」<% end %></p>
           <% if @selected_month_record %>
             <div class="summary-bar">
               <div class="stat-item">
@@ -64,7 +62,7 @@
                 <span class="stat-label">總Bug</span>
               </div>
               <div class="stat-item">
-                <span class="stat-value"><%= @selected_month_record[:block_rate] %>%</span>
+                <span class="stat-value"><%= month_kpi_rate_display(@selected_month_record[:block_rate]) %></span>
                 <span class="stat-label">攔截率</span>
               </div>
               <div class="stat-item">
@@ -76,11 +74,11 @@
                 <span class="stat-label">未結案</span>
               </div>
               <div class="stat-item">
-                <span class="stat-value"><%= @selected_month_record[:avg_days] %></span>
+                <span class="stat-value"><%= month_kpi_rate_display(@selected_month_record[:avg_days], unit: "") %></span>
                 <span class="stat-label">平均天數</span>
               </div>
               <div class="stat-item">
-                <span class="stat-value"><%= @selected_month_record[:sla_rate] %>%</span>
+                <span class="stat-value"><%= month_kpi_rate_display(@selected_month_record[:sla_rate]) %></span>
                 <span class="stat-label">SLA達標率</span>
               </div>
             </div>
@@ -127,8 +125,9 @@
         <%= form_with url: "/issues", method: :get, class: "project-selector",
                       data: { turbo_frame: "issue-content" } do %>
           <%= hidden_field_tag :tab, "detail" %>
-          <%# 同上：帶入「統計摘要」分頁目前的月份與排序選擇，避免送出本表單時把它們重設為預設值。 %>
-          <%= hidden_field_tag :month, @selected_month %>
+          <%# 同上：帶入「統計摘要」分頁目前的起訖日期與排序選擇，避免送出本表單時把它們重設為預設值。 %>
+          <%= hidden_field_tag :from, @selected_from&.iso8601 %>
+          <%= hidden_field_tag :to, @selected_to&.iso8601 %>
           <%= hidden_field_tag :breakdown_sort, @breakdown_sort %>
           <%= hidden_field_tag :breakdown_dir, @breakdown_dir %>
           <%# 快捷篩選 Tag（見下方）是獨立連結、不經過這個表單送出，但點擊後仍會落在

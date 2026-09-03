@@ -5,6 +5,11 @@ module Sheets
     input :project, default: nil
     input :assignee, default: nil
     input :status, default: "in_progress"
+    # 起訖日期區間篩選：作用於已解析出的週欄位日期（week_dates），留空＝顯示全部週次
+    # （維持改動前行為）。307 資料源本身鎖在單一年度分頁（見 BurndownSheetsClient 的
+    # SHEET_NAME 註解），無法跨年查詢，這裡只能篩「當年度已載入的週次」。
+    input :from, default: nil
+    input :to, default: nil
     output :issues
     output :projects
     output :assignees
@@ -23,6 +28,9 @@ module Sheets
     def call
       rows = BurndownSheetsClient.fetch_rows
       header = rows.first || []
+      # week_dates 本身不套用 from／to：累加消耗人時／理想線的計算基準需要議題完整的歷史
+      # 週次，只篩掉範圍外的週次會讓累加從「篩選後的第一週」重新歸零，變成沒有算入更早週次
+      # 已消耗人時的錯誤剩餘量（code review 回報：見 within_display_range? 改在輸出端套用）。
       week_dates = parse_week_dates(header)
 
       all_issues = parse_issues(rows.drop(1), week_dates)
@@ -215,8 +223,10 @@ module Sheets
           status: merge_status(group),
           estimated_hours: estimated_hours,
           reported_remaining_hours: remaining_values.empty? ? nil : remaining_values.sum,
-          actual_series: compute_actual_series(week_window, weekly_hours, estimated_hours),
-          ideal_series: compute_ideal_series(week_window, start_date, due_date, estimated_hours),
+          # 累加一律先用完整的 week_window 算完整段歷史的消耗／理想值，再依 from／to 裁掉
+          # 「顯示」範圍以外的資料點——只裁輸出、不裁輸入，累加基準才不會被裁短的範圍帶偏。
+          actual_series: trim_to_display_range(compute_actual_series(week_window, weekly_hours, estimated_hours)),
+          ideal_series: trim_to_display_range(compute_ideal_series(week_window, start_date, due_date, estimated_hours)),
           per_assignee: per_assignee_series(by_assignee, per_assignee_weekly, week_window)
         }
       end
@@ -232,7 +242,7 @@ module Sheets
         {
           assignee: assignee,
           estimated_hours: rows.sum { |r| r[:estimated_hours] },
-          cumulative_series: compute_cumulative_series(week_window, per_assignee_weekly[assignee])
+          cumulative_series: trim_to_display_range(compute_cumulative_series(week_window, per_assignee_weekly[assignee]))
         }
       end
     end
@@ -294,8 +304,21 @@ module Sheets
       ]
       # 錨點排在前面：Array#uniq 保留「第一次出現」的元素，若某週欄位剛好落在錨點同一天
       # （例如 due_date 本身不是週一、但正規化後跟某週欄位同一週），錨點的保證值（滿額／歸零）
-      # 必須贏過該週依比例算出的值，理想線才能真的準時歸零／從滿額開始。
+      # 必須贏過該週依比例算出的值，理想線才能真的準時歸零／從滿額開始。錨點超出 from／to
+      # 顯示範圍的部分，交給呼叫端的 trim_to_display_range 統一裁掉，這裡不重複處理。
       (anchors + points).uniq { |p| p[:date] }.sort_by { |p| p[:date] }
+    end
+
+    # 只裁「要顯示」的資料點，不影響傳入的累加計算——累加必須用完整歷史週次才正確，見
+    # merge_rows 對 actual_series／ideal_series／cumulative_series 的呼叫處註解。
+    def trim_to_display_range(series)
+      return series if from.blank? && to.blank?
+
+      series.select { |p| within_display_range?(Date.parse(p[:date])) }
+    end
+
+    def within_display_range?(date)
+      (from.blank? || date >= from) && (to.blank? || date <= to)
     end
 
     def parse_date(date_str)

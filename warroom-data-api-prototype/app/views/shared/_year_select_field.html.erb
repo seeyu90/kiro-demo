@@ -1,0 +1,8 @@
+<%# 共用年度篩選欄位：project_history／project_phase_tracking 兩頁的年度下拉原本逐字重複，
+    抽成這個 partial。呼叫端需在自己的 form_with 區塊內 render，並傳入
+    available_years:／selected_year: 兩個 local。 %>
+<div class="control-group">
+  <label for="year">年度：</label>
+  <%= select_tag :year,
+                 options_for_select([ [ "全部年度", "" ] ] + available_years.map { |y| [ y, y ] }, selected_year) %>
+</div>

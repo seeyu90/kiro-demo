@@ -1,4 +1,6 @@
 class IssuesController < ApplicationController
+  include DateRangeFilterable
+
   DEFAULT_STATUS = "新建立".freeze
   TABS = %w[stats detail].freeze
   DEFAULT_TAB = "stats".freeze
@@ -11,8 +13,10 @@ class IssuesController < ApplicationController
   ISSUE_PAGE_SIZE = 15
 
   def index
+    from, to = resolve_date_range
     result = Sheets::FetchIssueDashboard.result(
-      month: params[:month].presence,
+      from: from,
+      to: to,
       project: params[:project].presence,
       status: params.key?(:status) ? params[:status] : DEFAULT_STATUS,
       breakdown_sort: BREAKDOWN_SORT_KEYS.include?(params[:breakdown_sort]) ? params[:breakdown_sort] : nil,
@@ -36,10 +40,12 @@ class IssuesController < ApplicationController
 
     @month_kpi = MonthKpiBlueprint.render_as_hash(result.month_kpi)
     @available_months = result.available_months
-    @selected_month = result.selected_month
+    @selected_from = result.selected_from
+    @selected_to = result.selected_to
+    @matched_month_count = result.settled_month_count
     @selected_month_record = result.selected_month_record
     @selected_month_pending = result.selected_month_pending
-    @daily_kpi = DailyKpiBlueprint.render_as_hash(result.daily_kpi_for_month)
+    @daily_kpi = DailyKpiBlueprint.render_as_hash(result.daily_kpi_for_range)
 
     @breakdown_sort = BREAKDOWN_SORT_KEYS.include?(params[:breakdown_sort]) ? params[:breakdown_sort] : nil
     @breakdown_dir =
@@ -70,7 +76,9 @@ class IssuesController < ApplicationController
     @breakdown_sort = nil
     @breakdown_dir = DEFAULT_BREAKDOWN_SORT_DIR
     @available_months = []
-    @selected_month = nil
+    @selected_from = nil
+    @selected_to = nil
+    @matched_month_count = 0
     @selected_month_record = nil
     @selected_month_pending = false
     @projects = []

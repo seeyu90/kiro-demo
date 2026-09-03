@@ -557,6 +557,51 @@ RSpec.describe Sheets::FetchProjectBurndown do
       end
     end
 
+    context "from/to date range filtering" do
+      # 週欄位順序比照真實試算表：最靠近固定欄位的是最近一週，越右邊越舊（近→遠）。
+      let(:header) { fixed_header + %w[08/10 08/03 07/27 07/20] }
+      let(:rows) do
+        [
+          header,
+          # 開案 07/15、到期 08/20：開案週（07/13）在請求範圍之前，到期週（08/17）在請求
+          # 範圍之後，兩個錨點都應該被裁掉（見下方 "clamps ideal_series anchors" 案例）。
+          [ "5", "AG 亞炬", "議題A", "王贊勛", "1001", "2026/07/15", "2026/08/20", "執行中", "40",
+            "6", "5", "4", "3" ]
+        ]
+      end
+
+      it "shows all weeks when from/to are absent (default, backward compatible)" do
+        expect(result.issues.first[:actual_series].map { |p| p[:date] })
+          .to eq([ "2026-07-20", "2026-07-27", "2026-08-03", "2026-08-10" ])
+      end
+
+      it "keeps only weeks within [from, to], but accumulates from the issue's full history" do
+        result = described_class.result(from: Date.new(2026, 8, 1), to: Date.new(2026, 8, 15))
+
+        actual = result.issues.first[:actual_series]
+        expect(actual.map { |p| p[:date] }).to eq([ "2026-08-03", "2026-08-10" ])
+        # 累加必須延續被篩掉的 07/20（3）、07/27（4）兩週已消耗人時（40-3-4-5=28、
+        # 40-3-4-5-6=22），不能從篩選後的第一週重新歸零（那樣會算成 35/29，系統性高估
+        # 剩餘量——code review 回報的 bug，見 merge_rows 對 trim_to_display_range 的呼叫）。
+        expect(actual.map { |p| p[:hours] }).to eq([ 28.0, 22.0 ])
+      end
+
+      it "only applies the given bound when the other is absent (open-ended range)" do
+        result = described_class.result(from: Date.new(2026, 8, 1), to: nil)
+
+        expect(result.issues.first[:actual_series].map { |p| p[:date] }).to eq([ "2026-08-03", "2026-08-10" ])
+      end
+
+      it "clamps ideal_series anchors to the requested range instead of leaking outside it" do
+        result = described_class.result(from: Date.new(2026, 8, 1), to: Date.new(2026, 8, 15))
+
+        dates = result.issues.first[:ideal_series].map { |p| p[:date] }
+        expect(dates).not_to include("2026-07-13") # 開案週錨點，早於 from
+        expect(dates).not_to include("2026-08-17") # 到期週錨點，晚於 to
+        expect(dates).to all(satisfy { |d| d >= "2026-08-01" && d <= "2026-08-15" })
+      end
+    end
+
     context "when BurndownSheetsClient raises a StandardError (e.g. missing credentials)" do
       before do
         allow(BurndownSheetsClient).to receive(:fetch_rows)
