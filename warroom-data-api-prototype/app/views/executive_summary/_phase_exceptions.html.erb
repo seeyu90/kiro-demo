@@ -47,7 +47,7 @@
                 同一個取捨的說明）。 %>
             <% if group[:customer] != "未知客戶" %>
               <p class="freshness-label">
-                原始資料：<%= link_to "專案階段追蹤", project_phase_tracking_path(customer: group[:customer]), class: "raw-data-link" %>
+                原始資料：<%= link_to "專案階段追蹤", project_phase_tracking_path(customer: group[:customer]), class: "raw-data-link", target: "_blank", rel: "noopener" %>
               </p>
             <% end %>
           </div>

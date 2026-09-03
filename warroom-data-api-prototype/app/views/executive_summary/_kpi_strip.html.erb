@@ -3,11 +3,11 @@
     <span class="stat-value"><%= @portfolio[:project_count] %></span>
     <span class="stat-label">專案總數</span>
   </div>
-  <%= link_to dashboard_path(scope: "overdue"), class: "stat-item stat-overdue" do %>
+  <%= link_to dashboard_path(scope: "overdue"), class: "stat-item stat-overdue", target: "_blank", rel: "noopener" do %>
     <span class="stat-value"><%= @portfolio[:red_count] %></span>
     <span class="stat-label">🔴 需立即關注</span>
   <% end %>
-  <%= link_to dashboard_path(scope: "due_this_week"), class: "stat-item stat-warning" do %>
+  <%= link_to dashboard_path(scope: "due_this_week"), class: "stat-item stat-warning", target: "_blank", rel: "noopener" do %>
     <span class="stat-value"><%= @portfolio[:yellow_count] %></span>
     <span class="stat-label">🟡 觀察中</span>
   <% end %>
@@ -24,25 +24,28 @@
   （本頁另有 6 個月滾動窗＋「延誤未完成」「未完成」兩種狀態合計，目的頁只能單一年度＋單一
   狀態），寧可連到一個「範圍小、可用」的預設頁，讓使用者自己再調整篩選，也不要連到一個
   技術上資料更完整、但實際上塞爆看不下去的頁面。
+
+  全部 KPI 連結都用 target: "_blank"（另開分頁）：這頁是彙總儀表板，使用者點進細節頁查完
+  應該回來繼續看其他項目，不希望離開就弄丟目前這頁的捲動位置／已展開的卡片狀態。
 %>
 <div class="summary-bar executive-kpi-row" style="--kpi-columns: 5">
-  <%= link_to dashboard_path(scope: "overdue"), class: "stat-item stat-overdue" do %>
+  <%= link_to dashboard_path(scope: "overdue"), class: "stat-item stat-overdue", target: "_blank", rel: "noopener" do %>
     <span class="stat-value"><%= @portfolio[:overdue_task_total] %></span>
     <span class="stat-label">逾期任務總數</span>
   <% end %>
-  <%= link_to issues_path, class: "stat-item" do %>
+  <%= link_to issues_path, class: "stat-item", target: "_blank", rel: "noopener" do %>
     <span class="stat-value"><%= @portfolio[:month_complaint_count] || "—" %></span>
     <span class="stat-label">本月客訴</span>
   <% end %>
-  <%= link_to issues_path, class: "stat-item" do %>
+  <%= link_to issues_path, class: "stat-item", target: "_blank", rel: "noopener" do %>
     <span class="stat-value"><%= @portfolio[:sla_rate].present? ? "#{@portfolio[:sla_rate]}%" : "—" %></span>
     <span class="stat-label">SLA 達標率</span>
   <% end %>
-  <%= link_to issues_path(tab: "detail", type: "Complaint"), class: "stat-item #{"stat-overdue" if @portfolio[:urgent_complaint_count].to_i.positive?}" do %>
+  <%= link_to issues_path(tab: "detail", type: "Complaint"), class: "stat-item #{"stat-overdue" if @portfolio[:urgent_complaint_count].to_i.positive?}", target: "_blank", rel: "noopener" do %>
     <span class="stat-value"><%= @portfolio[:urgent_complaint_count] || "—" %></span>
     <span class="stat-label">緊急客訴（未結＋已逾期）</span>
   <% end %>
-  <%= link_to project_phase_tracking_path, class: "stat-item #{"stat-warning" if @portfolio[:phase_pending_count].positive?}" do %>
+  <%= link_to project_phase_tracking_path, class: "stat-item #{"stat-warning" if @portfolio[:phase_pending_count].positive?}", target: "_blank", rel: "noopener" do %>
     <span class="stat-value"><%= @portfolio[:phase_pending_count] %></span>
     <span class="stat-label">階段延誤／未完成</span>
   <% end %>

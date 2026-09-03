@@ -96,6 +96,15 @@ RSpec.describe "ExecutiveSummary", type: :request do
       expect(response.body).to include('href="/project_history?project_name=AG+%E4%BA%9E%E7%82%AC"')
     end
 
+    # 這頁是彙總儀表板，點進細節頁不該弄丟目前這頁的捲動位置／已展開的卡片狀態，故所有
+    # 「原始資料」連結都要另開分頁（見使用者回饋：應該要用另開分頁）。
+    it "opens every raw-data link in a new tab instead of navigating away from the summary" do
+      expect(response.body.scan('class="raw-data-link"').size).to be > 0
+      expect(response.body.scan(/class="raw-data-link"[^>]*target="_blank"/).size)
+        .to eq(response.body.scan('class="raw-data-link"').size)
+      expect(response.body.scan(/class="stat-item[^"]*"[^>]*target="_blank"/).size).to be >= 5
+    end
+
     it "links KPI tiles to the pages they summarize (overdue tasks, issues, phase tracking)" do
       expect(response.body).to include('href="/dashboard?scope=overdue"')
       expect(response.body).to include('href="/issues"')
