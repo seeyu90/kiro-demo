@@ -53,8 +53,9 @@ RSpec.describe "Issues", type: :request do
       expect(response).to have_http_status(200)
     end
 
-    it "defaults the month select to the latest year_month" do
-      expect(response.body).to match(/<option [^>]*selected="selected"[^>]*>2026-08<\/option>/)
+    it "defaults the date range to the latest settled month's bounds" do
+      expect(response.body).to include(%(name="from" id="from" value="2026-08-01"))
+      expect(response.body).to include(%(name="to" id="to" value="2026-08-31"))
     end
 
     it "shows KPI values for the latest month" do
@@ -69,8 +70,8 @@ RSpec.describe "Issues", type: :request do
     end
 
     it "does not repeat the note near the project/status filters (which do actively filter the list below)" do
-      # 確認「不受月份篩選影響」字樣只出現一次（在月度 KPI 區塊），不會出現在議題明細篩選附近造成混淆
-      expect(response.body.scan("不受月份篩選影響").size).to eq(1)
+      # 確認「不受期間篩選影響」字樣只出現一次（在月度 KPI 區塊），不會出現在議題明細篩選附近造成混淆
+      expect(response.body.scan("不受期間篩選影響").size).to eq(1)
     end
 
     it "shows the project breakdown table filtered to issues started in the selected month" do
@@ -143,8 +144,8 @@ RSpec.describe "Issues", type: :request do
     end
   end
 
-  describe "GET /issues?month=2026-07" do
-    before { get "/issues", params: { month: "2026-07", status: "" } }
+  describe "GET /issues?from=2026-07-01&to=2026-07-31" do
+    before { get "/issues", params: { from: "2026-07-01", to: "2026-07-31", status: "" } }
 
     it "shows KPI values for the selected month, not the latest" do
       expect(response.body).to include("20.0") # block_rate for 2026-07
@@ -153,7 +154,7 @@ RSpec.describe "Issues", type: :request do
     it "filters the project breakdown to issues started in the selected month" do
       # 2026-07 沒有任何 issue 的 start_date 落在此月份，應顯示空狀態
       section = project_breakdown_section(response.body)
-      expect(section).to include("所選月份無議題資料")
+      expect(section).to include("所選期間無議題資料")
       expect(section).not_to include("Virtuous HRM")
       expect(section).not_to include("AG 亞炬")
     end
@@ -163,10 +164,30 @@ RSpec.describe "Issues", type: :request do
     end
   end
 
-  describe "GET /issues?month=2026-01" do
-    before { get "/issues", params: { month: "2026-01", status: "" } }
+  describe "GET /issues?from=2026-07-01&to=2026-08-31 (跨月彙總)" do
+    before { get "/issues", params: { from: "2026-07-01", to: "2026-08-31", status: "" } }
 
-    it "shows the project breakdown filtered to issues started in January (需求 3a.2 已改為依月份篩選)" do
+    it "sums the count fields across matched months" do
+      expect(response.body).to include(">43<") # complaint 28+15
+      expect(response.body).to include(">16<") # testing 7+9, unresolved 7+3
+      expect(response.body).to include(">59<") # total_bug 35+24
+    end
+
+    it "shows a dash instead of a blended rate for block_rate/avg_days/sla_rate" do
+      expect(response.body.scan("－").size).to be >= 3
+      expect(response.body).not_to include("37.5%")
+      expect(response.body).not_to include("20.0%")
+    end
+
+    it "notes how many months were aggregated" do
+      expect(response.body).to include("彙總 2 個月")
+    end
+  end
+
+  describe "GET /issues?from=2026-01-01&to=2026-01-31" do
+    before { get "/issues", params: { from: "2026-01-01", to: "2026-01-31", status: "" } }
+
+    it "shows the project breakdown filtered to issues started in January (需求 3a.2 已改為依日期區間篩選)" do
       # issue 4547 的 start_date 為 2026/1/2，屬於此月份
       section = project_breakdown_section(response.body)
       expect(section).to include("Virtuous HRM")
@@ -209,11 +230,12 @@ RSpec.describe "Issues", type: :request do
       expect(section).not_to include("▼")
     end
 
-    it "keeps the selected month while sorting (sort links preserve the month param)" do
-      get "/issues", params: { month: "2026-01", breakdown_sort: "complaint" }
+    it "keeps the selected date range while sorting (sort links preserve the from/to params)" do
+      get "/issues", params: { from: "2026-01-01", to: "2026-01-31", breakdown_sort: "complaint" }
 
       section = project_breakdown_section(response.body)
-      expect(section).to include("month=2026-01")
+      expect(section).to include("from=2026-01-01")
+      expect(section).to include("to=2026-01-31")
       expect(section).to include("breakdown_sort=complaint")
     end
 
@@ -227,20 +249,22 @@ RSpec.describe "Issues", type: :request do
   end
 
   describe "GET /issues 兩個分頁籤的表單各自送出時，不得覆蓋另一個分頁籤目前的篩選狀態" do
-    it "keeps the 議題資料 tab's project/status filters when submitting the 統計摘要 tab's month form" do
+    it "keeps the 議題資料 tab's project/status filters when submitting the 統計摘要 tab's date range form" do
       get "/issues", params: { tab: "detail", project: "AG 亞炬", status: "" }
-      get "/issues", params: { tab: "stats", month: "2026-07", project: "AG 亞炬", status: "" }
+      get "/issues", params: { tab: "stats", from: "2026-07-01", to: "2026-07-31", project: "AG 亞炬", status: "" }
 
       expect(response.body).to match(/<option [^>]*selected="selected"[^>]*value="AG 亞炬"/)
       expect(response.body).to match(/<option [^>]*selected="selected"[^>]*value=""[^>]*>全部狀態<\/option>/)
     end
 
-    it "keeps the 統計摘要 tab's month/sort selections when submitting the 議題資料 tab's filter form" do
-      get "/issues", params: { tab: "stats", month: "2026-08", breakdown_sort: "complaint", breakdown_dir: "asc" }
-      get "/issues", params: { tab: "detail", project: "", status: "", month: "2026-08",
+    it "keeps the 統計摘要 tab's date range/sort selections when submitting the 議題資料 tab's filter form" do
+      get "/issues", params: { tab: "stats", from: "2026-08-01", to: "2026-08-31",
+                                breakdown_sort: "complaint", breakdown_dir: "asc" }
+      get "/issues", params: { tab: "detail", project: "", status: "", from: "2026-08-01", to: "2026-08-31",
                                 breakdown_sort: "complaint", breakdown_dir: "asc" }
 
-      expect(response.body).to match(/<option [^>]*selected="selected"[^>]*>2026-08<\/option>/)
+      expect(response.body).to include(%(name="from" id="from" value="2026-08-01"))
+      expect(response.body).to include(%(name="to" id="to" value="2026-08-31"))
       section = project_breakdown_section(response.body)
       expect(section).to include("breakdown_sort=complaint")
       expect(section).to include("breakdown_dir=desc") # 反轉方向的連結會顯示 desc（因目前是 asc）
@@ -254,11 +278,12 @@ RSpec.describe "Issues", type: :request do
       expect(stats_panel).to include('<input type="hidden" name="status" id="status" value="已暫停"')
     end
 
-    it "the 議題資料 tab's form includes hidden month/breakdown_sort/breakdown_dir fields carrying the current state" do
-      get "/issues", params: { month: "2026-01", breakdown_sort: "testing", breakdown_dir: "asc" }
+    it "the 議題資料 tab's form includes hidden from/to/breakdown_sort/breakdown_dir fields carrying the current state" do
+      get "/issues", params: { from: "2026-01-01", to: "2026-01-31", breakdown_sort: "testing", breakdown_dir: "asc" }
 
       detail_panel = response.body[/<div class="tab-panel" id="tab-panel-detail">.*/m]
-      expect(detail_panel).to include('<input type="hidden" name="month" id="month" value="2026-01"')
+      expect(detail_panel).to include('<input type="hidden" name="from" id="from" value="2026-01-01"')
+      expect(detail_panel).to include('<input type="hidden" name="to" id="to" value="2026-01-31"')
       expect(detail_panel).to include('<input type="hidden" name="breakdown_sort" id="breakdown_sort" value="testing"')
       expect(detail_panel).to include('<input type="hidden" name="breakdown_dir" id="breakdown_dir" value="asc"')
     end
@@ -303,12 +328,13 @@ RSpec.describe "Issues", type: :request do
 
     before { get "/issues" }
 
-    it "includes the in-progress current month (2026-09) in the month dropdown" do
-      expect(response.body).to match(/<option[^>]*value="2026-09"[^>]*>2026-09<\/option>/)
+    it "includes the in-progress current month (2026-09) in the date input's max bound" do
+      expect(response.body).to include('max="2026-09-30"')
     end
 
     it "still defaults the selection to the latest settled month (2026-08), not 2026-09" do
-      expect(response.body).to match(/<option [^>]*selected="selected"[^>]*>2026-08<\/option>/)
+      expect(response.body).to include(%(name="from" id="from" value="2026-08-01"))
+      expect(response.body).to include(%(name="to" id="to" value="2026-08-31"))
     end
 
     it "shows real KPI numbers by default (the settled month)" do
@@ -316,14 +342,14 @@ RSpec.describe "Issues", type: :request do
     end
 
     context "when the user explicitly selects the in-progress month" do
-      before { get "/issues", params: { month: "2026-09" } }
+      before { get "/issues", params: { from: "2026-09-01", to: "2026-09-30" } }
 
       it "shows a 尚未結算 placeholder instead of numbers" do
         expect(response.body).to include("尚未結算")
       end
 
       it "shows the empty state for the project breakdown (no issues started in 2026-09)" do
-        expect(response.body).to include("所選月份無議題資料")
+        expect(response.body).to include("所選期間無議題資料")
       end
     end
   end
@@ -357,8 +383,8 @@ RSpec.describe "Issues", type: :request do
       expect(detail_panel).not_to include("<h2>依專案分類</h2>")
     end
 
-    it "stays on the stats tab after submitting the month filter (hidden tab=stats field)" do
-      get "/issues", params: { month: "2026-07", tab: "stats" }
+    it "stays on the stats tab after submitting the date range filter (hidden tab=stats field)" do
+      get "/issues", params: { from: "2026-07-01", to: "2026-07-31", tab: "stats" }
 
       expect(tab_checked?(response.body, "tab-stats")).to be true
       expect(tab_checked?(response.body, "tab-detail")).to be false

@@ -344,6 +344,76 @@ RSpec.describe Sheets::FetchIssueDashboard do
       ])
     end
 
+    describe "from/to date range filtering" do
+      let(:month_kpi_rows) do
+        [
+          %w[year_month 客訴 測試 總Bug 攔截率 完成數 未結案 平均天數 SLA達標率 Top3],
+          [ "2026-07", "28", "7", "35", "20", "10", "7", "2.61", "10.71", "王贊勛:20" ],
+          [ "2026-08", "15", "9", "24", "37.5", "6", "3", "3.1", "25", "王贊勛:8" ]
+        ]
+      end
+
+      around { |example| travel_to(Date.new(2026, 8, 19)) { example.run } }
+
+      it "defaults from/to to the latest settled month's bounds when both are absent" do
+        expect(result.selected_from).to eq(Date.new(2026, 8, 1))
+        expect(result.selected_to).to eq(Date.new(2026, 8, 31))
+        expect(result.matched_months).to eq([ "2026-08" ])
+        expect(result.selected_month_record[:block_rate]).to eq(37.5)
+      end
+
+      it "returns the exact settled row (with rates) when exactly one month matches" do
+        result = described_class.result(from: Date.new(2026, 7, 1), to: Date.new(2026, 7, 31))
+
+        expect(result.matched_months).to eq([ "2026-07" ])
+        expect(result.selected_month_record).to eq(
+          year_month: "2026-07", complaint: 28, testing: 7, total_bug: 35, block_rate: 20.0,
+          completed: 10, unresolved: 7, avg_days: 2.61, sla_rate: 10.71
+        )
+      end
+
+      it "sums count fields and nils out rate fields when multiple months match" do
+        result = described_class.result(from: Date.new(2026, 7, 1), to: Date.new(2026, 8, 31))
+
+        expect(result.matched_months).to eq([ "2026-07", "2026-08" ])
+        expect(result.selected_month_record).to include(
+          complaint: 43, testing: 16, total_bug: 59, completed: 16, unresolved: 10,
+          block_rate: nil, avg_days: nil, sla_rate: nil
+        )
+      end
+
+      it "only applies the given bound when the other is absent (open-ended range)" do
+        result = described_class.result(from: Date.new(2026, 8, 1), to: nil)
+
+        expect(result.matched_months).to eq([ "2026-08" ])
+      end
+
+      it "is nil with no pending flag when the range matches no month at all" do
+        result = described_class.result(from: Date.new(2025, 1, 1), to: Date.new(2025, 1, 31))
+
+        expect(result.matched_months).to eq([])
+        expect(result.selected_month_record).to be_nil
+        expect(result.selected_month_pending).to be false
+      end
+
+      context "when the current month has no settled month_kpi row yet" do
+        let(:month_kpi_rows) do
+          [
+            %w[year_month 客訴 測試 總Bug 攔截率 完成數 未結案 平均天數 SLA達標率 Top3],
+            [ "2026-07", "28", "7", "35", "20", "10", "7", "2.61", "10.71", "王贊勛:20" ]
+          ]
+        end
+
+        it "flags selected_month_pending when the sole match is the in-progress current month" do
+          result = described_class.result(from: Date.new(2026, 8, 1), to: Date.new(2026, 8, 31))
+
+          expect(result.matched_months).to eq([ "2026-08" ])
+          expect(result.selected_month_record).to be_nil
+          expect(result.selected_month_pending).to be true
+        end
+      end
+    end
+
     describe "q/type filters and issue_kpis" do
       let(:issue_rows) do
         [

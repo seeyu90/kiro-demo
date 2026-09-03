@@ -2,7 +2,10 @@
 
 module Sheets
   class FetchIssueDashboard < ApplicationActor
-    input :month, default: nil
+    # 起訖日期區間篩選，取代原本的單一 month 參數：兩者皆空時預設沿用「最新已結算月份」；
+    # 只給一邊時另一邊視為不限制（比照 305/307 共用的 DateRangeFilterable 慣例）。
+    input :from, default: nil
+    input :to, default: nil
     input :project, default: nil
     input :status, default: "新建立"
     input :breakdown_sort, default: nil
@@ -22,10 +25,15 @@ module Sheets
     # 以下皆為「議題資料」HTML 頁面專用的衍生輸出，供 IssuesController 直接使用、不影響
     # 上面 4 個既有輸出（Api::IssueDashboardController 仍讀取全量、未篩選的版本）。
     output :available_months
-    output :selected_month
+    output :selected_from
+    output :selected_to
+    # 依 [selected_from, selected_to] 與 month_kpi 各月區間重疊判斷出的月份清單，供 View
+    # 判斷「單月」（1 個月，含比率）／「彙總」（多個月，只加總計數）／「查無資料」（0 個月）
+    # 三種呈現。
+    output :matched_months
     output :selected_month_record
     output :selected_month_pending
-    output :daily_kpi_for_month
+    output :daily_kpi_for_range
     output :month_project_breakdown
     output :projects
     output :statuses
@@ -48,20 +56,22 @@ module Sheets
       self.issues              = parse_issues(IssueSheetsClient.fetch_issue_rows)
       self.project_breakdown = compute_project_breakdown(issues)
 
-      # 月份選單納入進行中的當月（即使 month_kpi 尚無該月列，因為月結數字要等月底才產生），
-      # 但預設選中仍是最新「已結算」月份，確保頁面載入時直接看到有意義的月結數字。
+      # 月份選單（起訖日期輸入的 min/max guardrail）納入進行中的當月（即使 month_kpi 尚無該月
+      # 列，因為月結數字要等月底才產生）。
       current_year_month = Date.current.strftime("%Y-%m")
       self.available_months = (month_kpi.map { |m| m[:year_month] } + [ current_year_month ]).uniq.sort
-      self.selected_month = month.presence || month_kpi.map { |m| m[:year_month] }.max
-      self.selected_month_record = month_kpi.find { |m| m[:year_month] == selected_month }
-      self.selected_month_pending = selected_month_record.nil? && selected_month == current_year_month
 
-      # 每日趨勢與依專案分類統計皆依所選月份呈現（兩者與月度 KPI 同屬「統計摘要」分頁籤，
-      # 理應一起隨月份切換）；依專案分類以議題的 start_date（建立日）判斷所屬月份，
-      # 議題明細本身則不受月份篩選（見需求 8）。
-      self.daily_kpi_for_month = daily_kpi.select { |d| same_month?(d[:date], selected_month) }
-      month_issues = issues.select { |i| same_month?(i[:start_date], selected_month) }
-      self.month_project_breakdown = sort_project_breakdown(compute_project_breakdown(month_issues))
+      self.selected_from, self.selected_to = resolve_range(current_year_month)
+      self.matched_months = available_months.select { |ym| month_overlaps_range?(ym, selected_from, selected_to) }
+      self.selected_month_record = build_month_record(matched_months)
+      self.selected_month_pending = selected_month_record.nil? && matched_months == [ current_year_month ]
+
+      # 每日趨勢與依專案分類統計皆依所選期間呈現（兩者與月度 KPI 同屬「統計摘要」分頁籤，
+      # 理應一起隨期間切換）；依專案分類以議題的 start_date（建立日）判斷所屬日期，
+      # 議題明細本身則不受期間篩選（見需求 8）。
+      self.daily_kpi_for_range = daily_kpi.select { |d| date_in_range?(d[:date], selected_from, selected_to) }
+      range_issues = issues.select { |i| date_in_range?(i[:start_date], selected_from, selected_to) }
+      self.month_project_breakdown = sort_project_breakdown(compute_project_breakdown(range_issues))
 
       self.projects = issues.map { |i| i[:project] }.compact.uniq
       self.statuses = issues.map { |i| i[:status] }.compact.uniq
@@ -268,9 +278,63 @@ module Sheets
       }
     end
 
-    # 以日期欄位前 7 碼（YYYY-MM）判斷是否屬於指定月份，與 prototype 的 sameMonth() 邏輯一致。
-    def same_month?(date_str, year_month)
-      date_str.is_a?(String) && date_str[0, 7] == year_month
+    # from／to 皆空時，預設沿用「最新已結算月份」的起訖（month_kpi 完全沒有任何列時，退回
+    # 當月，讓 selected_month_pending 判斷仍然成立）；只給一邊時，另一邊視為不限制。
+    def resolve_range(current_year_month)
+      return [ from, to ] if from.present? || to.present?
+
+      default_month = month_kpi.map { |m| m[:year_month] }.max || current_year_month
+      month_bounds(default_month)
+    end
+
+    def month_bounds(year_month)
+      first = Date.parse("#{year_month}-01")
+      [ first, first.end_of_month ]
+    rescue ArgumentError, TypeError
+      [ nil, nil ]
+    end
+
+    def month_overlaps_range?(year_month, from_bound, to_bound)
+      month_start = Date.parse("#{year_month}-01")
+      month_end = month_start.end_of_month
+      (from_bound.blank? || month_end >= from_bound) && (to_bound.blank? || month_start <= to_bound)
+    rescue ArgumentError, TypeError
+      false
+    end
+
+    # matched 剛好 1 個月且該月有已結算列時，原樣回傳那一列（含比率，行為與改動前的單月選擇
+    # 相同）；matched 有多個月時，計數欄位加總、比率欄位（block_rate／avg_days／sla_rate）
+    # 不彙總、設為 nil（不同月份的比率沒有能正確合併的算法，寧可不顯示也不要顯示誤導的近似值，
+    # 見 View 對 nil 值顯示「－」的處理）；matched 為空、或多個月但一列已結算資料都沒有時，
+    # 回傳 nil（View 依此顯示「尚無月度 KPI 資料」或「尚未結算」）。
+    def build_month_record(matched)
+      return nil if matched.empty?
+
+      matched_rows = month_kpi.select { |m| matched.include?(m[:year_month]) }
+      return matched_rows.first if matched.size == 1
+
+      return nil if matched_rows.empty?
+
+      {
+        year_month: nil,
+        complaint: matched_rows.sum { |m| m[:complaint].to_i },
+        testing: matched_rows.sum { |m| m[:testing].to_i },
+        total_bug: matched_rows.sum { |m| m[:total_bug].to_i },
+        completed: matched_rows.sum { |m| m[:completed].to_i },
+        unresolved: matched_rows.sum { |m| m[:unresolved].to_i },
+        block_rate: nil,
+        avg_days: nil,
+        sla_rate: nil
+      }
+    end
+
+    def date_in_range?(date_str, from_bound, to_bound)
+      return false if date_str.blank?
+
+      date = Date.parse(date_str.to_s)
+      (from_bound.blank? || date >= from_bound) && (to_bound.blank? || date <= to_bound)
+    rescue ArgumentError, TypeError
+      false
     end
 
     # 與 305 Sheets::FetchProjectProgress#normalize_date 邏輯相同；維持獨立實作而非抽共用

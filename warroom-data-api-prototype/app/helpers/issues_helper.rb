@@ -12,14 +12,32 @@ module IssuesHelper
     ATTRIBUTION_CLASSES[type] || "attribution-other"
   end
 
+  # 起訖日期輸入欄位的 min/max guardrail：用 @available_months（"YYYY-MM" 字串陣列，已排序）
+  # 換算成第一個月的月初與最後一個月的月底，避免使用者選到明知沒有資料的日期。
+  # @available_months 為空時（理論上不會發生，fetch_issue_dashboard 一定會納入當月）回傳 nil。
+  def available_month_bounds
+    return [ nil, nil ] if @available_months.blank?
+
+    first_day = Date.parse("#{@available_months.first}-01")
+    last_day = Date.parse("#{@available_months.last}-01").end_of_month
+    [ first_day, last_day ]
+  end
+
+  # 月度 KPI 卡片的比率欄位（攔截率／平均天數／SLA 達標率）：選到跨月彙總時是 nil（不同月份
+  # 的比率沒有能正確合併的算法，見 Sheets::FetchIssueDashboard#build_month_record），顯示
+  # 「－」而不是空白加一個孤零零的「%」。
+  def month_kpi_rate_display(value, unit: "%")
+    value.nil? ? "－" : "#{value}#{unit}"
+  end
+
   # 「議題資料」分頁目前的篩選狀態，供快捷篩選 Tag 這類需要手動組 issues_path(...) 的連結共用
   # （分頁連結不需要這個——Pagy 直接沿用當前請求的 query params，見 index.html.erb），
-  # 避免同一組 project／status／q／type／month／breakdown_sort／breakdown_dir 在多處各自重複。
+  # 避免同一組 project／status／q／type／from／to／breakdown_sort／breakdown_dir 在多處各自重複。
   def issue_filter_params(overrides = {})
     {
       tab: "detail", project: @selected_project, status: @selected_status, q: @selected_q,
-      type: @selected_type, month: @selected_month, breakdown_sort: @breakdown_sort,
-      breakdown_dir: @breakdown_dir
+      type: @selected_type, from: @selected_from&.iso8601, to: @selected_to&.iso8601,
+      breakdown_sort: @breakdown_sort, breakdown_dir: @breakdown_dir
     }.merge(overrides)
   end
 
@@ -91,16 +109,18 @@ module IssuesHelper
   end
 
   # 依專案分類表格的可排序欄位標題連結：同一欄位再次點選時反轉方向，切換到不同欄位時預設降冪
-  # （筆數統計通常最關心「最多」的專案）；連結保留目前所選月份，並固定停留在「統計摘要」分頁籤。
-  # 同時帶入 project／status，因為這也是一個不含這兩個 query params 的 GET 請求，若不帶入，
-  # 點擊排序連結會把「議題資料」分頁目前的篩選值重設為預設值（與兩個表單各自獨立的設計意圖牴觸）。
+  # （筆數統計通常最關心「最多」的專案）；連結保留目前所選起訖日期，並固定停留在「統計摘要」
+  # 分頁籤。同時帶入 project／status，因為這也是一個不含這兩個 query params 的 GET 請求，
+  # 若不帶入，點擊排序連結會把「議題資料」分頁目前的篩選值重設為預設值（與兩個表單各自獨立的
+  # 設計意圖牴觸）。
   def breakdown_sort_link(key, label)
     active = @breakdown_sort == key.to_s
     next_dir = active && @breakdown_dir == "desc" ? "asc" : "desc"
     indicator = active ? (@breakdown_dir == "desc" ? " ▼" : " ▲") : ""
 
     link_to label + indicator,
-             issues_path(month: @selected_month, tab: "stats", breakdown_sort: key, breakdown_dir: next_dir,
+             issues_path(from: @selected_from&.iso8601, to: @selected_to&.iso8601, tab: "stats",
+                          breakdown_sort: key, breakdown_dir: next_dir,
                           project: @selected_project, status: @selected_status),
              class: "sort-button", "aria-label": "依「#{label}」排序"
   end
