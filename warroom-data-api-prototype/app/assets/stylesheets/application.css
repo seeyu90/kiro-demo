@@ -256,6 +256,19 @@ body {
   flex-direction: column;
 }
 
+/* KPI 小卡兼作連到原始資料頁面的連結時（見 executive_summary/_kpi_strip.html.erb），比照
+   .entry-card 的做法拿掉連結底線/變色，只用 hover 外框變色當作可點擊的提示。 */
+a.stat-item {
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s ease;
+}
+
+a.stat-item:hover,
+a.stat-item:focus {
+  border-color: var(--color-accent);
+}
+
 .stat-value {
   font-size: 1.5rem;
   font-weight: 700;
@@ -273,6 +286,38 @@ body {
 
 .stat-warning .stat-value {
   color: var(--at-risk-text);
+}
+
+/* 專案週報（executive_summary）KPI 排列：固定欄數平均分配寬度，且標籤不換行——跟共用的
+   .summary-bar（依內容自動伸縮、允許換行）刻意不同，這裡欄位數固定（見
+   _kpi_strip.html.erb 兩排各自的 --kpi-columns），不套用會讓每排欄寬不一致、長標籤斷成
+   兩行。只加在這個頁面用到的 class 上，不影響其他頁面既有的 .summary-bar 版面。 */
+.executive-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(var(--kpi-columns, 4), 1fr);
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.executive-kpi-row .stat-item {
+  flex: none;
+}
+
+.executive-kpi-row .stat-label {
+  font-size: 0.75rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 700px) {
+  .executive-kpi-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .executive-kpi-row .stat-label {
+    white-space: normal;
+  }
 }
 
 .row-overdue td:first-child {
@@ -1475,6 +1520,46 @@ turbo-frame[busy]::after {
 .project-card-body {
   border-top: 1px solid var(--color-border);
   padding: 0.5rem 1rem 1rem;
+}
+
+/* 卡片內「原始資料」連結（見 executive_summary/_project_card.html.erb、
+   _phase_exceptions.html.erb）：不能讓它們用瀏覽器預設的連結顏色——已點過的連結會套用
+   :visited 的暗紫/灰色，在深色主題背景下對比度很低、幾乎看不出是連結（使用者回饋：這個
+   配色不明顯）。比照既有 .back-link 的做法，固定用 --color-accent，不論 :link/:visited
+   都一樣清楚。 */
+.raw-data-link {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.raw-data-link:hover,
+.raw-data-link:focus {
+  text-decoration: underline;
+}
+
+/* 卡片內文的清單（逾期任務清單／燃盡略慢議題清單，見 executive_summary/_project_card.html.erb）
+   明確設定縮排，不依賴瀏覽器預設的 ul/li 邊界——預設值在不同瀏覽器不一致，且視覺上會讓
+   項目符號看起來沒有跟上面的標題對齊。 */
+.project-card-body ul {
+  margin: 0.25rem 0 0.75rem;
+  padding-left: 2rem;
+}
+
+.project-card-body li {
+  margin-bottom: 0.25rem;
+}
+
+.project-card-body li:last-child {
+  margin-bottom: 0;
+}
+
+/* 「🟢 正常」摘要行（executive_summary/index.html.erb）直接接在 .project-card-list 後面，
+   而 .project-card-list 本身沒有 margin-bottom（卡片間距靠 gap），這行會緊貼著最後一張卡片、
+   跟下面的「階段追蹤例外」標題也太近，加上下都上下留白，跟其他區塊有明確分隔。只加在這裡
+   用的 class 上，不影響其他頁面既有的 .freshness-label 間距。 */
+.executive-ontrack-line {
+  margin-top: 0.75rem;
+  margin-bottom: 1.5rem;
 }
 
 /* ── 專案階段追蹤（warroom-project-phase-tracking-real-source） ───────────────── */

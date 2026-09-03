@@ -1,0 +1,22 @@
+<section class="issue-section">
+  <h2>上週總結（<%= @last_week_summary[:range_start] %> ～ <%= @last_week_summary[:range_end] %>）</h2>
+
+  <div class="summary-bar executive-kpi-row" style="--kpi-columns: 3">
+    <div class="stat-item">
+      <span class="stat-value"><%= @last_week_summary[:completed_task_count] %></span>
+      <span class="stat-label">已完成任務</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-value"><%= @last_week_summary[:completed_stage_count] %></span>
+      <span class="stat-label">已完成階段</span>
+    </div>
+    <div class="stat-item <%= "stat-overdue" if @last_week_summary[:complaint_count].to_i.positive? %>">
+      <span class="stat-value"><%= @last_week_summary[:complaint_count] || "—" %></span>
+      <span class="stat-label">客訴數</span>
+    </div>
+  </div>
+
+  <p class="freshness-label">
+    註：人時燃盡沒有「實際完成日期」欄位，議題完成情形無法納入上週總結；客訴數則依通報日期統計，僅涵蓋專案任務、階段追蹤與客訴。
+  </p>
+</section>

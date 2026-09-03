@@ -1,0 +1,58 @@
+<div class="issue-section">
+  <h3>階段追蹤例外（依客戶彙總，最近半年）</h3>
+  <p class="freshness-label">
+    此區塊獨立於上方專案卡片：階段追蹤使用另一份試算表的專案代碼，目前無法可靠對應到上方的專案名稱，故按客戶彙總筆數，不勉強合併成同一張卡片。只列目前階段延誤或未完成、且該階段預計日期落在最近 6 個月內的項目；暫緩（刻意擱置）不列入。
+  </p>
+
+  <% if @phase_exceptions.empty? %>
+    <p class="empty-state">最近半年無延誤或未完成的階段。</p>
+  <% else %>
+    <div class="project-card-list">
+      <% @phase_exceptions_by_customer.each do |group| %>
+        <details class="project-card project-card-overdue">
+          <summary class="project-card-summary">
+            <span class="project-card-name"><%= group[:customer] %></span>
+            <span class="project-card-tags">
+              <span class="tag overdue-tag">延誤／未完成 <%= group[:count] %></span>
+            </span>
+          </summary>
+
+          <div class="project-card-body">
+            <table class="project-tasks">
+              <thead>
+                <tr>
+                  <th scope="col">專案代碼</th>
+                  <th scope="col">議題</th>
+                  <th scope="col">PM</th>
+                  <th scope="col">目前階段</th>
+                  <th scope="col">狀態</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% group[:exceptions].each do |exception| %>
+                  <tr class="row-overdue">
+                    <td data-label="專案代碼"><%= exception[:project_code] %></td>
+                    <td data-label="議題"><%= exception[:issue_label] %></td>
+                    <td data-label="PM"><%= exception[:pm] || "—" %></td>
+                    <td data-label="目前階段"><%= exception[:stage] || "—" %></td>
+                    <td data-label="狀態">
+                      <span class="tag <%= phase_tracking_status_class(exception[:status]) %>"><%= exception[:status] %></span>
+                    </td>
+                  </tr>
+                <% end %>
+              </tbody>
+            </table>
+            <%# 不清空 status/year：目的頁預設「當年度＋未完成」，清空後連個位數的客戶都會
+                跳出五、六十張歷史卡片，不是「查看更多」該有的體驗（見 _kpi_strip.html.erb
+                同一個取捨的說明）。 %>
+            <% if group[:customer] != "未知客戶" %>
+              <p class="freshness-label">
+                原始資料：<%= link_to "專案階段追蹤", project_phase_tracking_path(customer: group[:customer]), class: "raw-data-link", target: "_blank", rel: "noopener" %>
+              </p>
+            <% end %>
+          </div>
+        </details>
+      <% end %>
+    </div>
+  <% end %>
+</div>

@@ -1,7 +1,7 @@
 version: 2
 updates:
 - package-ecosystem: bundler
-  directory: "/"
+  directory: "/warroom-data-api-prototype"
   schedule:
     interval: weekly
   open-pull-requests-limit: 10

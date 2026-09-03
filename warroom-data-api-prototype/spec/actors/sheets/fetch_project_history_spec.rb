@@ -54,27 +54,29 @@ RSpec.describe Sheets::FetchProjectHistory do
     # 需求 1／1a：307 有對應議題時，甘特圖任務畫成真正的開發區間（start_date～due_date），
     # 並額外帶 assignees／progress_percent／overdue 供清單頁展開後的議題明細表格使用。
     it "builds gantt tasks from matched 307 burndown issues" do
-      roster_with_burndown = [
-        { project_name: "AG 亞炬", customer: "亞炬", pm: "呂俐禎", status: "維護", burndown_names_raw: "亞炬 PMS" }
-      ]
-      grouped = { "AG 亞炬" => [ { planned_completion_date: "2026-07-01", actual_completion_date: nil, status: "未完成" } ] }
-      burndown_issues = [
-        { project: "亞炬 PMS", issue_title: "API 效能優化", status: "in_progress", assignees: [ "王贊勛" ],
-          start_date: "2026-07-08", due_date: "2026-08-22", estimated_hours: 40,
-          actual_series: [ { date: "2026-07-08", hours: 30 } ] }
-      ]
+      travel_to Date.new(2026, 8, 1) do # 早於 due_date（08/22），確保 overdue 斷言不受實際跑測試當下日期影響
+        roster_with_burndown = [
+          { project_name: "AG 亞炬", customer: "亞炬", pm: "呂俐禎", status: "維護", burndown_names_raw: "亞炬 PMS" }
+        ]
+        grouped = { "AG 亞炬" => [ { planned_completion_date: "2026-07-01", actual_completion_date: nil, status: "未完成" } ] }
+        burndown_issues = [
+          { project: "亞炬 PMS", issue_title: "API 效能優化", status: "in_progress", assignees: [ "王贊勛" ],
+            start_date: "2026-07-08", due_date: "2026-08-22", estimated_hours: 40,
+            actual_series: [ { date: "2026-07-08", hours: 30 } ] }
+        ]
 
-      rows = actor.send(:build_overview_rows, roster_with_burndown, grouped, burndown_issues, nil, true)
-      ag = rows.first
+        rows = actor.send(:build_overview_rows, roster_with_burndown, grouped, burndown_issues, nil, true)
+        ag = rows.first
 
-      expect(ag[:tasks]).to eq([
-        { task_name: "API 效能優化", assignees: [ "王贊勛" ], status: "in_progress",
-          start_date: "2026-07-08", due_date: "2026-08-22", done: false,
-          estimated_hours: 40, consumed_hours: 10.0, progress_percent: 25, overdue: false }
-      ])
-      expect(ag[:hours_estimated]).to eq(40.0)
-      expect(ag[:hours_consumed]).to eq(10.0)
-      expect(ag[:progress_percent]).to eq(25)
+        expect(ag[:tasks]).to eq([
+          { task_name: "API 效能優化", assignees: [ "王贊勛" ], status: "in_progress",
+            start_date: "2026-07-08", due_date: "2026-08-22", done: false,
+            estimated_hours: 40, consumed_hours: 10.0, progress_percent: 25, overdue: false }
+        ])
+        expect(ag[:hours_estimated]).to eq(40.0)
+        expect(ag[:hours_consumed]).to eq(10.0)
+        expect(ag[:progress_percent]).to eq(25)
+      end
     end
 
     # 需求 1：307 無對應議題時，甘特圖那一列不畫任何色塊（不硬套 305 的單一完成日期畫出語意
