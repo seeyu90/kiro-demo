@@ -4,24 +4,24 @@ RSpec.describe "Api::IssueDashboard", type: :request do
   let(:month_kpi_rows) do
     [
       %w[year_month 客訴 測試 總Bug 攔截率 完成數 未結案 平均天數 SLA達標率 Top3],
-      ["2026-08", "15", "9", "24", "37.5", "6", "3", "3.1", "25", "王贊勛:8"]
+      [ "2026-08", "15", "9", "24", "37.5", "6", "3", "3.1", "25", "王贊勛:8" ]
     ]
   end
 
   let(:daily_kpi_rows) do
     [
       %w[日期 客訴 測試 其他 總計],
-      ["2026-08-13", "0", "1", "0", "1"]
+      [ "2026-08-13", "0", "1", "0", "1" ]
     ]
   end
 
   let(:issue_rows) do
     [
       %w[issue_id subject type tracker status assigned_to start_date due_date work_days sheet_name project],
-      ["4547", "未匯入行事曆", "Complaint", "臭蟲", "已結束", "黃靖益",
-       "2026/1/2", "2026/1/6", "3", "raw_2026", "Virtuous HRM"],
-      ["5165", "白名單申請時間錯誤", "TestingBug", "臭蟲", "新建立", "蔡秉逸",
-       "2026/8/12", "", "", "raw_2026", "Virtuous HRM"]
+      [ "4547", "未匯入行事曆", "Complaint", "臭蟲", "已結束", "黃靖益",
+       "2026/1/2", "2026/1/6", "3", "raw_2026", "Virtuous HRM" ],
+      [ "5165", "白名單申請時間錯誤", "TestingBug", "臭蟲", "新建立", "蔡秉逸",
+       "2026/8/12", "", "", "raw_2026", "Virtuous HRM" ]
     ]
   end
 
@@ -69,7 +69,7 @@ RSpec.describe "Api::IssueDashboard", type: :request do
     it "serializes issues via IssueBlueprint, without attribution or sheet_name" do
       json = JSON.parse(response.body)
 
-      expect(json["issues"].map { |i| i["issue_id"] }).to eq(["4547", "5165"])
+      expect(json["issues"].map { |i| i["issue_id"] }).to eq([ "4547", "5165" ])
       json["issues"].each do |issue|
         expect(issue.keys).to match_array(
           %w[issue_id subject type tracker status assigned_to start_date due_date work_days project total_hours]

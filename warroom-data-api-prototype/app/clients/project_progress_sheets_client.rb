@@ -8,9 +8,9 @@ class ProjectProgressSheetsClient
   # 變數並重啟服務即可切換；沒有設定環境變數時退回這裡寫死的預設值（同 BurndownSheetsClient
   # 的 SHEET_NAME 做法）。
   SPREADSHEET_ID = ENV.fetch("PROJECT_PROGRESS_SPREADSHEET_ID", "11gwDnOqEiGqj_VF2XF7AzxiJTiOW_k2knF6-4yQCej8")
-  SHEET_NAMES    = ["功能", "PR", "調整", "遺漏", "臭蟲"].freeze
+  SHEET_NAMES    = [ "功能", "PR", "調整", "遺漏", "臭蟲" ].freeze
   RANGE_SUFFIX   = "!A:G"
-  SCOPES         = ["https://www.googleapis.com/auth/spreadsheets.readonly"].freeze
+  SCOPES         = [ "https://www.googleapis.com/auth/spreadsheets.readonly" ].freeze
   CACHE_KEY            = "project_progress_sheets_client/fetch_rows/#{SPREADSHEET_ID}"
   CACHE_EXPIRY         = 5.minutes
   FETCHED_AT_CACHE_KEY = "#{CACHE_KEY}/fetched_at"
@@ -73,7 +73,7 @@ class ProjectProgressSheetsClient
   def tag_with_type(rows, sheet_name)
     rows.each_with_index.map do |row, i|
       normalized = pad_to_data_columns(row)
-      i.zero? ? normalized + ["類型"] : normalized + [sheet_name]
+      i.zero? ? normalized + [ "類型" ] : normalized + [ sheet_name ]
     end
   end
 

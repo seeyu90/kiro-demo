@@ -10,15 +10,15 @@ RSpec.describe Sheets::FetchProjectProgress do
       # Property 3（需求 3.1）：日期格式一致性
       # 對 YYYY/M/D、YYYY/MM/DD、YYYY-M-D、YYYY-MM-DD 四種格式各準備至少一組範例
       [
-        ["2024/1/5", "2024-01-05"],
-        ["2024/12/31", "2024-12-31"],
-        ["2024-1-5", "2024-01-05"],
-        ["2024-12-31", "2024-12-31"],
-        ["2024/01/05", "2024-01-05"],
-        ["2024-02-29", "2024-02-29"],
-        ["2024/2/29", "2024-02-29"],
-        ["2000-1-1", "2000-01-01"],
-        ["9999/9/9", "9999-09-09"]
+        [ "2024/1/5", "2024-01-05" ],
+        [ "2024/12/31", "2024-12-31" ],
+        [ "2024-1-5", "2024-01-05" ],
+        [ "2024-12-31", "2024-12-31" ],
+        [ "2024/01/05", "2024-01-05" ],
+        [ "2024-02-29", "2024-02-29" ],
+        [ "2024/2/29", "2024-02-29" ],
+        [ "2000-1-1", "2000-01-01" ],
+        [ "9999/9/9", "9999-09-09" ]
       ].each do |input, expected|
         it "normalizes #{input.inspect} to #{expected.inspect}" do
           expect(actor.send(:normalize_date, input)).to eq(expected)
@@ -44,7 +44,7 @@ RSpec.describe Sheets::FetchProjectProgress do
 
     # Property 4（需求 3.2）：nil 與空字串日期保留為 nil
     context "when the input is nil or an empty string" do
-      [nil, ""].each do |input|
+      [ nil, "" ].each do |input|
         it "returns nil for #{input.inspect}" do
           expect(actor.send(:normalize_date, input)).to be_nil
         end
@@ -58,32 +58,32 @@ RSpec.describe Sheets::FetchProjectProgress do
     # Property 1（需求 2.2、2.5）：空列跳過不影響有效資料數量
     it "skips nil rows and all-blank rows without affecting the count of valid rows" do
       rows = [
-        ["專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延遲天數"],
-        ["Project A", "Task 1", "completed", "Alice", "2024/1/5", "2024-01-10", "5"],
+        [ "專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延遲天數" ],
+        [ "Project A", "Task 1", "completed", "Alice", "2024/1/5", "2024-01-10", "5" ],
         nil,
-        ["", "", "", "", "", "", ""],
-        ["Project A", "Task 2", "in_progress", "Bob", "2024/2/10", "", "-4"],
-        [nil, nil, nil, nil, nil, nil, nil]
+        [ "", "", "", "", "", "", "" ],
+        [ "Project A", "Task 2", "in_progress", "Bob", "2024/2/10", "", "-4" ],
+        [ nil, nil, nil, nil, nil, nil, nil ]
       ]
 
       result = actor.send(:parse_rows, rows)
 
       expect(result.size).to eq(2)
-      expect(result.map { |r| r[:task_name] }).to eq(["Task 1", "Task 2"])
+      expect(result.map { |r| r[:task_name] }).to eq([ "Task 1", "Task 2" ])
     end
 
     # Property 2（需求 2.4）：列長度不足時 nil 填補完整性
     [
       [],
-      ["Project A"],
-      ["Project A", "Task 1"],
-      ["Project A", "Task 1", "completed"],
-      ["Project A", "Task 1", "completed", "Alice"],
-      ["Project A", "Task 1", "completed", "Alice", "2024/1/5"],
-      ["Project A", "Task 1", "completed", "Alice", "2024/1/5", "2024-01-10"]
+      [ "Project A" ],
+      [ "Project A", "Task 1" ],
+      [ "Project A", "Task 1", "completed" ],
+      [ "Project A", "Task 1", "completed", "Alice" ],
+      [ "Project A", "Task 1", "completed", "Alice", "2024/1/5" ],
+      [ "Project A", "Task 1", "completed", "Alice", "2024/1/5", "2024-01-10" ]
     ].each do |short_row|
       it "pads a row of length #{short_row.length} with nil so all 7 keys are present" do
-        rows = [["header"] * 7, short_row]
+        rows = [ [ "header" ] * 7, short_row ]
 
         result = actor.send(:parse_rows, rows)
 
@@ -134,10 +134,10 @@ RSpec.describe Sheets::FetchProjectProgress do
 
     let(:default_rows) do
       [
-        ["專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延遲天數"],
-        ["Project A", "Task 1", "completed", "Alice", "2024/1/5", "2024-01-10", "5"],
-        ["Project A", "Task 2", "in_progress", "Bob", "2024/2/10", "", "-4"],
-        ["Project B", "Task 3", "pending", "Carol", "2024-3-15", nil, "0"]
+        [ "專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延遲天數" ],
+        [ "Project A", "Task 1", "completed", "Alice", "2024/1/5", "2024-01-10", "5" ],
+        [ "Project A", "Task 2", "in_progress", "Bob", "2024/2/10", "", "-4" ],
+        [ "Project B", "Task 3", "pending", "Carol", "2024-3-15", nil, "0" ]
       ]
     end
 
@@ -145,7 +145,7 @@ RSpec.describe Sheets::FetchProjectProgress do
     context "with normal rows" do
       it "returns success with correctly grouped data" do
         expect(result).to be_success
-        expect(result.grouped_data.keys).to match_array(["Project A", "Project B"])
+        expect(result.grouped_data.keys).to match_array([ "Project A", "Project B" ])
 
         # Verify Project A has 2 tasks
         expect(result.grouped_data["Project A"].size).to eq(2)
@@ -166,9 +166,9 @@ RSpec.describe Sheets::FetchProjectProgress do
     context "with rows tagged with a task_type (8th column)" do
       let(:tagged_rows) do
         [
-          ["專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延遲天數", "類型"],
-          ["Project A", "Task 1", "completed", "Alice", "2024/1/5", "2024-01-10", "5", "功能"],
-          ["Project A", "Task 2", "in_progress", "Bob", "2024/2/10", "", "-4", "PR"]
+          [ "專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延遲天數", "類型" ],
+          [ "Project A", "Task 1", "completed", "Alice", "2024/1/5", "2024-01-10", "5", "功能" ],
+          [ "Project A", "Task 2", "in_progress", "Bob", "2024/2/10", "", "-4", "PR" ]
         ]
       end
 
@@ -198,12 +198,12 @@ RSpec.describe Sheets::FetchProjectProgress do
     context "with rows containing empty rows" do
       let(:rows_with_empty) do
         [
-          ["專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延遲天數"],
-          ["Project A", "Task 1", "completed", "Alice", "2024/1/5", "2024-01-10", "5"],
+          [ "專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延遲天數" ],
+          [ "Project A", "Task 1", "completed", "Alice", "2024/1/5", "2024-01-10", "5" ],
           [],
-          ["Project A", "Task 2", "in_progress", "Bob", "2024/2/10", "", "-4"],
-          [nil, nil, nil, nil, nil, nil, nil],
-          ["Project B", "Task 3", "pending", "Carol", "2024-3-15", nil, "0"]
+          [ "Project A", "Task 2", "in_progress", "Bob", "2024/2/10", "", "-4" ],
+          [ nil, nil, nil, nil, nil, nil, nil ],
+          [ "Project B", "Task 3", "pending", "Carol", "2024-3-15", nil, "0" ]
         ]
       end
 
@@ -220,10 +220,10 @@ RSpec.describe Sheets::FetchProjectProgress do
     context "with rows having fewer than 7 columns" do
       let(:short_rows) do
         [
-          ["專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延遲天數"],
-          ["Project A", "Task 1", "completed", "Alice", "2024/1/5", "2024-01-10", ""], # Only 6 columns + empty delay_days
-          ["Project A", "Task 2", "in_progress", "Bob", "", "", ""], # Only 3 columns + 4 empty
-          ["Project B", "Task 3", "pending", "Carol", "2024-3-15", nil, "0"]
+          [ "專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延遲天數" ],
+          [ "Project A", "Task 1", "completed", "Alice", "2024/1/5", "2024-01-10", "" ], # Only 6 columns + empty delay_days
+          [ "Project A", "Task 2", "in_progress", "Bob", "", "", "" ], # Only 3 columns + 4 empty
+          [ "Project B", "Task 3", "pending", "Carol", "2024-3-15", nil, "0" ]
         ]
       end
 
@@ -256,10 +256,10 @@ RSpec.describe Sheets::FetchProjectProgress do
     context "with mixed date formats" do
       let(:mixed_date_rows) do
         [
-          ["專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延遲天數"],
-          ["Project A", "Task 1", "completed", "Alice", "2024/1/5", "2024-01-10", "5"],
-          ["Project B", "Task 2", "in_progress", "Bob", "2024-2-10", "2024/2/15", "-4"],
-          ["Project C", "Task 3", "pending", "Carol", "2024/03/15", "2024-03-20", "0"]
+          [ "專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延遲天數" ],
+          [ "Project A", "Task 1", "completed", "Alice", "2024/1/5", "2024-01-10", "5" ],
+          [ "Project B", "Task 2", "in_progress", "Bob", "2024-2-10", "2024/2/15", "-4" ],
+          [ "Project C", "Task 3", "pending", "Carol", "2024/03/15", "2024-03-20", "0" ]
         ]
       end
 
@@ -283,9 +283,9 @@ RSpec.describe Sheets::FetchProjectProgress do
     context "with empty date values" do
       let(:empty_date_rows) do
         [
-          ["專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延遲天數"],
-          ["Project A", "Task 1", "completed", "Alice", "", "", ""],
-          ["Project B", "Task 2", "in_progress", "Bob", nil, nil, "0"]
+          [ "專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延遲天數" ],
+          [ "Project A", "Task 1", "completed", "Alice", "", "", "" ],
+          [ "Project B", "Task 2", "in_progress", "Bob", nil, nil, "0" ]
         ]
       end
 
@@ -305,8 +305,8 @@ RSpec.describe Sheets::FetchProjectProgress do
     context "with delay_days as negative integer string" do
       let(:negative_delay_rows) do
         [
-          ["專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延遲天數"],
-          ["Project A", "Task 1", "completed", "Alice", "2024/1/5", "2024-01-10", "-4"]
+          [ "專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延遲天數" ],
+          [ "Project A", "Task 1", "completed", "Alice", "2024/1/5", "2024-01-10", "-4" ]
         ]
       end
 
@@ -324,8 +324,8 @@ RSpec.describe Sheets::FetchProjectProgress do
     context "with delay_days as non-numeric string" do
       let(:tbd_delay_rows) do
         [
-          ["專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延遲天數"],
-          ["Project A", "Task 1", "completed", "Alice", "2024/1/5", "2024-01-10", "TBD"]
+          [ "專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延遲天數" ],
+          [ "Project A", "Task 1", "completed", "Alice", "2024/1/5", "2024-01-10", "TBD" ]
         ]
       end
 
@@ -343,9 +343,9 @@ RSpec.describe Sheets::FetchProjectProgress do
     context "with a row missing a required field" do
       let(:mixed_validity_rows) do
         [
-          ["專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延遲天數"],
-          ["Project A", "Task 1", "", "Alice", "2024/1/5", "2024-01-10", "5"], # Empty status, should be skipped
-          ["Project A", "Task 2", "in_progress", "Bob", "2024/2/10", "", "-4"]
+          [ "專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延遲天數" ],
+          [ "Project A", "Task 1", "", "Alice", "2024/1/5", "2024-01-10", "5" ], # Empty status, should be skipped
+          [ "Project A", "Task 2", "in_progress", "Bob", "2024/2/10", "", "-4" ]
         ]
       end
 
@@ -353,7 +353,7 @@ RSpec.describe Sheets::FetchProjectProgress do
 
       it "skips the invalid row and returns success with the remaining valid rows" do
         expect(result).to be_success
-        expect(result.grouped_data["Project A"].map { |t| t[:task_name] }).to eq(["Task 2"])
+        expect(result.grouped_data["Project A"].map { |t| t[:task_name] }).to eq([ "Task 2" ])
       end
     end
 
@@ -420,8 +420,8 @@ RSpec.describe Sheets::FetchProjectProgress do
 
       let(:valid_rows) do
         [
-          ["專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延遲天數"],
-          ["Project A", "Task 1", "completed", "Alice", "2024/1/5", "2024-01-10", "5"]
+          [ "專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延遲天數" ],
+          [ "Project A", "Task 1", "completed", "Alice", "2024/1/5", "2024-01-10", "5" ]
         ]
       end
 
@@ -471,8 +471,8 @@ RSpec.describe Sheets::FetchProjectProgress do
 
       let(:rows_with_one_task) do
         [
-          ["專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延遲天數", "類型"],
-          ["Project A", "Task 1", "未完成", "Alice", "2026-06-15", "", "", "功能"]
+          [ "專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延遲天數", "類型" ],
+          [ "Project A", "Task 1", "未完成", "Alice", "2026-06-15", "", "", "功能" ]
         ]
       end
 

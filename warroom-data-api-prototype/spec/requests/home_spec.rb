@@ -30,7 +30,7 @@ RSpec.describe "Home", type: :request do
 
   describe "GET /dashboard is still directly reachable after root changed to home#index" do
     before do
-      allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_return([["專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延誤"]])
+      allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_return([ [ "專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延誤" ] ])
       get "/dashboard"
     end
 
@@ -45,9 +45,9 @@ RSpec.describe "Home", type: :request do
 
   describe "GET /issues renders a back link to the entry page" do
     before do
-      allow(IssueSheetsClient).to receive(:fetch_month_kpi_rows).and_return([%w[year_month 客訴 測試 總Bug 攔截率 完成數 未結案 平均天數 SLA達標率 Top3]])
-      allow(IssueSheetsClient).to receive(:fetch_daily_kpi_rows).and_return([%w[日期 客訴 測試 其他 總計]])
-      allow(IssueSheetsClient).to receive(:fetch_issue_rows).and_return([%w[issue_id subject type tracker status assigned_to start_date due_date work_days sheet_name project]])
+      allow(IssueSheetsClient).to receive(:fetch_month_kpi_rows).and_return([ %w[year_month 客訴 測試 總Bug 攔截率 完成數 未結案 平均天數 SLA達標率 Top3] ])
+      allow(IssueSheetsClient).to receive(:fetch_daily_kpi_rows).and_return([ %w[日期 客訴 測試 其他 總計] ])
+      allow(IssueSheetsClient).to receive(:fetch_issue_rows).and_return([ %w[issue_id subject type tracker status assigned_to start_date due_date work_days sheet_name project] ])
       get "/issues"
     end
 

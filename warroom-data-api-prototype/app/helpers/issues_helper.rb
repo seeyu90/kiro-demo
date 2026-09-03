@@ -117,7 +117,7 @@ module IssuesHelper
 
   def trend_chart_points(daily_kpi)
     max = trend_chart_max(daily_kpi)
-    step_x = trend_chart_plot_width / [daily_kpi.length - 1, 1].max.to_f
+    step_x = trend_chart_plot_width / [ daily_kpi.length - 1, 1 ].max.to_f
 
     daily_kpi.each_with_index.map do |record, i|
       x = TREND_PADDING_LEFT + i * step_x
@@ -140,7 +140,7 @@ module IssuesHelper
   end
 
   def trend_chart_x_labels(daily_kpi)
-    step_x = trend_chart_plot_width / [daily_kpi.length - 1, 1].max.to_f
+    step_x = trend_chart_plot_width / [ daily_kpi.length - 1, 1 ].max.to_f
 
     daily_kpi.each_with_index.map do |record, i|
       x = TREND_PADDING_LEFT + i * step_x
@@ -151,7 +151,7 @@ module IssuesHelper
   private
 
   def trend_chart_max(daily_kpi)
-    [daily_kpi.map { |r| r[:total].to_f }.max || 1, 1].max
+    [ daily_kpi.map { |r| r[:total].to_f }.max || 1, 1 ].max
   end
 
   def trend_chart_plot_width

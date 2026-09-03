@@ -120,13 +120,13 @@ RSpec.describe IssuesHelper, type: :helper do
     end
 
     it "does not raise when all totals are 0 (avoids division by zero)" do
-      records = [{ date: "2026-08-01", total: 0 }, { date: "2026-08-02", total: 0 }]
+      records = [ { date: "2026-08-01", total: 0 }, { date: "2026-08-02", total: 0 } ]
 
       expect { helper.trend_chart_points(records) }.not_to raise_error
     end
 
     it "does not raise for a single record (avoids division by zero on step_x)" do
-      records = [{ date: "2026-08-01", total: 5 }]
+      records = [ { date: "2026-08-01", total: 5 } ]
 
       points = helper.trend_chart_points(records)
 
@@ -141,7 +141,7 @@ RSpec.describe IssuesHelper, type: :helper do
 
   describe "#trend_chart_polyline" do
     it "joins x,y pairs with spaces" do
-      points = [{ x: 1.0, y: 2.0 }, { x: 3.5, y: 4.5 }]
+      points = [ { x: 1.0, y: 2.0 }, { x: 3.5, y: 4.5 } ]
 
       expect(helper.trend_chart_polyline(points)).to eq("1.0,2.0 3.5,4.5")
     end
@@ -149,15 +149,15 @@ RSpec.describe IssuesHelper, type: :helper do
 
   describe "#trend_chart_y_ticks" do
     it "returns 3 ticks at 0, mid, and max of the total values" do
-      records = [{ total: 0 }, { total: 4 }, { total: 8 }]
+      records = [ { total: 0 }, { total: 4 }, { total: 8 } ]
 
       ticks = helper.trend_chart_y_ticks(records)
 
-      expect(ticks.map { |t| t[:value] }).to eq([0, 4, 8])
+      expect(ticks.map { |t| t[:value] }).to eq([ 0, 4, 8 ])
     end
 
     it "places the value-0 tick at the bottom (largest y) and the max tick at the top (smallest y)" do
-      records = [{ total: 0 }, { total: 10 }]
+      records = [ { total: 0 }, { total: 10 } ]
 
       ticks = helper.trend_chart_y_ticks(records)
 
@@ -165,17 +165,17 @@ RSpec.describe IssuesHelper, type: :helper do
     end
 
     it "does not raise when all totals are 0" do
-      expect { helper.trend_chart_y_ticks([{ total: 0 }]) }.not_to raise_error
+      expect { helper.trend_chart_y_ticks([ { total: 0 } ]) }.not_to raise_error
     end
   end
 
   describe "#trend_chart_x_labels" do
     it "shows one label per record" do
-      records = [{ date: "2026-08-01" }, { date: "2026-08-02" }, { date: "2026-08-03" }]
+      records = [ { date: "2026-08-01" }, { date: "2026-08-02" }, { date: "2026-08-03" } ]
 
       labels = helper.trend_chart_x_labels(records)
 
-      expect(labels.map { |l| l[:text] }).to eq(["08/01", "08/02", "08/03"])
+      expect(labels.map { |l| l[:text] }).to eq([ "08/01", "08/02", "08/03" ])
     end
 
     it "shows one label per record even when there are many records (no cap)" do
@@ -193,9 +193,9 @@ RSpec.describe IssuesHelper, type: :helper do
     end
 
     it "returns a single label for a single record" do
-      labels = helper.trend_chart_x_labels([{ date: "2026-08-05" }])
+      labels = helper.trend_chart_x_labels([ { date: "2026-08-05" } ])
 
-      expect(labels.map { |l| l[:text] }).to eq(["08/05"])
+      expect(labels.map { |l| l[:text] }).to eq([ "08/05" ])
     end
   end
 end

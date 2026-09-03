@@ -1,13 +1,13 @@
 require "rails_helper"
 
 RSpec.describe "Dashboard", type: :request do
-  let(:header_row) { ["專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延誤", "類型"] }
+  let(:header_row) { [ "專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延誤", "類型" ] }
   let(:valid_rows) do
     [
       header_row,
-      ["Project Alpha", "Task Alpha 1", "完成", "Alice", "2026/1/5", "2026/1/6", "1", "功能"],
-      ["Project Beta", "Task Beta 1", "未完成", "Bob", "2026/2/10", "", "", "PR"],
-      ["Project Beta", "Task Beta 2", "未完成", "Carol", "2099/1/1", "", "", "調整"]
+      [ "Project Alpha", "Task Alpha 1", "完成", "Alice", "2026/1/5", "2026/1/6", "1", "功能" ],
+      [ "Project Beta", "Task Beta 1", "未完成", "Bob", "2026/2/10", "", "", "PR" ],
+      [ "Project Beta", "Task Beta 2", "未完成", "Carol", "2099/1/1", "", "", "調整" ]
     ]
   end
 
@@ -30,7 +30,7 @@ RSpec.describe "Dashboard", type: :request do
 
   describe "GET /dashboard with filters disabled (scope=all, incomplete_only=0, all types)" do
     before do
-      get "/dashboard", params: { scope: "all", incomplete_only: "0", "task_type[]" => ["功能", "PR", "調整"] }
+      get "/dashboard", params: { scope: "all", incomplete_only: "0", "task_type[]" => [ "功能", "PR", "調整" ] }
     end
 
     it "returns HTTP 200" do
