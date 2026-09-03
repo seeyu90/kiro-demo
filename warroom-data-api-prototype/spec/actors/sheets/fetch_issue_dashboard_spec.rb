@@ -411,6 +411,27 @@ RSpec.describe Sheets::FetchIssueDashboard do
           expect(result.selected_month_record).to be_nil
           expect(result.selected_month_pending).to be true
         end
+
+        # code review 回報的邊界案例：區間橫跨 2 個「日曆月份」（matched_months），但其中一個
+        # （進行中的當月）根本沒有已結算列，實際只有 1 個月真的貢獻資料。判斷單月／彙總的依據
+        # 應該是「有幾個月真的有資料」（settled_month_count），不是「區間橫跨幾個月」，否則會
+        # 白白把可以精確顯示的比率隱藏成「－」，且 UI 顯示的「彙總 2 個月」也會誤導。
+        it "returns the exact settled row (not an aggregate) when the range spans an unsettled month" do
+          result = described_class.result(from: Date.new(2026, 7, 1), to: Date.new(2026, 8, 31))
+
+          expect(result.matched_months).to eq([ "2026-07", "2026-08" ])
+          expect(result.settled_month_count).to eq(1)
+          expect(result.selected_month_record).to eq(
+            year_month: "2026-07", complaint: 28, testing: 7, total_bug: 35, block_rate: 20.0,
+            completed: 10, unresolved: 7, avg_days: 2.61, sla_rate: 10.71
+          )
+        end
+      end
+
+      it "exposes settled_month_count matching the number of month_kpi rows actually aggregated" do
+        result = described_class.result(from: Date.new(2026, 7, 1), to: Date.new(2026, 8, 31))
+
+        expect(result.settled_month_count).to eq(2)
       end
     end
 

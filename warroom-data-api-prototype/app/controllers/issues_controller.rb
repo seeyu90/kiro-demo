@@ -42,7 +42,7 @@ class IssuesController < ApplicationController
     @available_months = result.available_months
     @selected_from = result.selected_from
     @selected_to = result.selected_to
-    @matched_month_count = result.matched_months.size
+    @matched_month_count = result.settled_month_count
     @selected_month_record = result.selected_month_record
     @selected_month_pending = result.selected_month_pending
     @daily_kpi = DailyKpiBlueprint.render_as_hash(result.daily_kpi_for_range)

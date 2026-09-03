@@ -27,10 +27,14 @@ module Sheets
     output :available_months
     output :selected_from
     output :selected_to
-    # 依 [selected_from, selected_to] 與 month_kpi 各月區間重疊判斷出的月份清單，供 View
-    # 判斷「單月」（1 個月，含比率）／「彙總」（多個月，只加總計數）／「查無資料」（0 個月）
-    # 三種呈現。
+    # 依 [selected_from, selected_to] 與 month_kpi 各月區間重疊判斷出的月份清單（含尚無已結算
+    # 列的進行中當月），供 selected_month_pending 判斷「唯一命中的月份是不是當月」用。
     output :matched_months
+    # matched_months 之中「真的有已結算 month_kpi 列」的月份數，這才是 selected_month_record
+    # 實際彙總了幾個月的依據——區間橫跨的月份數（matched_months.size）可能包含尚無資料的
+    # 進行中當月，若拿它判斷單月／彙總會誤把「只有 1 個月真的有資料」的情況當成彙總，白白
+    # 隱藏掉其實可以精確顯示的比率（code review 回報）。
+    output :settled_month_count
     output :selected_month_record
     output :selected_month_pending
     output :daily_kpi_for_range
@@ -63,7 +67,9 @@ module Sheets
 
       self.selected_from, self.selected_to = resolve_range(current_year_month)
       self.matched_months = available_months.select { |ym| month_overlaps_range?(ym, selected_from, selected_to) }
-      self.selected_month_record = build_month_record(matched_months)
+      matched_rows = month_kpi.select { |m| matched_months.include?(m[:year_month]) }
+      self.settled_month_count = matched_rows.size
+      self.selected_month_record = build_month_record(matched_rows)
       self.selected_month_pending = selected_month_record.nil? && matched_months == [ current_year_month ]
 
       # 每日趨勢與依專案分類統計皆依所選期間呈現（兩者與月度 KPI 同屬「統計摘要」分頁籤，
@@ -302,17 +308,16 @@ module Sheets
       false
     end
 
-    # matched 剛好 1 個月且該月有已結算列時，原樣回傳那一列（含比率，行為與改動前的單月選擇
-    # 相同）；matched 有多個月時，計數欄位加總、比率欄位（block_rate／avg_days／sla_rate）
-    # 不彙總、設為 nil（不同月份的比率沒有能正確合併的算法，寧可不顯示也不要顯示誤導的近似值，
-    # 見 View 對 nil 值顯示「－」的處理）；matched 為空、或多個月但一列已結算資料都沒有時，
-    # 回傳 nil（View 依此顯示「尚無月度 KPI 資料」或「尚未結算」）。
-    def build_month_record(matched)
-      return nil if matched.empty?
-
-      matched_rows = month_kpi.select { |m| matched.include?(m[:year_month]) }
-      return matched_rows.first if matched.size == 1
-
+    # 判斷依據是「真的有幾個月已結算資料」（matched_rows.size），不是「區間橫跨幾個月」——
+    # 後者可能把尚無資料的進行中當月也算進去，讓「其實只有 1 個月有資料」的情況被誤判成彙總、
+    # 白白隱藏掉本來可以精確顯示的比率（code review 回報）。
+    # 剛好 1 個月有已結算列時，原樣回傳那一列（含比率，行為與改動前的單月選擇相同）；有多個月
+    # 時，計數欄位加總、比率欄位（block_rate／avg_days／sla_rate）不彙總、設為 nil（不同月份的
+    # 比率沒有能正確合併的算法，寧可不顯示也不要顯示誤導的近似值，見 View 對 nil 值顯示「－」
+    # 的處理）；一個月已結算資料都沒有時，回傳 nil（View 依此顯示「尚無月度 KPI 資料」或
+    # 「尚未結算」）。
+    def build_month_record(matched_rows)
+      return matched_rows.first if matched_rows.size == 1
       return nil if matched_rows.empty?
 
       {
