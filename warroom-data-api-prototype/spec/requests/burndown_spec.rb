@@ -151,12 +151,14 @@ RSpec.describe "Burndown", type: :request do
       expect(section).to include("5") # 議題A 剩餘人時
     end
 
-    it "narrows the displayed weeks to [from, to], changing the computed remaining hours" do
+    it "narrows the displayed weeks without changing the computed remaining hours (accumulates from full history, not the trimmed display range)" do
       get "/burndown", params: { status: "all", from: "2026-08-08", to: "2026-08-31" }
 
-      # 只剩 08/10 這一週人時 3 計入（08/03 被篩掉），議題A 剩餘 = 10 - 3 = 7。
+      # 只剩 08/10 這週會顯示，但累加基準仍是完整歷史（08/03 的 2 人時仍計入），
+      # 議題A 剩餘 = 10 - 2 - 3 = 5，跟不篩選時完全一致，不會因為縮小顯示範圍
+      # 就把 08/03 已消耗的人時漏算、算出錯誤偏高的 7（code review 回報的 bug）。
       section = issue_series_section(response.body)
-      expect(section).to include("7")
+      expect(section).to include("5") # 議題A 剩餘人時
     end
   end
 

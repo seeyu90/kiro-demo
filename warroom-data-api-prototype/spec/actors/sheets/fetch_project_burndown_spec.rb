@@ -575,13 +575,15 @@ RSpec.describe Sheets::FetchProjectBurndown do
           .to eq([ "2026-07-20", "2026-07-27", "2026-08-03", "2026-08-10" ])
       end
 
-      it "keeps only weeks within [from, to]" do
+      it "keeps only weeks within [from, to], but accumulates from the issue's full history" do
         result = described_class.result(from: Date.new(2026, 8, 1), to: Date.new(2026, 8, 15))
 
         actual = result.issues.first[:actual_series]
         expect(actual.map { |p| p[:date] }).to eq([ "2026-08-03", "2026-08-10" ])
-        # 累加從篩選後的第一週重新開始（5、5+6=11），不是延續被篩掉的前兩週累積量。
-        expect(actual.map { |p| p[:hours] }).to eq([ 35.0, 29.0 ])
+        # 累加必須延續被篩掉的 07/20（3）、07/27（4）兩週已消耗人時（40-3-4-5=28、
+        # 40-3-4-5-6=22），不能從篩選後的第一週重新歸零（那樣會算成 35/29，系統性高估
+        # 剩餘量——code review 回報的 bug，見 merge_rows 對 trim_to_display_range 的呼叫）。
+        expect(actual.map { |p| p[:hours] }).to eq([ 28.0, 22.0 ])
       end
 
       it "only applies the given bound when the other is absent (open-ended range)" do
