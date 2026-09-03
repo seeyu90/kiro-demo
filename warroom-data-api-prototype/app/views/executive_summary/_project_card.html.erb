@@ -35,5 +35,12 @@
         </ul>
       </details>
     <% end %>
+
+    <p class="freshness-label">
+      原始資料：
+      <%= link_to "305 專案進度", dashboard_path(project: project[:project_name]), class: "raw-data-link" %>
+      ｜
+      <%= link_to "專案歷程", project_history_path(project_name: project[:project_name]), class: "raw-data-link" %>
+    </p>
   </div>
 </details>

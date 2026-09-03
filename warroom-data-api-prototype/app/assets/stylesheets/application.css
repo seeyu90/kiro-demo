@@ -256,6 +256,19 @@ body {
   flex-direction: column;
 }
 
+/* KPI 小卡兼作連到原始資料頁面的連結時（見 executive_summary/_kpi_strip.html.erb），比照
+   .entry-card 的做法拿掉連結底線/變色，只用 hover 外框變色當作可點擊的提示。 */
+a.stat-item {
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s ease;
+}
+
+a.stat-item:hover,
+a.stat-item:focus {
+  border-color: var(--color-accent);
+}
+
 .stat-value {
   font-size: 1.5rem;
   font-weight: 700;
@@ -1507,6 +1520,21 @@ turbo-frame[busy]::after {
 .project-card-body {
   border-top: 1px solid var(--color-border);
   padding: 0.5rem 1rem 1rem;
+}
+
+/* 卡片內「原始資料」連結（見 executive_summary/_project_card.html.erb、
+   _phase_exceptions.html.erb）：不能讓它們用瀏覽器預設的連結顏色——已點過的連結會套用
+   :visited 的暗紫/灰色，在深色主題背景下對比度很低、幾乎看不出是連結（使用者回饋：這個
+   配色不明顯）。比照既有 .back-link 的做法，固定用 --color-accent，不論 :link/:visited
+   都一樣清楚。 */
+.raw-data-link {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.raw-data-link:hover,
+.raw-data-link:focus {
+  text-decoration: underline;
 }
 
 /* 卡片內文的清單（逾期任務清單／燃盡略慢議題清單，見 executive_summary/_project_card.html.erb）

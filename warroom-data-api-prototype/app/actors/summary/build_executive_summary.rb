@@ -45,7 +45,7 @@ module Summary
       self.projects = build_projects(roster, progress_result.grouped_data, burndown_issues, issue_rows)
       self.phase_exceptions = build_phase_exceptions(phase_cards)
       self.phase_exceptions_by_customer = group_phase_exceptions_by_customer(phase_exceptions)
-      self.last_week_summary = build_last_week_summary(progress_result.grouped_data, phase_cards)
+      self.last_week_summary = build_last_week_summary(progress_result.grouped_data, phase_cards, issue_rows)
       self.portfolio = build_portfolio(projects, issue_rows, phase_exceptions)
     end
 
@@ -184,23 +184,35 @@ module Summary
     # ── 階段追蹤例外（獨立於專案卡片，見類別註解）────────────────────────
 
     # 只挑「需要注意」的卡片：目前所在階段狀態為延誤未完成／未完成（比照
-    # ProjectPhaseTrackingHelper::STATUS_TAG_CLASS 的紅色分類）或暫緩。已完成／延誤已完成
-    # 的卡片不算例外（已結束，不需要 CEO 再花時間看）。
-    NEEDS_ATTENTION_STATUSES = %w[延誤未完成 未完成 暫緩].freeze
+    # ProjectPhaseTrackingHelper::STATUS_TAG_CLASS 的紅色分類）。「暫緩」是刻意擱置、非緊急，
+    # 不算需要 CEO 注意的例外，故不列入（見使用者回饋：暫緩狀態不重要，不需要顯示）；
+    # 已完成／延誤已完成的卡片同樣不算例外（已結束，不需要 CEO 再花時間看）。
+    NEEDS_ATTENTION_STATUSES = %w[延誤未完成 未完成].freeze
+
+    # 只看最近半年：這份資料源沒有年度篩選就是全部歷史（Sheets::FetchPhaseTracking 的 year
+    # 這裡故意不帶，見 fetch_phase_cards），會把陳年舊資料也混進「本週應追蹤項目」；改用
+    # 「目前所在階段」的預計日期做滾動 6 個月篩選（而非固定行事曆年度），理由是使用者要的是
+    # 「最近」而非「今年」，兩者在年初/年底會有落差（比照使用者回饋：只看最近半年的）。
+    # 抓不到日期的卡片視為「無法判斷新舊」，保守起見不顯示（此頁的目的是收斂，不是盡量列出）。
+    RECENT_MONTHS = 6
 
     def build_phase_exceptions(cards)
+      cutoff = Date.current - RECENT_MONTHS.months
+
       cards.filter_map do |card|
         next unless NEEDS_ATTENTION_STATUSES.include?(card[:status])
 
         current_stage = card[:stages].reverse.find { |s| s[:primary] }
+        planned_date = Sheets::FetchProjectProgress.parse_date(current_stage&.dig(:primary, :planned_date))
+        next if planned_date.nil? || planned_date < cutoff
+
         {
           project_code: card[:project],
           issue_label: card[:issue_name].presence || card[:issue_id],
           customer: card[:customer],
           pm: card[:pm],
           stage: current_stage&.dig(:stage),
-          status: card[:status],
-          paused: card[:status] == "暫緩"
+          status: card[:status]
         }
       end
     end
@@ -210,29 +222,23 @@ module Summary
     def group_phase_exceptions_by_customer(phase_exceptions)
       phase_exceptions
         .group_by { |e| e[:customer].presence || "未知客戶" }
-        .map do |customer, exceptions|
-          {
-            customer: customer,
-            pending_count: exceptions.count { |e| !e[:paused] },
-            paused_count: exceptions.count { |e| e[:paused] },
-            exceptions: exceptions
-          }
-        end
-        .sort_by { |g| -(g[:pending_count] + g[:paused_count]) }
+        .map { |customer, exceptions| { customer: customer, count: exceptions.size, exceptions: exceptions } }
+        .sort_by { |g| -g[:count] }
     end
 
     # ── 上週總結（純檢視上週已發生的事，不需要任何跨週快照/資料庫——見
     # .kiro/specs/warroom-executive-weekly-summary/design.md「Phase 2」的取捨：CEO 要的是
-    # 「上週完成了什麼」而非逐週數字對比，用既有的實際完成日期欄位即時篩選即可，不必等
-    # Phase 2 的資料庫）。307／306 沒有「實際完成/解決日期」欄位（只有 status，見
-    # Sheets::FetchProjectHistory 附註），無法可靠判斷「上週完成」，故上週總結只涵蓋 305
-    # 任務與階段追蹤（兩者都有 actual_date／actual_completion_date 欄位）。──────────────
+    # 「上週發生了什麼」而非逐週數字對比，用既有的日期欄位即時篩選即可，不必等 Phase 2 的
+    # 資料庫）。307 沒有「實際完成日期」欄位（只有 status，見 Sheets::FetchProjectHistory
+    # 附註），無法可靠判斷「上週完成的議題」；306 雖然同樣沒有「解決日期」，但客訴數本來就是
+    # 依「通報日期」（daily_kpi 的 date 欄）逐日統計，不需要解決日期也能算出「上週新增幾件
+    # 客訴」，故納入上週總結。──────────────────────────────────────────
 
     def last_week_range
       Sheets::FetchProjectProgress.week_range(Date.current - 7)
     end
 
-    def build_last_week_summary(progress_grouped, phase_cards)
+    def build_last_week_summary(progress_grouped, phase_cards, issue_dashboard_result)
       range = last_week_range
       completed_tasks = last_week_completed_tasks(progress_grouped, range)
       completed_stages = last_week_completed_stages(phase_cards, range)
@@ -243,8 +249,20 @@ module Summary
         completed_task_count: completed_tasks.size,
         completed_tasks: completed_tasks,
         completed_stage_count: completed_stages.size,
-        completed_stages: completed_stages
+        completed_stages: completed_stages,
+        complaint_count: last_week_complaint_count(issue_dashboard_result, range)
       }
+    end
+
+    # 306 讀取失敗時回傳 nil（畫面顯示「—」），不得顯示 0——0 代表「確認上週零客訴」，
+    # 跟「不知道」是完全不同的訊息。
+    def last_week_complaint_count(issue_dashboard_result, range)
+      return nil if issue_dashboard_result.nil?
+
+      issue_dashboard_result.daily_kpi.sum do |d|
+        date = Sheets::FetchProjectProgress.parse_date(d[:date])
+        date && range.cover?(date) ? d[:complaint].to_i : 0
+      end
     end
 
     def last_week_completed_tasks(progress_grouped, range)
@@ -291,8 +309,7 @@ module Summary
         sla_rate: selected_month_record&.dig(:sla_rate),
         month_complaint_count: selected_month_record&.dig(:complaint),
         urgent_complaint_count: issue_dashboard_result&.issue_kpis&.dig(:urgent_complaints),
-        phase_pending_count: phase_exceptions.count { |e| !e[:paused] },
-        phase_paused_count: phase_exceptions.count { |e| e[:paused] }
+        phase_pending_count: phase_exceptions.size
       }
     end
   end

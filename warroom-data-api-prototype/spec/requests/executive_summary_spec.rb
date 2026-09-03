@@ -90,6 +90,29 @@ RSpec.describe "ExecutiveSummary", type: :request do
       expect(response.body).to include("報表模組")
       expect(response.body).to include("延誤未完成")
     end
+
+    it "links each project card to its raw 305 progress and project history detail pages" do
+      expect(response.body).to include('href="/dashboard?project=AG+%E4%BA%9E%E7%82%AC"')
+      expect(response.body).to include('href="/project_history?project_name=AG+%E4%BA%9E%E7%82%AC"')
+    end
+
+    it "links KPI tiles to the pages they summarize (overdue tasks, issues, phase tracking)" do
+      expect(response.body).to include('href="/dashboard?scope=overdue"')
+      expect(response.body).to include('href="/issues"')
+      expect(response.body).to include('href="/project_phase_tracking"')
+    end
+
+    # 目的頁預設「當年度＋未完成」；連結不清空這兩個篩選（不加 status=/year=），避免使用者
+    # 點過去看到全部歷史、所有狀態塞爆頁面（見 _kpi_strip.html.erb／_phase_exceptions.html.erb
+    # 的取捨說明）。
+    it "does not blank out the phase-tracking page's default year/status filters via the link (would dump its entire history)" do
+      expect(response.body).not_to match(%r{href="/project_phase_tracking\?[^"]*status=(&|")})
+      expect(response.body).not_to match(%r{href="/project_phase_tracking\?[^"]*year=(&|")})
+    end
+
+    it "links each phase-exception customer group to that customer's filtered phase-tracking page" do
+      expect(response.body).to include('href="/project_phase_tracking?customer=AMAS')
+    end
   end
 
   describe "GET /executive_summary — 上週總結" do
@@ -110,8 +133,20 @@ RSpec.describe "ExecutiveSummary", type: :request do
                     planned: "2026-08-20", actual: "2026-08-27", status: "完成")
       ]
     end
+    let(:daily_kpi_rows) do
+      [
+        %w[日期 客訴 測試 其他 總計],
+        [ "2026-08-25", "2", "0", "0", "2" ],
+        [ "2026-08-15", "9", "0", "0", "9" ]
+      ]
+    end
 
     before { get "/executive_summary" }
+
+    it "sums 306 daily complaint counts that fall inside last week's range into 客訴數" do
+      section = last_week_section(response.body)
+      expect(section).to match(%r{<span class="stat-value">2</span>\s*<span class="stat-label">客訴數</span>})
+    end
 
     def last_week_section(body)
       body[%r{<h2>上週總結.*?</section>}m]
@@ -146,15 +181,26 @@ RSpec.describe "ExecutiveSummary", type: :request do
         record_row(project: "HRM", issue_id: "9001", issue_name: "報表模組", stage: "開發",
                     planned: "2026-08-01", actual: nil, status: "延誤未完成"),
         record_row(project: "HRM", issue_id: "9002", issue_name: "假單模組", stage: "測試",
-                    planned: "2026-08-05", actual: nil, status: "暫緩")
+                    planned: "2026-08-05", actual: nil, status: "未完成"),
+        record_row(project: "HRM", issue_id: "9003", issue_name: "刻意擱置的模組", stage: "測試",
+                    planned: "2026-08-05", actual: nil, status: "暫緩"),
+        record_row(project: "HRM", issue_id: "9004", issue_name: "很久以前卡住的模組", stage: "測試",
+                    planned: "2020-01-01", actual: nil, status: "未完成")
       ]
     end
 
     before { get "/executive_summary" }
 
-    it "groups both exceptions under the same customer (AMAS) instead of listing 2 flat rows" do
-      expect(response.body).to include("延誤／未完成 1")
-      expect(response.body).to include("暫緩 1")
+    it "groups both recent needs-attention exceptions under the same customer (AMAS) into a single count" do
+      expect(response.body).to include("延誤／未完成 2")
+    end
+
+    it "does not render 暫緩 items at all (deliberately paused, not something the CEO needs to see)" do
+      expect(response.body).not_to include("刻意擱置的模組")
+    end
+
+    it "does not render a needs-attention item whose current-stage planned date is older than 6 months" do
+      expect(response.body).not_to include("很久以前卡住的模組")
     end
   end
 

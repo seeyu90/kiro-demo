@@ -37,36 +37,58 @@ RSpec.describe Summary::BuildExecutiveSummary do
     let(:cards) do
       [
         { project: "HRM", issue_id: "1", issue_name: "請假模組", customer: "AMAS", pm: "楊欣翰", status: "延誤未完成",
-          stages: [ { stage: "開發", primary: { status: "延誤未完成" }, history: [] } ] },
+          stages: [ { stage: "開發", primary: { status: "延誤未完成", planned_date: "2026-08-01" }, history: [] } ] },
         { project: "HRM", issue_id: "2", issue_name: "報表模組", customer: "AMAS", pm: "楊欣翰", status: "暫緩",
-          stages: [ { stage: "開案", primary: { status: "暫緩" }, history: [] } ] },
+          stages: [ { stage: "開案", primary: { status: "暫緩", planned_date: "2026-08-01" }, history: [] } ] },
         { project: "HRM", issue_id: "3", issue_name: "已完成模組", customer: "AMAS", pm: "楊欣翰", status: "完成",
-          stages: [ { stage: "發布", primary: { status: "完成" }, history: [] } ] },
+          stages: [ { stage: "發布", primary: { status: "完成", planned_date: "2026-08-01" }, history: [] } ] },
         { project: "HRM", issue_id: "4", issue_name: "曾延誤但已完成", customer: "AMAS", pm: "楊欣翰", status: "延誤已完成",
-          stages: [ { stage: "發布", primary: { status: "延誤已完成" }, history: [] } ] }
+          stages: [ { stage: "發布", primary: { status: "延誤已完成", planned_date: "2026-08-01" }, history: [] } ] },
+        { project: "HRM", issue_id: "5", issue_name: "很久以前的未完成項目", customer: "AMAS", pm: "楊欣翰", status: "未完成",
+          stages: [ { stage: "開發", primary: { status: "未完成", planned_date: "2020-01-01" }, history: [] } ] },
+        { project: "HRM", issue_id: "6", issue_name: "沒有日期的未完成項目", customer: "AMAS", pm: "楊欣翰", status: "未完成",
+          stages: [ { stage: "開發", primary: { status: "未完成", planned_date: nil }, history: [] } ] }
       ]
     end
 
-    it "includes only cards whose current status needs attention (延誤未完成／未完成／暫緩)" do
-      exceptions = actor.send(:build_phase_exceptions, cards)
+    it "includes only cards whose current status needs attention (延誤未完成／未完成) within the last 6 months" do
+      travel_to Date.new(2026, 9, 1) do
+        exceptions = actor.send(:build_phase_exceptions, cards)
 
-      expect(exceptions.map { |e| e[:issue_label] }).to contain_exactly("請假模組", "報表模組")
+        expect(exceptions.map { |e| e[:issue_label] }).to contain_exactly("請假模組")
+      end
     end
 
     it "excludes completed and 延誤已完成 cards — already done, not a live risk" do
-      exceptions = actor.send(:build_phase_exceptions, cards)
+      travel_to Date.new(2026, 9, 1) do
+        exceptions = actor.send(:build_phase_exceptions, cards)
 
-      expect(exceptions.map { |e| e[:issue_label] }).not_to include("已完成模組", "曾延誤但已完成")
+        expect(exceptions.map { |e| e[:issue_label] }).not_to include("已完成模組", "曾延誤但已完成")
+      end
     end
 
-    it "flags 暫緩 cards separately via :paused, distinct from 延誤未完成" do
-      exceptions = actor.send(:build_phase_exceptions, cards)
+    it "excludes 暫緩 cards — deliberately paused, not something the CEO needs to see" do
+      travel_to Date.new(2026, 9, 1) do
+        exceptions = actor.send(:build_phase_exceptions, cards)
 
-      paused = exceptions.find { |e| e[:issue_label] == "報表模組" }
-      pending = exceptions.find { |e| e[:issue_label] == "請假模組" }
+        expect(exceptions.map { |e| e[:issue_label] }).not_to include("報表模組")
+      end
+    end
 
-      expect(paused[:paused]).to be true
-      expect(pending[:paused]).to be false
+    it "excludes a needs-attention card whose current-stage planned_date is older than 6 months" do
+      travel_to Date.new(2026, 9, 1) do
+        exceptions = actor.send(:build_phase_exceptions, cards)
+
+        expect(exceptions.map { |e| e[:issue_label] }).not_to include("很久以前的未完成項目")
+      end
+    end
+
+    it "excludes a needs-attention card with no planned_date to judge recency by (conservative: hide, not show)" do
+      travel_to Date.new(2026, 9, 1) do
+        exceptions = actor.send(:build_phase_exceptions, cards)
+
+        expect(exceptions.map { |e| e[:issue_label] }).not_to include("沒有日期的未完成項目")
+      end
     end
   end
 
@@ -159,17 +181,17 @@ RSpec.describe Summary::BuildExecutiveSummary do
   describe "#group_phase_exceptions_by_customer" do
     let(:exceptions) do
       [
-        { customer: "AMAS", paused: false },
-        { customer: "AMAS", paused: true },
-        { customer: nil, paused: false },
-        { customer: "舊振南", paused: false }
+        { customer: "AMAS" },
+        { customer: "AMAS" },
+        { customer: nil },
+        { customer: "舊振南" }
       ]
     end
 
-    it "groups by customer with pending/paused counts, sorted by total count descending" do
+    it "groups by customer with a count, sorted by count descending" do
       groups = actor.send(:group_phase_exceptions_by_customer, exceptions)
 
-      expect(groups.first).to include(customer: "AMAS", pending_count: 1, paused_count: 1)
+      expect(groups.first).to include(customer: "AMAS", count: 2)
       expect(groups.map { |g| g[:customer] }).to include("未知客戶", "舊振南")
     end
 
@@ -177,7 +199,7 @@ RSpec.describe Summary::BuildExecutiveSummary do
       groups = actor.send(:group_phase_exceptions_by_customer, exceptions)
 
       unknown = groups.find { |g| g[:customer] == "未知客戶" }
-      expect(unknown[:pending_count]).to eq(1)
+      expect(unknown[:count]).to eq(1)
     end
   end
 
@@ -192,7 +214,7 @@ RSpec.describe Summary::BuildExecutiveSummary do
           ]
         }
 
-        summary = actor.send(:build_last_week_summary, progress_grouped, [])
+        summary = actor.send(:build_last_week_summary, progress_grouped, [], nil)
 
         expect(summary[:completed_task_count]).to eq(1)
         expect(summary[:completed_tasks].first[:task_name]).to eq("上週完成")
@@ -207,7 +229,7 @@ RSpec.describe Summary::BuildExecutiveSummary do
                       { stage: "測試", primary: { actual_date: "2026-08-10" } } ] }
         ]
 
-        summary = actor.send(:build_last_week_summary, {}, phase_cards)
+        summary = actor.send(:build_last_week_summary, {}, phase_cards, nil)
 
         expect(summary[:completed_stage_count]).to eq(1)
         expect(summary[:completed_stages].first[:stage]).to eq("開發")
@@ -216,10 +238,32 @@ RSpec.describe Summary::BuildExecutiveSummary do
 
     it "returns zero counts (not an error) when nothing completed last week" do
       travel_to Date.new(2026, 9, 8) do
-        summary = actor.send(:build_last_week_summary, {}, [])
+        summary = actor.send(:build_last_week_summary, {}, [], nil)
 
         expect(summary[:completed_task_count]).to eq(0)
         expect(summary[:completed_stage_count]).to eq(0)
+      end
+    end
+
+    it "sums 306 daily_kpi complaint counts whose date falls in last week's range" do
+      travel_to Date.new(2026, 9, 8) do
+        issue_dashboard_result = double("Result", daily_kpi: [
+          { date: "2026-09-03", complaint: 2 },
+          { date: "2026-09-05", complaint: 1 },
+          { date: "2026-08-20", complaint: 5 }
+        ])
+
+        summary = actor.send(:build_last_week_summary, {}, [], issue_dashboard_result)
+
+        expect(summary[:complaint_count]).to eq(3)
+      end
+    end
+
+    it "reports complaint_count as nil (not 0) when 306 is unavailable — unknown, not confirmed zero" do
+      travel_to Date.new(2026, 9, 8) do
+        summary = actor.send(:build_last_week_summary, {}, [], nil)
+
+        expect(summary[:complaint_count]).to be_nil
       end
     end
   end
@@ -229,7 +273,8 @@ RSpec.describe Summary::BuildExecutiveSummary do
     let(:progress_result) { double("Result", success?: true, grouped_data: {}) }
     let(:burndown_result) { double("Result", success?: true, issues: []) }
     let(:issue_dashboard_result) do
-      double("Result", success?: true, project_breakdown: [], selected_month_record: nil, issue_kpis: { urgent_complaints: 0 })
+      double("Result", success?: true, project_breakdown: [], selected_month_record: nil,
+                        issue_kpis: { urgent_complaints: 0 }, daily_kpi: [])
     end
     let(:phase_tracking_result) { double("Result", success?: true, cards: []) }
 

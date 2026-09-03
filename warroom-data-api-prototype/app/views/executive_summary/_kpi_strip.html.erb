@@ -3,43 +3,47 @@
     <span class="stat-value"><%= @portfolio[:project_count] %></span>
     <span class="stat-label">專案總數</span>
   </div>
-  <div class="stat-item stat-overdue">
+  <%= link_to dashboard_path(scope: "overdue"), class: "stat-item stat-overdue" do %>
     <span class="stat-value"><%= @portfolio[:red_count] %></span>
     <span class="stat-label">🔴 需立即關注</span>
-  </div>
-  <div class="stat-item stat-warning">
+  <% end %>
+  <%= link_to dashboard_path(scope: "due_this_week"), class: "stat-item stat-warning" do %>
     <span class="stat-value"><%= @portfolio[:yellow_count] %></span>
     <span class="stat-label">🟡 觀察中</span>
-  </div>
+  <% end %>
   <div class="stat-item">
     <span class="stat-value"><%= @portfolio[:green_count] %></span>
     <span class="stat-label">🟢 正常</span>
   </div>
 </div>
 
-<div class="summary-bar executive-kpi-row" style="--kpi-columns: 6">
-  <div class="stat-item stat-overdue">
+<%#
+  「階段延誤／未完成」連到 /project_phase_tracking 刻意不帶 status=&year=（清空篩選）：
+  那個頁面預設當年度＋狀態未完成，清空篩選會撈出全部歷史、所有狀態，卡片數從個位數暴增到
+  上百張，跟本頁「收斂例外」的精神相反。這裡數字跟目的頁篩選條件對不到 100%
+  （本頁另有 6 個月滾動窗＋「延誤未完成」「未完成」兩種狀態合計，目的頁只能單一年度＋單一
+  狀態），寧可連到一個「範圍小、可用」的預設頁，讓使用者自己再調整篩選，也不要連到一個
+  技術上資料更完整、但實際上塞爆看不下去的頁面。
+%>
+<div class="summary-bar executive-kpi-row" style="--kpi-columns: 5">
+  <%= link_to dashboard_path(scope: "overdue"), class: "stat-item stat-overdue" do %>
     <span class="stat-value"><%= @portfolio[:overdue_task_total] %></span>
     <span class="stat-label">逾期任務總數</span>
-  </div>
-  <div class="stat-item">
+  <% end %>
+  <%= link_to issues_path, class: "stat-item" do %>
     <span class="stat-value"><%= @portfolio[:month_complaint_count] || "—" %></span>
     <span class="stat-label">本月客訴</span>
-  </div>
-  <div class="stat-item">
+  <% end %>
+  <%= link_to issues_path, class: "stat-item" do %>
     <span class="stat-value"><%= @portfolio[:sla_rate].present? ? "#{@portfolio[:sla_rate]}%" : "—" %></span>
     <span class="stat-label">SLA 達標率</span>
-  </div>
-  <div class="stat-item <%= "stat-overdue" if @portfolio[:urgent_complaint_count].to_i.positive? %>">
+  <% end %>
+  <%= link_to issues_path(tab: "detail", type: "Complaint"), class: "stat-item #{"stat-overdue" if @portfolio[:urgent_complaint_count].to_i.positive?}" do %>
     <span class="stat-value"><%= @portfolio[:urgent_complaint_count] || "—" %></span>
     <span class="stat-label">緊急客訴（未結＋已逾期）</span>
-  </div>
-  <div class="stat-item <%= "stat-warning" if @portfolio[:phase_pending_count].positive? %>">
+  <% end %>
+  <%= link_to project_phase_tracking_path, class: "stat-item #{"stat-warning" if @portfolio[:phase_pending_count].positive?}" do %>
     <span class="stat-value"><%= @portfolio[:phase_pending_count] %></span>
     <span class="stat-label">階段延誤／未完成</span>
-  </div>
-  <div class="stat-item">
-    <span class="stat-value"><%= @portfolio[:phase_paused_count] %></span>
-    <span class="stat-label">階段暫緩</span>
-  </div>
+  <% end %>
 </div>
