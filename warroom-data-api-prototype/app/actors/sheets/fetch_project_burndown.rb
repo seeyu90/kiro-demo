@@ -5,6 +5,11 @@ module Sheets
     input :project, default: nil
     input :assignee, default: nil
     input :status, default: "in_progress"
+    # 起訖日期區間篩選：作用於已解析出的週欄位日期（week_dates），留空＝顯示全部週次
+    # （維持改動前行為）。307 資料源本身鎖在單一年度分頁（見 BurndownSheetsClient 的
+    # SHEET_NAME 註解），無法跨年查詢，這裡只能篩「當年度已載入的週次」。
+    input :from, default: nil
+    input :to, default: nil
     output :issues
     output :projects
     output :assignees
@@ -23,7 +28,7 @@ module Sheets
     def call
       rows = BurndownSheetsClient.fetch_rows
       header = rows.first || []
-      week_dates = parse_week_dates(header)
+      week_dates = parse_week_dates(header).select { |w| within_display_range?(w[:date]) }
 
       all_issues = parse_issues(rows.drop(1), week_dates)
       self.projects = all_issues.map { |i| i[:project] }.compact.uniq
@@ -292,10 +297,18 @@ module Sheets
         { date: start_d.beginning_of_week(:monday).iso8601, hours: estimated_hours.round(2) },
         { date: due_d.beginning_of_week(:monday).iso8601, hours: 0.0 }
       ]
+      # 錨點固定加在開案／到期兩個時間點，不受 sorted_week_dates（可能已被議題自己的開案週
+      # 裁切、或被 from／to 篩選收窄）限制，故需額外依 from／to 過濾，避免自訂起訖日期篩選
+      # 之後，理想線仍畫出使用者請求範圍以外的錨點（見 within_display_range?）。
+      anchors = anchors.select { |a| within_display_range?(Date.parse(a[:date])) }
       # 錨點排在前面：Array#uniq 保留「第一次出現」的元素，若某週欄位剛好落在錨點同一天
       # （例如 due_date 本身不是週一、但正規化後跟某週欄位同一週），錨點的保證值（滿額／歸零）
       # 必須贏過該週依比例算出的值，理想線才能真的準時歸零／從滿額開始。
       (anchors + points).uniq { |p| p[:date] }.sort_by { |p| p[:date] }
+    end
+
+    def within_display_range?(date)
+      (from.blank? || date >= from) && (to.blank? || date <= to)
     end
 
     def parse_date(date_str)

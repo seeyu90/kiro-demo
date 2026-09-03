@@ -44,6 +44,10 @@
                        ) %>
       </div>
 
+      <%# 依週欄位日期篩選顯示範圍，留白＝顯示全部週次。307 資料源鎖在單一年度分頁，
+          無法跨年查詢，這裡只能篩「當年度已載入的週次」。 %>
+      <%= render "shared/date_range_filter", from: @selected_from, to: @selected_to, min: nil, max: nil %>
+
       <%= submit_tag "套用篩選", class: "apply-filters-btn" %>
     <% end %>
 

@@ -135,6 +135,31 @@ RSpec.describe "Burndown", type: :request do
     end
   end
 
+  describe "GET /burndown with from/to date range filter" do
+    it "renders the selected from/to values back into the date inputs" do
+      get "/burndown", params: { from: "2026-08-05", to: "2026-08-12" }
+
+      expect(response.body).to include(%(name="from" id="from" value="2026-08-05"))
+      expect(response.body).to include(%(name="to" id="to" value="2026-08-12"))
+    end
+
+    it "does not restrict weeks when from/to are absent (default, backward compatible)" do
+      get "/burndown", params: { status: "all" }
+
+      # 議題A：08/10 週人時 3、08/03 週人時 2，兩週都應計入累積消耗（10 - 3 - 2 = 5 剩餘）。
+      section = issue_series_section(response.body)
+      expect(section).to include("5") # 議題A 剩餘人時
+    end
+
+    it "narrows the displayed weeks to [from, to], changing the computed remaining hours" do
+      get "/burndown", params: { status: "all", from: "2026-08-08", to: "2026-08-31" }
+
+      # 只剩 08/10 這一週人時 3 計入（08/03 被篩掉），議題A 剩餘 = 10 - 3 = 7。
+      section = issue_series_section(response.body)
+      expect(section).to include("7")
+    end
+  end
+
   describe "GET /burndown when BurndownSheetsClient raises an error" do
     before do
       error = Google::Apis::ClientError.new("Forbidden")
