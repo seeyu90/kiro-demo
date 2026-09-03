@@ -15,7 +15,7 @@
     </p>
 
     <% if project[:overdue_tasks].any? %>
-      <details>
+      <details open>
         <summary>逾期任務清單（<%= project[:overdue_tasks].size %>）</summary>
         <ul>
           <% project[:overdue_tasks].each do |task| %>
@@ -26,7 +26,7 @@
     <% end %>
 
     <% if project[:at_risk_burndown_issues].any? %>
-      <details>
+      <details open>
         <summary>燃盡略慢／超支議題（<%= project[:at_risk_burndown_issues].size %>）</summary>
         <ul>
           <% project[:at_risk_burndown_issues].each do |issue| %>
