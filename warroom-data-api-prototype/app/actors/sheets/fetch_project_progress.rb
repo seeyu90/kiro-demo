@@ -23,12 +23,12 @@ module Sheets
 
     REQUIRED_KEYS = %i[project_name task_name status owner].freeze
 
-    PRIORITY_TYPES = ["功能", "PR"].freeze
+    PRIORITY_TYPES = [ "功能", "PR" ].freeze
     SCOPES = %w[all due_this_week overdue].freeze
     # 真實試算表的「狀態」欄位是自由輸入的中文文字，非固定英文 enum；實際觀察到的值只有
     # 「完成」「已確認」「未完成」三種，其中「完成」與「已確認」皆代表任務已結束（「已確認」
     # 的紀錄一律已有實際完成日期），故兩者皆視為完成狀態；沒有「進行中」「待開始」的細分。
-    COMPLETED_STATUSES = ["完成", "已確認"].freeze
+    COMPLETED_STATUSES = [ "完成", "已確認" ].freeze
 
     def call
       rows = ProjectProgressSheetsClient.fetch_rows(force: force)

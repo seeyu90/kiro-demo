@@ -39,14 +39,14 @@ RSpec.describe IssueSheetsClient do
 
   def issue_rows_for(sheet_name, count: 1)
     Array.new(count) do |i|
-      ["#{sheet_name}-#{i}", "subject-#{i}", "Complaint", "臭蟲", "已結束", "owner",
-       "2026/1/1", "2026/1/2", "1", sheet_name, "project-#{sheet_name}"]
+      [ "#{sheet_name}-#{i}", "subject-#{i}", "Complaint", "臭蟲", "已結束", "owner",
+       "2026/1/1", "2026/1/2", "1", sheet_name, "project-#{sheet_name}" ]
     end
   end
 
   def all_issue_sheets_rows(empty_sheets: [])
     described_class::ISSUE_SHEETS.each_with_object({}) do |name, acc|
-      rows = empty_sheets.include?(name) ? [issue_header] : [issue_header] + issue_rows_for(name)
+      rows = empty_sheets.include?(name) ? [ issue_header ] : [ issue_header ] + issue_rows_for(name)
       acc["#{name}!A:L"] = rows
     end
   end
@@ -56,7 +56,7 @@ RSpec.describe IssueSheetsClient do
       before { stub_credentials }
 
       it "requests the month_kpi sheet with the correct range" do
-        fake_service = stub_service_for({ "month_kpi!A:J" => [month_kpi_header] })
+        fake_service = stub_service_for({ "month_kpi!A:J" => [ month_kpi_header ] })
 
         described_class.fetch_month_kpi_rows
 
@@ -66,12 +66,12 @@ RSpec.describe IssueSheetsClient do
       end
 
       it "returns the raw rows" do
-        data_row = ["2026-08", "15", "9", "24", "37.5", "6", "3", "3.1", "25", "王贊勛:8"]
-        stub_service_for({ "month_kpi!A:J" => [month_kpi_header, data_row] })
+        data_row = [ "2026-08", "15", "9", "24", "37.5", "6", "3", "3.1", "25", "王贊勛:8" ]
+        stub_service_for({ "month_kpi!A:J" => [ month_kpi_header, data_row ] })
 
         result = described_class.fetch_month_kpi_rows
 
-        expect(result).to eq([month_kpi_header, data_row])
+        expect(result).to eq([ month_kpi_header, data_row ])
       end
 
       it "returns an empty array when the API responds with a nil values payload" do
@@ -86,7 +86,7 @@ RSpec.describe IssueSheetsClient do
     before { stub_credentials }
 
     it "requests the daily_kpi sheet with the correct range" do
-      fake_service = stub_service_for({ "daily_kpi!A:E" => [daily_kpi_header] })
+      fake_service = stub_service_for({ "daily_kpi!A:E" => [ daily_kpi_header ] })
 
       described_class.fetch_daily_kpi_rows
 
@@ -96,10 +96,10 @@ RSpec.describe IssueSheetsClient do
     end
 
     it "returns the raw rows" do
-      data_row = ["2026-08-13", "0", "0", "0", "0"]
-      stub_service_for({ "daily_kpi!A:E" => [daily_kpi_header, data_row] })
+      data_row = [ "2026-08-13", "0", "0", "0", "0" ]
+      stub_service_for({ "daily_kpi!A:E" => [ daily_kpi_header, data_row ] })
 
-      expect(described_class.fetch_daily_kpi_rows).to eq([daily_kpi_header, data_row])
+      expect(described_class.fetch_daily_kpi_rows).to eq([ daily_kpi_header, data_row ])
     end
   end
 
@@ -137,7 +137,7 @@ RSpec.describe IssueSheetsClient do
       end
 
       it "includes data rows from every raw_YYYY sheet, including the currently-empty raw_2027" do
-        stub_service_for(all_issue_sheets_rows(empty_sheets: ["raw_2027"]))
+        stub_service_for(all_issue_sheets_rows(empty_sheets: [ "raw_2027" ]))
 
         result = described_class.fetch_issue_rows
 
@@ -159,10 +159,10 @@ RSpec.describe IssueSheetsClient do
       end
 
       it "re-tags string cells to UTF-8 encoding" do
-        data_row = ["raw_2023-0", "客訴主旨", "Complaint", "臭蟲", "已結束", "owner",
-                    "2026/1/1", "2026/1/2", "1", "raw_2023", "project"]
+        data_row = [ "raw_2023-0", "客訴主旨", "Complaint", "臭蟲", "已結束", "owner",
+                    "2026/1/1", "2026/1/2", "1", "raw_2023", "project" ]
         rows = all_issue_sheets_rows
-        rows["raw_2023!A:L"] = [issue_header, data_row]
+        rows["raw_2023!A:L"] = [ issue_header, data_row ]
         stub_service_for(rows)
 
         result = described_class.fetch_issue_rows
@@ -184,7 +184,7 @@ RSpec.describe IssueSheetsClient do
 
         result = described_class.fetch_issue_rows
 
-        expect(result).to eq([issue_header])
+        expect(result).to eq([ issue_header ])
       end
     end
 

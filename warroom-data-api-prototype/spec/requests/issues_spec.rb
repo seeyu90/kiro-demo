@@ -10,33 +10,33 @@ RSpec.describe "Issues", type: :request do
   let(:month_kpi_rows) do
     [
       %w[year_month 客訴 測試 總Bug 攔截率 完成數 未結案 平均天數 SLA達標率 Top3],
-      ["2026-07", "28", "7", "35", "20", "10", "7", "2.61", "10.71", "王贊勛:20"],
-      ["2026-08", "15", "9", "24", "37.5", "6", "3", "3.1", "25", "王贊勛:8"]
+      [ "2026-07", "28", "7", "35", "20", "10", "7", "2.61", "10.71", "王贊勛:20" ],
+      [ "2026-08", "15", "9", "24", "37.5", "6", "3", "3.1", "25", "王贊勛:8" ]
     ]
   end
 
   let(:daily_kpi_rows) do
     [
       %w[日期 客訴 測試 其他 總計],
-      ["2026-07-15", "1", "0", "0", "1"],
-      ["2026-08-01", "0", "1", "0", "1"],
-      ["2026-08-13", "0", "0", "0", "0"]
+      [ "2026-07-15", "1", "0", "0", "1" ],
+      [ "2026-08-01", "0", "1", "0", "1" ],
+      [ "2026-08-13", "0", "0", "0", "0" ]
     ]
   end
 
   let(:issue_rows) do
     [
       %w[issue_id subject type tracker status assigned_to start_date due_date work_days sheet_name project],
-      ["4547", "未匯入行事曆", "Complaint", "臭蟲", "已結束", "黃靖益",
-       "2026/1/2", "2026/1/6", "3", "raw_2026", "Virtuous HRM"],
-      ["5165", "白名單申請時間錯誤", "TestingBug", "臭蟲", "新建立", "蔡秉逸",
-       "2026/8/12", "", "", "raw_2026", "Virtuous HRM"],
-      ["3058", "結案小工序DeadlockVictim", "Other", "臭蟲", "已暫停", "王贊勛",
-       "2024/4/29", "", "", "raw_2024", "AG 亞炬"],
-      ["5170", "測試環境資料回填驗證", "TestingBug", "測試", "新建立", "蔡秉逸",
-       "2026/8/13", "", "", "raw_2026", "Virtuous HRM"],
-      ["5180", "客訴：儀表板顯示異常", "Complaint", "臭蟲", "已解決", "王贊勛",
-       "2026/8/5", "2026/8/6", "1", "raw_2026", "JZN 舊振南智慧工廠"]
+      [ "4547", "未匯入行事曆", "Complaint", "臭蟲", "已結束", "黃靖益",
+       "2026/1/2", "2026/1/6", "3", "raw_2026", "Virtuous HRM" ],
+      [ "5165", "白名單申請時間錯誤", "TestingBug", "臭蟲", "新建立", "蔡秉逸",
+       "2026/8/12", "", "", "raw_2026", "Virtuous HRM" ],
+      [ "3058", "結案小工序DeadlockVictim", "Other", "臭蟲", "已暫停", "王贊勛",
+       "2024/4/29", "", "", "raw_2024", "AG 亞炬" ],
+      [ "5170", "測試環境資料回填驗證", "TestingBug", "測試", "新建立", "蔡秉逸",
+       "2026/8/13", "", "", "raw_2026", "Virtuous HRM" ],
+      [ "5180", "客訴：儀表板顯示異常", "Complaint", "臭蟲", "已解決", "王贊勛",
+       "2026/8/5", "2026/8/6", "1", "raw_2026", "JZN 舊振南智慧工廠" ]
     ]
   end
 
@@ -183,13 +183,13 @@ RSpec.describe "Issues", type: :request do
       get "/issues", params: { breakdown_sort: "complaint" }
 
       # 2026-08：JZN 舊振南智慧工廠 complaint=1（issue 5180），Virtuous HRM complaint=0（issue 5165 為 TestingBug）
-      expect(breakdown_project_order(response.body)).to eq(["JZN 舊振南智慧工廠", "Virtuous HRM"])
+      expect(breakdown_project_order(response.body)).to eq([ "JZN 舊振南智慧工廠", "Virtuous HRM" ])
     end
 
     it "toggles to ascending when the same key is applied with breakdown_dir=asc" do
       get "/issues", params: { breakdown_sort: "complaint", breakdown_dir: "asc" }
 
-      expect(breakdown_project_order(response.body)).to eq(["Virtuous HRM", "JZN 舊振南智慧工廠"])
+      expect(breakdown_project_order(response.body)).to eq([ "Virtuous HRM", "JZN 舊振南智慧工廠" ])
     end
 
     it "shows a ▼ indicator on the active descending column and none on the others" do
@@ -222,7 +222,7 @@ RSpec.describe "Issues", type: :request do
       # 兩專案同分的欄位（total 各為 1）驗證平手時的順序固定為 project 字典序
       get "/issues", params: { breakdown_sort: "total" }
 
-      expect(breakdown_project_order(response.body)).to eq(["JZN 舊振南智慧工廠", "Virtuous HRM"].sort.reverse)
+      expect(breakdown_project_order(response.body)).to eq([ "JZN 舊振南智慧工廠", "Virtuous HRM" ].sort.reverse)
     end
   end
 

@@ -1,13 +1,13 @@
 require "rails_helper"
 
 RSpec.describe "Api::ProjectProgress", type: :request do
-  let(:header_row) { ["專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延誤"] }
+  let(:header_row) { [ "專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延誤" ] }
   let(:valid_rows) do
     [
       header_row,
-      ["Project A", "Task 1", "已完成", "Alice", "2026/1/5", "2026/1/6", "1"],
-      ["Project A", "Task 2", "進行中", "Bob", "2026/2/10", "", ""],
-      ["Project B", "Task 3", "已確認", "Carol", "2026-3-1", "2026-3-1", "0"]
+      [ "Project A", "Task 1", "已完成", "Alice", "2026/1/5", "2026/1/6", "1" ],
+      [ "Project A", "Task 2", "進行中", "Bob", "2026/2/10", "", "" ],
+      [ "Project B", "Task 3", "已確認", "Carol", "2026-3-1", "2026-3-1", "0" ]
     ]
   end
 
@@ -25,9 +25,9 @@ RSpec.describe "Api::ProjectProgress", type: :request do
       json = JSON.parse(response.body)
 
       expect(json).to be_a(Hash)
-      expect(json.keys).to match_array(["Project A", "Project B"])
-      expect(json["Project A"].map { |t| t["task_name"] }).to match_array(["Task 1", "Task 2"])
-      expect(json["Project B"].map { |t| t["task_name"] }).to eq(["Task 3"])
+      expect(json.keys).to match_array([ "Project A", "Project B" ])
+      expect(json["Project A"].map { |t| t["task_name"] }).to match_array([ "Task 1", "Task 2" ])
+      expect(json["Project B"].map { |t| t["task_name"] }).to eq([ "Task 3" ])
 
       json.each_value do |tasks|
         tasks.each do |task|
@@ -107,8 +107,8 @@ RSpec.describe "Api::ProjectProgress", type: :request do
     let(:rows_with_blank_field) do
       [
         header_row,
-        ["", "Task 1", "已完成", "Alice", "2026/1/5", "2026/1/6", "1"], # blank project_name, skipped
-        ["Project A", "Task 2", "進行中", "Bob", "2026/2/10", "", ""]
+        [ "", "Task 1", "已完成", "Alice", "2026/1/5", "2026/1/6", "1" ], # blank project_name, skipped
+        [ "Project A", "Task 2", "進行中", "Bob", "2026/2/10", "", "" ]
       ]
     end
 
@@ -121,8 +121,8 @@ RSpec.describe "Api::ProjectProgress", type: :request do
       expect(response).to have_http_status(200)
 
       json = JSON.parse(response.body)
-      expect(json.keys).to eq(["Project A"])
-      expect(json["Project A"].map { |t| t["task_name"] }).to eq(["Task 2"])
+      expect(json.keys).to eq([ "Project A" ])
+      expect(json["Project A"].map { |t| t["task_name"] }).to eq([ "Task 2" ])
     end
   end
 
@@ -155,7 +155,7 @@ RSpec.describe "Api::ProjectProgress", type: :request do
       expect(response).to have_http_status(200)
 
       json = JSON.parse(response.body)
-      expect(json.keys).to match_array(["Project A", "Project B"])
+      expect(json.keys).to match_array([ "Project A", "Project B" ])
     end
   end
 end

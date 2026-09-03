@@ -18,7 +18,7 @@ class IssueSheetsClient
   # 任務 6 需要，擴大範圍納入。
   ISSUE_RANGE     = "A:L"
 
-  SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"].freeze
+  SCOPES = [ "https://www.googleapis.com/auth/spreadsheets.readonly" ].freeze
   CACHE_EXPIRY = 5.minutes
 
   # 三個讀取類別各自獨立快取鍵，避免共用一把鍵導致互相覆蓋（見 ProjectProgressSheetsClient 相同作法）。

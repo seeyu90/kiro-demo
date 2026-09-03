@@ -11,7 +11,7 @@ RSpec.describe Sheets::FetchIssueDashboard do
     it "maps columns to the expected keys, ignoring the Top3 column" do
       rows = [
         header,
-        ["2026-08", "15", "9", "24", "37.5", "6", "3", "3.1", "25", "王贊勛:8 | 黃靖益:5"]
+        [ "2026-08", "15", "9", "24", "37.5", "6", "3", "3.1", "25", "王贊勛:8 | 黃靖益:5" ]
       ]
 
       result = actor.send(:parse_month_kpi, rows)
@@ -32,7 +32,7 @@ RSpec.describe Sheets::FetchIssueDashboard do
     end
 
     it "does not include a :top3 key in the output" do
-      rows = [header, ["2026-08", "15", "9", "24", "37.5", "6", "3", "3.1", "25", "王贊勛:8"]]
+      rows = [ header, [ "2026-08", "15", "9", "24", "37.5", "6", "3", "3.1", "25", "王贊勛:8" ] ]
 
       result = actor.send(:parse_month_kpi, rows)
 
@@ -42,10 +42,10 @@ RSpec.describe Sheets::FetchIssueDashboard do
     it "skips blank rows" do
       rows = [
         header,
-        ["2026-08", "15", "9", "24", "37.5", "6", "3", "3.1", "25", "王贊勛:8"],
+        [ "2026-08", "15", "9", "24", "37.5", "6", "3", "3.1", "25", "王贊勛:8" ],
         [],
-        [nil, nil, nil, nil, nil, nil, nil, nil, nil, nil],
-        ["", "", "", "", "", "", "", "", "", ""]
+        [ nil, nil, nil, nil, nil, nil, nil, nil, nil, nil ],
+        [ "", "", "", "", "", "", "", "", "", "" ]
       ]
 
       result = actor.send(:parse_month_kpi, rows)
@@ -54,13 +54,13 @@ RSpec.describe Sheets::FetchIssueDashboard do
     end
 
     it "skips a row whose year_month is blank" do
-      rows = [header, ["", "15", "9", "24", "37.5", "6", "3", "3.1", "25", ""]]
+      rows = [ header, [ "", "15", "9", "24", "37.5", "6", "3", "3.1", "25", "" ] ]
 
       expect(actor.send(:parse_month_kpi, rows)).to eq([])
     end
 
     it "keeps a non-numeric value as-is instead of raising" do
-      rows = [header, ["2026-08", "TBD", "9", "24", "37.5", "6", "3", "3.1", "25", ""]]
+      rows = [ header, [ "2026-08", "TBD", "9", "24", "37.5", "6", "3", "3.1", "25", "" ] ]
 
       result = actor.send(:parse_month_kpi, rows)
 
@@ -69,7 +69,7 @@ RSpec.describe Sheets::FetchIssueDashboard do
 
     it "returns an empty array for nil or header-only input" do
       expect(actor.send(:parse_month_kpi, nil)).to eq([])
-      expect(actor.send(:parse_month_kpi, [header])).to eq([])
+      expect(actor.send(:parse_month_kpi, [ header ])).to eq([])
     end
   end
 
@@ -77,7 +77,7 @@ RSpec.describe Sheets::FetchIssueDashboard do
     let(:header) { %w[日期 客訴 測試 其他 總計] }
 
     it "maps columns to the expected keys" do
-      rows = [header, ["2026-08-13", "0", "1", "0", "1"]]
+      rows = [ header, [ "2026-08-13", "0", "1", "0", "1" ] ]
 
       result = actor.send(:parse_daily_kpi, rows)
 
@@ -87,7 +87,7 @@ RSpec.describe Sheets::FetchIssueDashboard do
     end
 
     it "treats an empty total as 0 instead of nil" do
-      rows = [header, ["2026-08-13", "0", "0", "0", ""]]
+      rows = [ header, [ "2026-08-13", "0", "0", "0", "" ] ]
 
       result = actor.send(:parse_daily_kpi, rows)
 
@@ -97,18 +97,18 @@ RSpec.describe Sheets::FetchIssueDashboard do
     it "sorts records by date ascending regardless of source order" do
       rows = [
         header,
-        ["2026-08-13", "0", "0", "0", "0"],
-        ["2026-08-01", "1", "0", "0", "1"],
-        ["2026-08-06", "0", "2", "0", "2"]
+        [ "2026-08-13", "0", "0", "0", "0" ],
+        [ "2026-08-01", "1", "0", "0", "1" ],
+        [ "2026-08-06", "0", "2", "0", "2" ]
       ]
 
       result = actor.send(:parse_daily_kpi, rows)
 
-      expect(result.map { |r| r[:date] }).to eq(["2026-08-01", "2026-08-06", "2026-08-13"])
+      expect(result.map { |r| r[:date] }).to eq([ "2026-08-01", "2026-08-06", "2026-08-13" ])
     end
 
     it "skips blank rows" do
-      rows = [header, ["2026-08-13", "0", "0", "0", "0"], [], [nil, nil, nil, nil, nil]]
+      rows = [ header, [ "2026-08-13", "0", "0", "0", "0" ], [], [ nil, nil, nil, nil, nil ] ]
 
       result = actor.send(:parse_daily_kpi, rows)
 
@@ -116,14 +116,14 @@ RSpec.describe Sheets::FetchIssueDashboard do
     end
 
     it "skips a row whose date is blank" do
-      rows = [header, ["", "0", "0", "0", "0"]]
+      rows = [ header, [ "", "0", "0", "0", "0" ] ]
 
       expect(actor.send(:parse_daily_kpi, rows)).to eq([])
     end
 
     it "returns an empty array for nil or header-only input" do
       expect(actor.send(:parse_daily_kpi, nil)).to eq([])
-      expect(actor.send(:parse_daily_kpi, [header])).to eq([])
+      expect(actor.send(:parse_daily_kpi, [ header ])).to eq([])
     end
   end
 
@@ -135,8 +135,8 @@ RSpec.describe Sheets::FetchIssueDashboard do
     it "maps columns to the expected keys, dropping sheet_name" do
       rows = [
         header,
-        ["4547", "未匯入行事曆", "Complaint", "臭蟲", "已結束", "黃靖益",
-         "2026/1/2", "2026/1/6", "3", "raw_2026", "Virtuous HRM", "0.75"]
+        [ "4547", "未匯入行事曆", "Complaint", "臭蟲", "已結束", "黃靖益",
+         "2026/1/2", "2026/1/6", "3", "raw_2026", "Virtuous HRM", "0.75" ]
       ]
 
       result = actor.send(:parse_issues, rows)
@@ -170,7 +170,7 @@ RSpec.describe Sheets::FetchIssueDashboard do
     end
 
     it "normalizes start_date and due_date to ISO 8601" do
-      rows = [header, ["1", "s", "Complaint", "臭蟲", "已結束", "x", "2026/8/1", "2026-08-02", "", "raw_2026", "P"]]
+      rows = [ header, [ "1", "s", "Complaint", "臭蟲", "已結束", "x", "2026/8/1", "2026-08-02", "", "raw_2026", "P" ] ]
 
       result = actor.send(:parse_issues, rows)
 
@@ -179,7 +179,7 @@ RSpec.describe Sheets::FetchIssueDashboard do
     end
 
     it "leaves start_date/due_date nil when the source cell is empty" do
-      rows = [header, ["1", "s", "Complaint", "臭蟲", "已結束", "x", "", nil, "", "raw_2026", "P"]]
+      rows = [ header, [ "1", "s", "Complaint", "臭蟲", "已結束", "x", "", nil, "", "raw_2026", "P" ] ]
 
       result = actor.send(:parse_issues, rows)
 
@@ -188,31 +188,31 @@ RSpec.describe Sheets::FetchIssueDashboard do
     end
 
     it "converts a valid work_days string to Integer" do
-      rows = [header, ["1", "s", "Complaint", "臭蟲", "已結束", "x", "", "", "108", "raw_2026", "P"]]
+      rows = [ header, [ "1", "s", "Complaint", "臭蟲", "已結束", "x", "", "", "108", "raw_2026", "P" ] ]
 
       expect(actor.send(:parse_issues, rows).first[:work_days]).to eq(108)
     end
 
     it "keeps a non-numeric work_days value as-is instead of raising" do
-      rows = [header, ["1", "s", "Complaint", "臭蟲", "已結束", "x", "", "", "TBD", "raw_2026", "P"]]
+      rows = [ header, [ "1", "s", "Complaint", "臭蟲", "已結束", "x", "", "", "TBD", "raw_2026", "P" ] ]
 
       expect(actor.send(:parse_issues, rows).first[:work_days]).to eq("TBD")
     end
 
     it "leaves work_days nil when the source cell is empty" do
-      rows = [header, ["1", "s", "Complaint", "臭蟲", "已結束", "x", "", "", "", "raw_2026", "P"]]
+      rows = [ header, [ "1", "s", "Complaint", "臭蟲", "已結束", "x", "", "", "", "raw_2026", "P" ] ]
 
       expect(actor.send(:parse_issues, rows).first[:work_days]).to be_nil
     end
 
     it "skips a row when issue_id is blank" do
-      rows = [header, ["", "s", "Complaint", "臭蟲", "已結束", "x", "", "", "", "raw_2026", "P"]]
+      rows = [ header, [ "", "s", "Complaint", "臭蟲", "已結束", "x", "", "", "", "raw_2026", "P" ] ]
 
       expect(actor.send(:parse_issues, rows)).to eq([])
     end
 
     it "skips a row when subject is blank" do
-      rows = [header, ["1", "", "Complaint", "臭蟲", "已結束", "x", "", "", "", "raw_2026", "P"]]
+      rows = [ header, [ "1", "", "Complaint", "臭蟲", "已結束", "x", "", "", "", "raw_2026", "P" ] ]
 
       expect(actor.send(:parse_issues, rows)).to eq([])
     end
@@ -220,19 +220,19 @@ RSpec.describe Sheets::FetchIssueDashboard do
     it "skips a row when status is blank, keeping other valid rows" do
       rows = [
         header,
-        ["1", "s", "Complaint", "臭蟲", "", "x", "", "", "", "raw_2026", "P"],
-        ["2", "s2", "TestingBug", "臭蟲", "新建立", "y", "", "", "", "raw_2026", "P"]
+        [ "1", "s", "Complaint", "臭蟲", "", "x", "", "", "", "raw_2026", "P" ],
+        [ "2", "s2", "TestingBug", "臭蟲", "新建立", "y", "", "", "", "raw_2026", "P" ]
       ]
 
       result = actor.send(:parse_issues, rows)
 
-      expect(result.map { |r| r[:issue_id] }).to eq(["2"])
+      expect(result.map { |r| r[:issue_id] }).to eq([ "2" ])
     end
 
     it "skips blank rows" do
       rows = [
         header,
-        ["1", "s", "Complaint", "臭蟲", "已結束", "x", "", "", "", "raw_2026", "P"],
+        [ "1", "s", "Complaint", "臭蟲", "已結束", "x", "", "", "", "raw_2026", "P" ],
         [],
         Array.new(11)
       ]
@@ -242,19 +242,19 @@ RSpec.describe Sheets::FetchIssueDashboard do
 
     it "returns an empty array for nil or header-only input" do
       expect(actor.send(:parse_issues, nil)).to eq([])
-      expect(actor.send(:parse_issues, [header])).to eq([])
+      expect(actor.send(:parse_issues, [ header ])).to eq([])
     end
 
     it "skips a row whose tracker is 測試 (test-only issue, not a real quality defect), keeping other valid rows" do
       rows = [
         header,
-        ["1", "s", "TestingBug", "測試", "新建立", "x", "", "", "", "raw_2026", "P"],
-        ["2", "s2", "TestingBug", "臭蟲", "新建立", "y", "", "", "", "raw_2026", "P"]
+        [ "1", "s", "TestingBug", "測試", "新建立", "x", "", "", "", "raw_2026", "P" ],
+        [ "2", "s2", "TestingBug", "臭蟲", "新建立", "y", "", "", "", "raw_2026", "P" ]
       ]
 
       result = actor.send(:parse_issues, rows)
 
-      expect(result.map { |r| r[:issue_id] }).to eq(["2"])
+      expect(result.map { |r| r[:issue_id] }).to eq([ "2" ])
     end
   end
 
@@ -277,11 +277,11 @@ RSpec.describe Sheets::FetchIssueDashboard do
     end
 
     it "groups issues with a blank project under 未分類" do
-      issues = [{ project: "", type: "Complaint" }, { project: nil, type: "TestingBug" }]
+      issues = [ { project: "", type: "Complaint" }, { project: nil, type: "TestingBug" } ]
 
       result = actor.send(:compute_project_breakdown, issues)
 
-      expect(result).to eq([{ project: "未分類", complaint: 1, testing: 1, other: 0, total: 2 }])
+      expect(result).to eq([ { project: "未分類", complaint: 1, testing: 1, other: 0, total: 2 } ])
     end
 
     it "returns an empty array for an empty issues list" do
@@ -295,24 +295,24 @@ RSpec.describe Sheets::FetchIssueDashboard do
     let(:month_kpi_rows) do
       [
         %w[year_month 客訴 測試 總Bug 攔截率 完成數 未結案 平均天數 SLA達標率 Top3],
-        ["2026-08", "15", "9", "24", "37.5", "6", "3", "3.1", "25", "王贊勛:8"]
+        [ "2026-08", "15", "9", "24", "37.5", "6", "3", "3.1", "25", "王贊勛:8" ]
       ]
     end
 
     let(:daily_kpi_rows) do
       [
         %w[日期 客訴 測試 其他 總計],
-        ["2026-08-13", "0", "1", "0", "1"]
+        [ "2026-08-13", "0", "1", "0", "1" ]
       ]
     end
 
     let(:issue_rows) do
       [
         %w[issue_id subject type tracker status assigned_to start_date due_date work_days sheet_name project total_hours],
-        ["4547", "未匯入行事曆", "Complaint", "臭蟲", "已結束", "黃靖益",
-         "2026/1/2", "2026/1/6", "3", "raw_2026", "Virtuous HRM"],
-        ["5165", "白名單申請時間錯誤", "TestingBug", "臭蟲", "新建立", "蔡秉逸",
-         "2026/8/12", "", "", "raw_2026", "Virtuous HRM"]
+        [ "4547", "未匯入行事曆", "Complaint", "臭蟲", "已結束", "黃靖益",
+         "2026/1/2", "2026/1/6", "3", "raw_2026", "Virtuous HRM" ],
+        [ "5165", "白名單申請時間錯誤", "TestingBug", "臭蟲", "新建立", "蔡秉逸",
+         "2026/8/12", "", "", "raw_2026", "Virtuous HRM" ]
       ]
     end
 
@@ -335,7 +335,7 @@ RSpec.describe Sheets::FetchIssueDashboard do
     end
 
     it "populates issues from the client's rows" do
-      expect(result.issues.map { |i| i[:issue_id] }).to eq(["4547", "5165"])
+      expect(result.issues.map { |i| i[:issue_id] }).to eq([ "4547", "5165" ])
     end
 
     it "populates project_breakdown derived from issues" do

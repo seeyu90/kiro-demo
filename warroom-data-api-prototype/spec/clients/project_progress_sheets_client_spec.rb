@@ -5,7 +5,7 @@ require "rails_helper"
 RSpec.describe ProjectProgressSheetsClient do
   include ActiveSupport::Testing::TimeHelpers
 
-  let(:header_row) { ["專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延誤"] }
+  let(:header_row) { [ "專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延誤" ] }
   let(:fake_creds_json) { '{"type":"service_account","project_id":"fake"}' }
 
   before do
@@ -37,8 +37,8 @@ RSpec.describe ProjectProgressSheetsClient do
 
   def all_sheets_rows(header_only: false)
     described_class::SHEET_NAMES.each_with_object({}) do |name, acc|
-      row = ["#{name}-project", "#{name}-task", "done", "owner", "2026/1/1", "2026/1/2", "0"]
-      acc["#{name}!A:G"] = header_only ? [header_row] : [header_row, row]
+      row = [ "#{name}-project", "#{name}-task", "done", "owner", "2026/1/1", "2026/1/2", "0" ]
+      acc["#{name}!A:G"] = header_only ? [ header_row ] : [ header_row, row ]
     end
   end
 
@@ -62,7 +62,7 @@ RSpec.describe ProjectProgressSheetsClient do
         stub_service_for(all_sheets_rows)
 
         result = described_class.fetch_rows
-        tagged_header = header_row + ["類型"]
+        tagged_header = header_row + [ "類型" ]
 
         expect(result.first).to eq(tagged_header)
         expect(result.count { |row| row == tagged_header }).to eq(1)
@@ -76,7 +76,7 @@ RSpec.describe ProjectProgressSheetsClient do
 
         described_class::SHEET_NAMES.each do |name|
           expect(result).to include(
-            ["#{name}-project", "#{name}-task", "done", "owner", "2026/1/1", "2026/1/2", "0", name]
+            [ "#{name}-project", "#{name}-task", "done", "owner", "2026/1/1", "2026/1/2", "0", name ]
           )
         end
       end
@@ -94,7 +94,7 @@ RSpec.describe ProjectProgressSheetsClient do
 
         result = described_class.fetch_rows
 
-        expect(result).to eq([header_row + ["類型"]])
+        expect(result).to eq([ header_row + [ "類型" ] ])
       end
     end
 
@@ -114,8 +114,8 @@ RSpec.describe ProjectProgressSheetsClient do
         result = described_class.fetch_rows
 
         expect(result).to eq(
-          [header_row + ["類型"]] + described_class::SHEET_NAMES.map do |name|
-            ["#{name}-project", "#{name}-task", "done", "owner", "2026/1/1", "2026/1/2", "0", name]
+          [ header_row + [ "類型" ] ] + described_class::SHEET_NAMES.map do |name|
+            [ "#{name}-project", "#{name}-task", "done", "owner", "2026/1/1", "2026/1/2", "0", name ]
           end
         )
       end
@@ -123,15 +123,15 @@ RSpec.describe ProjectProgressSheetsClient do
       it "pads short rows (trailing empty cells trimmed by the Sheets API) before tagging, so the type lands in the 8th slot" do
         # Google Sheets omits trailing empty cells: a row with a blank "延誤" column
         # comes back with only 6 elements instead of 7.
-        short_row = ["功能-project", "功能-task", "done", "owner", "2026/1/1", "2026/1/2"]
+        short_row = [ "功能-project", "功能-task", "done", "owner", "2026/1/1", "2026/1/2" ]
         rows = all_sheets_rows
-        rows["功能!A:G"] = [header_row, short_row]
+        rows["功能!A:G"] = [ header_row, short_row ]
         stub_service_for(rows)
 
         result = described_class.fetch_rows
 
         tagged_short_row = result.find { |row| row[0] == "功能-project" }
-        expect(tagged_short_row).to eq(short_row + [nil, "功能"])
+        expect(tagged_short_row).to eq(short_row + [ nil, "功能" ])
       end
 
       it "treats a sheet with a nil response as contributing no rows" do
@@ -144,7 +144,7 @@ RSpec.describe ProjectProgressSheetsClient do
         # 功能(header+data) + PR(nil→0) + 調整/遺漏/臭蟲(data only, header dropped) = 2+0+1+1+1
         expect(result).not_to include(nil)
         expect(result.size).to eq(5)
-        expect(result).not_to include(["PR-project", "PR-task", "done", "owner", "2026/1/1", "2026/1/2", "0", "PR"])
+        expect(result).not_to include([ "PR-project", "PR-task", "done", "owner", "2026/1/1", "2026/1/2", "0", "PR" ])
       end
     end
 
