@@ -27,12 +27,13 @@
   - _需求：2、3、4_
 
 - [x] 7. 檢查點：`bundle exec rspec`、`bin/rubocop` 全部通過（既有 1 個與本次改動無關的
-      日期相依既有測試 flaky failure，見下方備註）
+      日期相依既有測試 flaky failure，已順手修正，見下方備註）
 
-**備註**：`bundle exec rspec` 執行時 `spec/actors/sheets/fetch_project_history_spec.rb:56`
-（"builds gantt tasks from matched 307 burndown issues"）目前會因為測試沒有 `travel_to` 固定
+**備註**：`spec/actors/sheets/fetch_project_history_spec.rb:56`
+（"builds gantt tasks from matched 307 burndown issues"）原本會因為測試沒有 `travel_to` 固定
 日期、且系統日期已晚於測試假設的 `due_date`（2026-08-22）而失敗；此為既有測試本身的日期
-相依問題，與本 spec 的任何改動無關，不在本 spec 範圍內修正。
+相依問題，與本 spec 的任何改動無關，但屬於低成本的順手修正，已在本 PR 內加上 `travel_to`
+固定測試日期解決，不留給後續 PR。
 
 ## Phase 2（設計已定案，尚未排入實作——見 design.md）
 
