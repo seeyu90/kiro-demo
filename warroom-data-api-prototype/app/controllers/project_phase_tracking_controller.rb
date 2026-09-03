@@ -1,4 +1,6 @@
 class ProjectPhaseTrackingController < ApplicationController
+  include YearFilterable
+
   VIEWS = %w[list gantt].freeze
   DEFAULT_VIEW = "list".freeze
   # 預設狀態篩選就是「未完成」，使用者能明確選「全部狀態」（比照 resolve_year 慣例，以
@@ -16,14 +18,6 @@ class ProjectPhaseTrackingController < ApplicationController
   end
 
   private
-
-  # 年度篩選預設「今年」，使用者能明確選「全部年度」（比照既有 project_history_controller
-  # 慣例，以 params.key? 區分「使用者選了全部年度」與「表單根本還沒送出過」）。
-  def resolve_year
-    return params[:year].presence if params.key?(:year)
-
-    Date.current.year.to_s
-  end
 
   def resolve_status
     return params[:status].presence if params.key?(:status)
