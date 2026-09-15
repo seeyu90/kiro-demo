@@ -69,7 +69,8 @@ output :failure_code, :message
    （`ISSUE_SLA_DAYS`）就以 `start_date + sla_days` 推算（`:sla`）；兩者皆無回傳 `[nil, nil]`。
 2. `Sheets::FetchIssueDashboard.done?(issue)` 與 `.overdue?(issue)` 公開；`overdue?` 改以
    `effective_due_date` 實作，讓「到期日」只有一處定義。
-3. 既有的 private `issue_done?`／`issue_overdue?` 改為委派呼叫上述 class method，**306 頁面與
+3. 既有的 private `issue_done?`／`issue_overdue?`／`sla_overdue?` 直接刪除（唯一呼叫點是
+   `compute_issue_kpis`，改為直接呼叫 class method，不留一層只做委派的薄包裝）。**306 頁面與
    KPI 的行為不變**，既有 `spec/actors/sheets/fetch_issue_dashboard_spec.rb` 必須維持全綠——
    這是本次改動的迴歸防線。
 

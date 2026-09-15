@@ -42,6 +42,13 @@ module Sheets
     BREAKDOWN_SORT_KEYS = %w[complaint testing other total].freeze
     BREAKDOWN_SORT_DIRS = %w[asc desc].freeze
 
+    # 沒填到期日時的內建 SLA（依 type 而定，天數是從開始日算起「最晚應完成」的期限）：客訴兩天內
+    # 要完成、測試（TestingBug／個人責任）當天要完成。取代原本「沒填到期日一律不算逾期」的判斷
+    # ——這兩種類型即使沒有明確到期日，業務上仍有既定的完成期限，不該永遠不算逾期、也不該
+    # 永遠被歸類到「未定到期日」（見 compute_issue_kpis 的 undated 判斷）。其餘沒有 SLA 對應的
+    # 類型（Other）沒填到期日時維持「未定」，不會被視為逾期。
+    ISSUE_SLA_DAYS = { "Complaint" => 2, "TestingBug" => 0 }.freeze
+
     def call
       self.month_kpi          = parse_month_kpi(IssueSheetsClient.fetch_month_kpi_rows)
       self.daily_kpi          = parse_daily_kpi(IssueSheetsClient.fetch_daily_kpi_rows)
@@ -83,6 +90,42 @@ module Sheets
       end
     rescue => e
       fail!(failure_code: :internal_error, message: "未預期的內部錯誤：#{e.message}")
+    end
+
+    # 「議題是否結案／是否逾期／到期日是哪一天」這三個判斷，本 Actor（KPI 計算）與
+    # Summary::BuildPmWeeklyReport（PM 週報的週別歸屬）共用同一套定義，故公開為 class method，
+    # 比照 Sheets::FetchProjectProgress.overdue? 已建立的前例（同樣是為了讓其他層共用而公開）。
+    def self.done?(issue)
+      issue[:status].to_s.match?(ISSUE_DONE_STATUS_PATTERN)
+    end
+
+    # 回傳 [到期日, 來源]：試算表有填到期日就以它為準（`:sheet`）；沒填但該 type 有內建 SLA
+    # 時，以「開始日 + SLA 天數」推算（`:sla`，PM 週報需要標示這是推算值而非試算表填的）；
+    # 沒有可用依據時回傳 [nil, nil]（未定到期日，一律不視為逾期）。
+    # 試算表「有填但無法解析」的髒資料一律回 [nil, nil]、不改用 SLA 推算，維持既有
+    # issue_overdue? 的行為（解析失敗不算逾期），避免髒資料反而被判成逾期。
+    def self.effective_due_date(issue)
+      if issue[:due_date].present?
+        date = parse_date(issue[:due_date])
+        return date ? [ date, :sheet ] : [ nil, nil ]
+      end
+
+      sla_days = ISSUE_SLA_DAYS[issue[:type]]
+      return [ nil, nil ] if sla_days.nil? || issue[:start_date].blank?
+
+      start_date = parse_date(issue[:start_date])
+      start_date ? [ start_date + sla_days, :sla ] : [ nil, nil ]
+    end
+
+    def self.overdue?(issue)
+      date, = effective_due_date(issue)
+      date.present? && date < Date.current
+    end
+
+    def self.parse_date(value)
+      Date.parse(value.to_s)
+    rescue ArgumentError, TypeError
+      nil
     end
 
     private
@@ -211,47 +254,19 @@ module Sheets
       [ issue[:subject], issue[:issue_id], issue[:assigned_to] ].any? { |value| value.to_s.downcase.include?(needle) }
     end
 
-    def issue_done?(issue)
-      issue[:status].to_s.match?(ISSUE_DONE_STATUS_PATTERN)
-    end
-
-    # 沒填到期日時的內建 SLA（依 type 而定，天數是從開始日算起「最晚應完成」的期限）：客訴兩天內
-    # 要完成、測試（TestingBug／個人責任）當天要完成。取代原本「沒填到期日一律不算逾期」的判斷
-    # ——這兩種類型即使沒有明確到期日，業務上仍有既定的完成期限，不該永遠不算逾期、也不該
-    # 永遠被歸類到「未定到期日」（見 compute_issue_kpis 的 undated 判斷）。其餘沒有 SLA 對應的
-    # 類型（Other）沒填到期日時維持「未定」，不會被視為逾期。
-    ISSUE_SLA_DAYS = { "Complaint" => 2, "TestingBug" => 0 }.freeze
-
-    def issue_overdue?(issue)
-      if issue[:due_date].present?
-        Date.parse(issue[:due_date]) < Date.current
-      else
-        sla_overdue?(issue)
-      end
-    rescue ArgumentError, TypeError
-      false
-    end
-
-    def sla_overdue?(issue)
-      sla_days = ISSUE_SLA_DAYS[issue[:type]]
-      return false if sla_days.nil? || issue[:start_date].blank?
-
-      Date.parse(issue[:start_date]) + sla_days < Date.current
-    end
-
     # KPI 卡片：待處理議題（未完成）／緊急客訴（未完成的客訴且已逾期——資料裡沒有優先權／
     # 嚴重度欄位，「客訴+已逾期」是目前能從既有資料算出最接近「緊急」的定義，見
     # warroom-issue-dashboard-ux-refresh 任務 2.1 的取捨說明）／逾期或未定到期日（未完成
     # 且到期日已過，或沒填到期日、也沒有對應 SLA 可判斷）。三者都只算「未完成」的議題，
     # 已完成的議題不算緊急也不算逾期。
     def compute_issue_kpis(issues)
-      pending = issues.reject { |i| issue_done?(i) }
+      pending = issues.reject { |i| self.class.done?(i) }
       # overdue? 每筆只算一次（Date.parse 有成本），urgent_complaints／overdue_or_undated
       # 共用同一個結果，不各自重算一次。
       urgent_count = 0
       overdue_or_undated_count = 0
       pending.each do |i|
-        overdue = issue_overdue?(i)
+        overdue = self.class.overdue?(i)
         undated = i[:due_date].blank? && !ISSUE_SLA_DAYS.key?(i[:type])
         urgent_count += 1 if i[:type] == "Complaint" && overdue
         overdue_or_undated_count += 1 if undated || overdue

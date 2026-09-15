@@ -18,11 +18,12 @@ Wave 5   8. RSpec（Actor / Request / Helper）
 
 ---
 
-- [ ] 1. 把 `Sheets::FetchIssueDashboard` 的完成／逾期／到期日判斷提為 class method
+- [x] 1. 把 `Sheets::FetchIssueDashboard` 的完成／逾期／到期日判斷提為 class method
   - 新增 `.effective_due_date(issue)` → `[Date|nil, :sheet|:sla|nil]`（試算表到期日優先，
     次之依 `ISSUE_SLA_DAYS` 自 `start_date` 推算）
   - 公開 `.done?(issue)`、`.overdue?(issue)`；`.overdue?` 改以 `.effective_due_date` 實作
-  - 既有 private `issue_done?`／`issue_overdue?`／`sla_overdue?` 改為委派，呼叫端不變
+  - 既有 private `issue_done?`／`issue_overdue?`／`sla_overdue?` 刪除，唯一呼叫點
+    `compute_issue_kpis` 改呼叫 class method
   - **驗收**：`bundle exec rspec spec/actors/sheets/fetch_issue_dashboard_spec.rb` 全綠
     （既有測試即迴歸防線，行為必須完全不變）；新增三個 class method 的 spec，涵蓋
     有填到期日／`Complaint` 推算／`TestingBug` 推算／`Other` 無 SLA 回傳 `[nil, nil]`

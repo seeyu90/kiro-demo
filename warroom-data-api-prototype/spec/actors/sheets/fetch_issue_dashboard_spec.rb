@@ -510,4 +510,76 @@ RSpec.describe Sheets::FetchIssueDashboard do
       end
     end
   end
+  # 以下三個 class method 是本 Actor 與 Summary::BuildPmWeeklyReport 共用的判斷定義
+  # （見 warroom-pm-weekly-report spec 任務 1）；instance 端的 KPI 計算也走同一組方法，
+  # 故此處的行為即是 306 頁面 KPI 與 PM 週報週別歸屬的共同契約。
+  describe ".done?" do
+    it "treats statuses containing 完成/確認/關閉/解決/結束 as done" do
+      [ "已完成", "已確認", "已關閉", "已解決", "已結束" ].each do |status|
+        expect(described_class.done?({ status: status })).to be(true)
+      end
+    end
+
+    it "treats 新建立/處理中 as not done" do
+      expect(described_class.done?({ status: "新建立" })).to be(false)
+      expect(described_class.done?({ status: "處理中" })).to be(false)
+      expect(described_class.done?({ status: nil })).to be(false)
+    end
+  end
+
+  describe ".effective_due_date" do
+    it "uses the sheet due date when present, tagged :sheet" do
+      issue = { type: "Complaint", start_date: "2026-09-01", due_date: "2026-09-10" }
+      expect(described_class.effective_due_date(issue)).to eq([ Date.new(2026, 9, 10), :sheet ])
+    end
+
+    it "derives Complaint due dates as start_date + 2 days when the sheet has none, tagged :sla" do
+      issue = { type: "Complaint", start_date: "2026-09-01", due_date: nil }
+      expect(described_class.effective_due_date(issue)).to eq([ Date.new(2026, 9, 3), :sla ])
+    end
+
+    it "derives TestingBug due dates as the start date itself (SLA 0 天)" do
+      issue = { type: "TestingBug", start_date: "2026-09-01", due_date: nil }
+      expect(described_class.effective_due_date(issue)).to eq([ Date.new(2026, 9, 1), :sla ])
+    end
+
+    it "returns [nil, nil] for types without an SLA (Other) and no sheet due date" do
+      issue = { type: "Other", start_date: "2026-09-01", due_date: nil }
+      expect(described_class.effective_due_date(issue)).to eq([ nil, nil ])
+    end
+
+    it "returns [nil, nil] when the type has an SLA but there is no start date to derive from" do
+      issue = { type: "Complaint", start_date: nil, due_date: nil }
+      expect(described_class.effective_due_date(issue)).to eq([ nil, nil ])
+    end
+
+    it "returns [nil, nil] for an unparseable sheet due date rather than falling back to the SLA" do
+      # 髒資料不該反而被判成「有到期日」：既有 issue_overdue? 的行為是解析失敗一律不算逾期，
+      # 若此處退回 SLA 推算，會讓一筆填了亂碼的客訴突然變成逾期。
+      issue = { type: "Complaint", start_date: "2026-09-01", due_date: "未定" }
+      expect(described_class.effective_due_date(issue)).to eq([ nil, nil ])
+    end
+  end
+
+  describe ".overdue?" do
+    around { |example| travel_to(Date.new(2026, 9, 15)) { example.run } }
+
+    it "is true when the sheet due date has passed" do
+      expect(described_class.overdue?({ type: "Other", due_date: "2026-09-14" })).to be(true)
+    end
+
+    it "is false when the sheet due date is today or later" do
+      expect(described_class.overdue?({ type: "Other", due_date: "2026-09-15" })).to be(false)
+      expect(described_class.overdue?({ type: "Other", due_date: "2026-09-16" })).to be(false)
+    end
+
+    it "is true when the SLA-derived due date has passed" do
+      issue = { type: "Complaint", start_date: "2026-09-10", due_date: nil }
+      expect(described_class.overdue?(issue)).to be(true)
+    end
+
+    it "is false when there is no usable due date at all" do
+      expect(described_class.overdue?({ type: "Other", start_date: "2026-01-01", due_date: nil })).to be(false)
+    end
+  end
 end
