@@ -27,7 +27,7 @@ PmWeeklyReportController#index
 | `PmWeeklyReportController` | `app/controllers/pm_weekly_report_controller.rb` | 呼叫 Actor，成功時把輸出指派給 ivar，失敗時依 `failure_code` 對應 HTTP 狀態（沿用既有對應表） |
 | `Summary::BuildPmWeeklyReport` | `app/actors/summary/build_pm_weekly_report.rb` | 週別歸屬、分組排序、降級旗標 |
 | `PmWeeklyIssueBlueprint` | `app/blueprints/pm_weekly_issue_blueprint.rb` | 306 議題在本頁的輸出欄位（含兩個衍生欄位） |
-| `PmWeeklyReportHelper` | `app/helpers/pm_weekly_report_helper.rb` | 週區間文字、逾期天數與對應 CSS class、推算到期日標記 |
+| `PmWeeklyReportHelper` | `app/helpers/pm_weekly_report_helper.rb` | 週區間文字、日期格式、逾期天數、推算到期日標記、資料更新時間。方法一律加 `pm_weekly_` 前綴（Rails 的 include_all_helpers 會把所有 helper 混進同一個 view context，同名方法會互相覆蓋） |
 | View | `app/views/pm_weekly_report/` | `index` + `_task_section` + `_issue_section` + `_phase_section` + `_project_group` |
 
 ### Actor 輸出
@@ -144,7 +144,7 @@ Controller 只負責把 `params[:project]` 傳進去。306 的 `project` 欄位�
 
 | 情境 | 行為 |
 |---|---|
-| 305 失敗 | `fail!(failure_code:, message:)` 原樣往上傳，Controller 依既有對應表回應（404/403/422/500），View 只渲染 `.error-message` |
+| 305 失敗 | `fail!(failure_code:, message:)` 原樣往上傳，Controller 仍回 **200** 並只渲染 `.error-message`——沿用既有 HTML 頁面慣例（dashboard／executive_summary 皆如此，見 `spec/requests/executive_summary_spec.rb` 對失敗情境同樣期待 200）；rails-standards.md 的 `failure_code` → HTTP 狀態對應表是給 JSON API 用的 |
 | 306 失敗 | `issues_unavailable = true`，306 三個清單為空陣列，頁面照常渲染 305 與階段追蹤，頂部顯示「部分資料來源目前無法讀取：306 臭蟲議題」 |
 | 階段追蹤失敗 | `phase_tracking_unavailable = true`，同上 |
 
@@ -155,5 +155,8 @@ Controller 只負責把 `params[:project]` 傳進去。306 的 `project` 欄位�
 3. **階段追蹤命名系統獨立**：`ProjectProfilesSheetsClient`「專案」分頁用 Notion/Github 專案代碼
    （HRM、JZNPMS），與 305／306 的專案名稱無可靠對照欄位，故獨立區塊且不受專案篩選影響
    （沿用 `warroom-executive-weekly-summary` design.md 同一個取捨，非本 spec 新引入）。
-4. **快取延遲**：三個資料源皆有 5 分鐘 client 層快取，頁面顯示的 `fetched_at` 為 305 的抓取時間；
+4. **資料更新時間顯示為相對時間**（「X 分鐘前」）：本 app 未設定 `config.time_zone`（預設 UTC），
+   顯示絕對時間會與使用者本地時間差 8 小時。規則與 `DashboardController#freshness_label` 相同，
+   兩處各自實作、暫不共用（目前只有兩個使用點，等第三個頁面也需要時再抽到 `ApplicationHelper`）。
+5. **快取延遲**：三個資料源皆有 5 分鐘 client 層快取，頁面顯示的 `fetched_at` 為 305 的抓取時間；
    本頁不提供 `?refresh=`（只有 305 client 支援 force，306／階段追蹤沒有，做半套反而誤導）。

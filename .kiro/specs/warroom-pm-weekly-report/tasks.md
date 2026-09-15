@@ -46,17 +46,21 @@ Wave 5   8. RSpec（Actor / Request / Helper）
   - **驗收**：blueprint spec 確認渲染出上述 8 個欄位、且 `due_date_estimated` 為布林
   - _需求：3.5_
 
-- [ ] 4. 新增 `PmWeeklyReportController` + 路由 `get "/pm_weekly_report"`
-  - 成功時指派 ivar；失敗時沿用既有 `failure_code` → HTTP 狀態對應表
+- [x] 4. 新增 `PmWeeklyReportController` + 路由 `get "/pm_weekly_report"`
+  - 成功時指派 ivar；失敗時仍回 200 並渲染錯誤訊息（既有 HTML 頁面慣例，
+    `failure_code` → HTTP 狀態對應表只適用 JSON API）
   - 只負責傳遞 `params[:project]`，不做任何資料處理
   - **驗收**：`bin/rails routes | grep pm_weekly_report` 有該路由；controller 無任何
     日期運算或資料轉換程式碼
   - _需求：1.1、5.4、6.1_
 
-- [ ] 5. 新增 `PmWeeklyReportHelper`
-  - `week_range_label(range)` → `YYYY/MM/DD ~ YYYY/MM/DD`
-  - `overdue_days(task)` → `(Date.current - 預計完成日).to_i`
-  - `due_date_label(issue)` → 推算值標示為「(推算)」
+- [x] 5. 新增 `PmWeeklyReportHelper`
+  - `pm_weekly_range_label(range)` → `YYYY/MM/DD ~ YYYY/MM/DD`
+  - `pm_weekly_date_label(value)` → `YYYY/MM/DD`；無法解析的原始字串照原樣顯示
+  - `pm_weekly_overdue_days(task)` → `(Date.current - 預計完成日).to_i`
+  - `pm_weekly_due_date_label(issue)` → 推算值標示為「（推算）」
+  - `pm_weekly_freshness_label(fetched_at)` → 相對時間（未設 time_zone，絕對時間會差 8 小時）
+  - 方法一律加 `pm_weekly_` 前綴，避免與其他 helper 同名覆蓋
   - **驗收**：helper spec 以 `travel_to` 驗證三個方法的輸出字串
   - _需求：1.1、2.9、3.5_
 

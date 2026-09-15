@@ -19,6 +19,7 @@ Rails.application.routes.draw do
   get "/project_history", to: "project_history#index"
   get "/project_phase_tracking", to: "project_phase_tracking#index"
   get "/executive_summary", to: "executive_summary#index"
+  get "/pm_weekly_report", to: "pm_weekly_report#index"
 
   # API routes
   namespace :api do
