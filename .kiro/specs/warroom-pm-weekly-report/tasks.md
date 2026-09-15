@@ -29,7 +29,7 @@ Wave 5   8. RSpec（Actor / Request / Helper）
     有填到期日／`Complaint` 推算／`TestingBug` 推算／`Other` 無 SLA 回傳 `[nil, nil]`
   - _需求：3.4、3.5、3.6_
 
-- [ ] 2. 新增 `Summary::BuildPmWeeklyReport`
+- [x] 2. 新增 `Summary::BuildPmWeeklyReport`
   - 呼叫 305（核心，失敗即 `fail!`）／306／階段追蹤（次要，失敗設 `*_unavailable` 旗標）
   - 依 design.md「週別歸屬（權威定義）」表實作 305／306／階段追蹤三套歸屬，互斥
   - 依專案分組 + 排序（逾期依天數、其餘依日期）
@@ -39,7 +39,7 @@ Wave 5   8. RSpec（Actor / Request / Helper）
     且其餘清單照常產出
   - _需求：1.1、2.1–2.7、3.1–3.3、3.7、4.2、4.4、5.1、5.2、6.1、6.2_
 
-- [ ] 3. 新增 `PmWeeklyIssueBlueprint`
+- [x] 3. 新增 `PmWeeklyIssueBlueprint`
   - 欄位：`issue_id, subject, type, status, assigned_to, project, effective_due_date,
     due_date_estimated`
   - 不改動既有 `IssueBlueprint`（306 頁面與 JSON API 欄位契約）
