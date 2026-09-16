@@ -15,7 +15,9 @@
   --color-text: #1a202c;
   --color-text-strong: #171923;
   --color-text-muted: #4a5568;
-  --color-text-faint: #64748b;
+  /* #64748b 對 --color-surface（白）只有 4.76:1，貼著 WCAG AA 的 4.5:1 門檻沒有餘裕；
+     加深到 #54627a（6.17:1）給表格表頭等 12px 小字留出安全邊際。 */
+  --color-text-faint: #54627a;
   --color-accent: #2b6cb0;
   --color-accent-strong: #2c5282;
 
@@ -66,7 +68,9 @@ html[data-theme="dark"] {
   --color-text: #e2e8f0;
   --color-text-strong: #f7fafc;
   --color-text-muted: #a0aec0;
-  --color-text-faint: #718096;
+  /* #718096 對 --color-surface（深色）只有 4.06:1，實測已經低於 4.5:1 門檻；
+     調亮到 #96a3ba（6.41:1）。 */
+  --color-text-faint: #96a3ba;
   --color-accent: #63b3ed;
   --color-accent-strong: #4299e1;
 
@@ -284,6 +288,15 @@ body {
   color: var(--color-text-muted);
 }
 
+/* 「～」與結束日期輸入框包成同一個 inline-flex，讓它們在窄螢幕換行時當成一個整體一起換行
+   （見 _date_range_filter.html.erb 的說明），不會出現「～」單獨留在上一行行尾的情況。
+   gap 跟外層 .date-range-filter 一致，視覺間距不因為多包一層而改變。 */
+.date-range-to {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
 /* ── Summary Bar ── */
 .summary-bar {
   display: flex;
@@ -292,11 +305,25 @@ body {
   margin-bottom: 1.5rem;
 }
 
+/* 統計卡數字只受「專案」「任務類型」篩選影響，「範圍」「預計完成日期」都不影響它（見
+   dashboard/index.html.erb 的說明），不點明的話容易被誤以為篩選沒套用成功。 */
+.filter-summary {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  margin: 1.25rem 0 0.75rem;
+}
+
 /* 統計卡緊接在篩選表單後面時，兩者之間原本完全沒有間距（篩選列底部與統計卡頂端同一個 y），
    跟頁面其他區塊 20～24px 的節奏對不上，看起來像黏在一起。只針對「緊接在篩選表單之後」
    這個位置補間距，不動其他頁面 .summary-bar 出現在別種脈絡下的排版。 */
 .project-selector + .summary-bar {
   margin-top: 1.25rem;
+}
+
+/* .filter-summary 已經帶了自己的上邊距，緊接其後的統計卡不需要再疊加 .project-selector 那條
+   規則給的間距，否則兩段間距相加會比其他頁面明顯寬。 */
+.filter-summary + .summary-bar {
+  margin-top: 0;
 }
 
 .stat-item {
@@ -563,6 +590,13 @@ turbo-frame[busy]::after {
 
 .project-block:hover {
   border-color: var(--color-border-hover);
+}
+
+/* 標題＋表頭是固定內容，任務筆數少時這些固定內容佔卡片高度的比例就偏高，看起來比任務多
+   的專案空一截（實測：1 筆任務的卡片 172px、6 筆的 414px，平均每列分別是 172px 與 69px）。
+   只收緊下緣內距，讓單筆卡片沒那麼多留白，不動上緣（標題與其他卡片的標題要對齊）。 */
+.project-block:has(tbody tr:only-child) {
+  padding-bottom: 0.75rem;
 }
 
 /* PM 週報的專案分組標題用 h4（該頁的 h1/h2/h3 已經分給頁標題、四大區塊、區塊內小標），

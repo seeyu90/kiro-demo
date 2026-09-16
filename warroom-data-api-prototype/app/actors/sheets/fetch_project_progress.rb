@@ -86,8 +86,8 @@ module Sheets
       fail!(failure_code: :internal_error, message: "未預期的內部錯誤：#{e.message}")
     end
 
-    # 任務是否逾期：ProjectTaskBlueprint 的 :overdue 欄位、依專案彙總摘要的逾期計數、
-    # 依逾期優先排序皆需要同一份判斷邏輯，故公開讓 Blueprint 也能呼叫（Blueprint 渲染每次
+    # 任務是否「目前仍逾期」：未完成且已過期。executive_summary／pm_weekly_report 的專案
+    # 健康度、任務分類皆依賴這個較窄的定義，公開讓其他 Actor 也能呼叫（Blueprint 渲染每次
     # request 都會重新執行，不受 ProjectProgressSheetsClient 的原始列快取影響，「今天」一律
     # 是呼叫當下的日期，不會被快取凍結在舊的時間點）。
     def self.overdue?(task)
@@ -95,6 +95,19 @@ module Sheets
 
       date = parse_date(task[:planned_completion_date])
       date && date < Date.current
+    end
+
+    # 305 頁專用、較寬的「逾期」定義：目前仍逾期，或已完成但當初遲交（delay_days > 0）。
+    # 305 的「逾期」標籤、摘要卡逾期數、「範圍＝已逾期」篩選三處都改用這個定義，理由是三者
+    # 原本各自用不同標準（標籤／摘要卡用上面較窄的 .overdue?，範圍篩選另外算），同一個畫面
+    # 出現兩種「逾期」卻沒有區分，容易被誤讀成資料兜不起來。
+    #
+    # 刻意不動上面的 .overdue?：executive_summary 的專案健康度分級與 pm_weekly_report 的任務
+    # 分類都共用那個方法，這裡的調整只該影響 305 這頁，不該外溢到那兩個跨來源彙整頁面。
+    def self.overdue_or_completed_late?(task)
+      return task[:delay_days].to_i.positive? if COMPLETED_STATUSES.include?(task[:status])
+
+      overdue?(task)
     end
 
     def self.parse_date(value)
@@ -213,7 +226,7 @@ module Sheets
         next false unless matches_base_filters?(t, selected_project, selected_types)
         next false unless within_planned_range?(t, from, to)
         next false if selected_scope == "incomplete" && COMPLETED_STATUSES.include?(t[:status])
-        next false if selected_scope == "overdue" && !overdue_scope?(t)
+        next false if selected_scope == "overdue" && !self.class.overdue_or_completed_late?(t)
         next false if selected_scope == "due_this_week" && !due_this_week_scope?(t, week_range)
 
         true
@@ -253,26 +266,18 @@ module Sheets
       week_range.cover?(planned) || (actual.present? && week_range.cover?(actual))
     end
 
-    # 已逾期（未完成）＝現在還沒交且已過期；已逾期（已完成）＝當初逾期完成的（延誤天數 > 0），
-    # 讓使用者取消「只顯示未完成」時看到的是「哪些任務遲交了」，而不是一模一樣的清單。
-    def overdue_scope?(task)
-      return self.class.overdue?(task) unless COMPLETED_STATUSES.include?(task[:status])
-
-      task[:delay_days].to_i.positive?
-    end
-
     def compute_summary(tasks)
       completed = tasks.count { |t| COMPLETED_STATUSES.include?(t[:status]) }
       {
         total: tasks.size,
         completed: completed,
         incomplete: tasks.size - completed,
-        overdue: tasks.count { |t| self.class.overdue?(t) }
+        overdue: tasks.count { |t| self.class.overdue_or_completed_late?(t) }
       }
     end
 
     def sort_overdue_first(tasks)
-      tasks.sort_by { |t| self.class.overdue?(t) ? 0 : 1 }
+      tasks.sort_by { |t| self.class.overdue_or_completed_late?(t) ? 0 : 1 }
     end
   end
 end

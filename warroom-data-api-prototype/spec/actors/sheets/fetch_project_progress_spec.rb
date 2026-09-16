@@ -528,6 +528,32 @@ RSpec.describe Sheets::FetchProjectProgress do
       end
     end
 
+    # 305 頁的「逾期」標籤／摘要卡逾期數／「範圍＝已逾期」三處共用同一個較寬定義：目前仍
+    # 逾期，或已完成但當初遲交（delay_days > 0）。修正前摘要卡只算「目前仍逾期」，同畫面
+    # 出現「延誤天數：+N 天」卻沒有逾期標籤／沒被算進摘要卡的完成任務，容易被誤讀成資料
+    # 兜不起來（見 warroom-dashboard-ux-audit/tasks.md）。
+    context "summary 的逾期數涵蓋完成但當初遲交的任務" do
+      let(:rows) do
+        [
+          [ "專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延遲天數", "類型" ],
+          [ "P", "未完成已過期", "未完成", "A", "2026/8/1", "", "", "功能" ],
+          [ "P", "完成但遲交", "完成", "A", "2026/8/1", "2026/8/20", "", "功能" ],
+          [ "P", "完成準時", "完成", "A", "2026/8/1", "2026/8/1", "", "功能" ]
+        ]
+      end
+
+      before { allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_return(rows) }
+
+      it "counts both the still-open overdue task and the completed-late task" do
+        travel_to(Date.new(2026, 9, 16)) do
+          summary = described_class.result(task_types: [ "功能" ]).summary
+
+          expect(summary[:total]).to eq(3)
+          expect(summary[:overdue]).to eq(2)
+        end
+      end
+    end
+
     # Test 9a: stub 拋出 Google::Apis::ClientError（status 404）→ 驗證 failure_code: :sheet_not_found
     context "with Google::Apis::ClientError status 404" do
       before do

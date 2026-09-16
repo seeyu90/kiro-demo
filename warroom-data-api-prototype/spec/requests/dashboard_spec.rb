@@ -34,6 +34,30 @@ RSpec.describe "Dashboard", type: :request do
     end
   end
 
+  # 統計卡只受「專案」「任務類型」影響，不受「範圍」「預計完成日期」影響——不講清楚的話，
+  # 改了範圍或日期卻發現卡片數字沒變，容易被誤以為篩選沒套用成功（見
+  # warroom-dashboard-ux-audit/tasks.md）。
+  describe "GET /dashboard 摘要卡篩選範圍說明" do
+    it "explains which filters the summary cards do and do not respond to" do
+      get "/dashboard"
+
+      expect(response.body).to include("filter-summary")
+      expect(response.body).to include("不受下方「範圍」與「預計完成日期」影響")
+    end
+  end
+
+  # 「逾期」標籤與摘要卡逾期數改用較寬的定義：目前仍逾期，或已完成但當初遲交。修正前完成
+  # 但遲交的任務（如 Task Alpha 1：完成、2026/1/5 到期、2026/1/6 才完成）不會被標「逾期」，
+  # 跟旁邊延誤天數欄的「+N 天」對不起來，容易被誤讀成資料錯誤。
+  describe "GET /dashboard 逾期標籤涵蓋完成但遲交的任務" do
+    it "tags a completed-late task the same way as a still-open overdue task" do
+      get "/dashboard", params: { scope: "all", "task_type[]" => [ "功能", "PR", "調整" ] }
+
+      expect(response.body).to include("Task Alpha 1")
+      expect(response.body.scan("overdue-tag").size).to eq(2) # Task Alpha 1（完成但遲交）+ Task Beta 1（未完成且已過期）
+    end
+  end
+
   describe "GET /dashboard with filters disabled (scope=all, all types)" do
     before do
       get "/dashboard", params: { scope: "all", "task_type[]" => [ "功能", "PR", "調整" ] }

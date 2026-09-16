@@ -80,6 +80,15 @@
       <strong>錯誤：</strong><%= @error %>
     </div>
   <% else %>
+    <%# 統計卡數字只受「專案」「任務類型」影響，「範圍」「預計完成日期」都不影響它（見
+        Actor#call 的 scoped_tasks／compute_summary）——不講清楚的話，改了範圍或日期卻發現
+        卡片數字沒變，會被誤以為篩選沒套用成功。另外「逾期」在這裡跟畫面上任務名稱旁的
+        「逾期」標籤共用同一個較寬定義（見 overdue_or_completed_late?），一併說明，
+        避免使用者以為完成的任務不該被算進逾期。 %>
+    <p class="filter-summary">
+      以上統計僅套用「專案」與「任務類型」篩選，不受下方「範圍」與「預計完成日期」影響；
+      「逾期」計入目前仍逾期，或已完成但當初遲交的任務。
+    </p>
     <div class="summary-bar">
       <div class="stat-item">
         <span class="stat-value"><%= @summary[:total] %></span>
