@@ -14,7 +14,9 @@ RSpec.describe "PmWeeklyReport", type: :request do
       progress_header,
       [ "AG 亞炬", "很久以前就該完成", "未完成", "王贊勛", "2026/08/01", "", "48", "功能" ],
       [ "AG 亞炬", "本週日到期", "未完成", "王贊勛", "2026/09/20", "", "", "功能" ],
-      [ "Virtuous HRM", "本週三完成的", "完成", "黃靖益", "2026/09/16", "2026/09/16", "0", "功能" ],
+      # 預計 9/14、實際 9/16 完成，試算表的「延誤」欄為 2——用來確認本週已完成會顯示
+      # 試算表的延誤天數（事實紀錄），而不是逾期區塊那種即時計算的天數
+      [ "Virtuous HRM", "本週三完成的", "完成", "黃靖益", "2026/09/14", "2026/09/16", "2", "功能" ],
       [ "Virtuous HRM", "下週二到期", "未完成", "黃靖益", "2026/09/22", "", "", "PR" ],
       [ "Virtuous HRM", "還沒排期", "未完成", "黃靖益", "", "", "", "功能" ]
     ]
@@ -115,6 +117,19 @@ RSpec.describe "PmWeeklyReport", type: :request do
     expect(response.body).to include("報表模組")
   end
 
+  # 讀不到 ≠ 沒有：降級時筆數要顯示「—」、空清單要講「讀不到」，不能沿用「目前無…」的
+  # 空狀態文字——需求 1.4 保留空區塊正是為了讓 PM 分辨「確實沒有」與「漏抓」。
+  it "does not pass off an unreadable 306 as an empty one" do
+    allow(IssueSheetsClient).to receive(:fetch_issue_rows).and_raise(Google::Apis::ClientError.new("notFound"))
+
+    get "/pm_weekly_report"
+
+    expect(response.body).to include("306 臭蟲議題（—）")
+    expect(response.body).to include("此資料來源目前無法讀取，清單暫時無法顯示。")
+    expect(response.body).not_to include("本週無到期的議題。")
+    expect(response.body).not_to include("306 臭蟲議題（0）")
+  end
+
   it "shows a degradation notice naming only 階段追蹤 when it fails, and still renders 305／306" do
     allow(PhaseRecordsSheetsClient).to receive(:fetch_rows).and_raise(Google::Apis::ClientError.new("notFound"))
 
@@ -123,8 +138,9 @@ RSpec.describe "PmWeeklyReport", type: :request do
     expect(response).to have_http_status(200)
     expect(degradation_notice).to include("專案階段追蹤")
     expect(degradation_notice).not_to include("306 臭蟲議題")
-    expect(response.body).to include("階段追蹤（0）")
-    expect(response.body).to include("目前無逾期或本週／下週到期的階段項目。")
+    expect(response.body).to include("階段追蹤（—）")
+    expect(response.body).to include("此資料來源目前無法讀取，清單暫時無法顯示。")
+    expect(response.body).not_to include("目前無逾期或本週／下週到期的階段項目。")
     expect(response.body).to include("很久以前就該完成")
     expect(response.body).to include("登入失敗")
   end
@@ -133,5 +149,21 @@ RSpec.describe "PmWeeklyReport", type: :request do
     get "/pm_weekly_report"
 
     expect(degradation_notice).to be_nil
+  end
+
+  it "still says 確實沒有 for a source that is healthy but genuinely has nothing this week" do
+    get "/pm_weekly_report"
+
+    # 306 這週真的沒有到期議題（fixture 只有逾期的 101、下週的 103、未定的 106）
+    expect(response.body).to include("本週無到期的議題。")
+    expect(response.body).not_to include("此資料來源目前無法讀取，清單暫時無法顯示。")
+  end
+
+  it "shows the sheet 延誤天數 for tasks completed this week (當初延遲了幾天的事實紀錄)" do
+    get "/pm_weekly_report"
+
+    completed_section = response.body[/本週已完成（1）.*?<\/table>/m]
+    expect(completed_section).to include("延誤天數")
+    expect(completed_section).to include("+2 天")
   end
 end

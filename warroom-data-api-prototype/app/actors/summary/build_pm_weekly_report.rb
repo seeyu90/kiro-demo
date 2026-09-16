@@ -193,11 +193,15 @@ module Summary
           pm: card[:pm],
           stage: stage[:stage],
           status: card[:status],
-          planned_date: stage[:primary][:planned_date],
+          # 存解析後的 Date 而不是試算表原始字串：階段追蹤的日期欄沒有正規化
+          # （見 Sheets::FetchPhaseTracking#parse_records），同一個 bucket 裡混到
+          # 「2026-09-15」與「2026/9/1」時，字串比較會在第 5 個字元比到 '-' < '/'
+          # 而把 9/15 排到 9/1 前面。這裡日期必定解析得出來（解析不出來的上面已跳過）。
+          planned_date: date,
           reason: stage[:primary][:reason],
           bucket: bucket
         }
-      end.sort_by { |item| [ PHASE_BUCKET_ORDER.fetch(item[:bucket]), item[:planned_date].to_s, item[:issue_id].to_s ] }
+      end.sort_by { |item| [ PHASE_BUCKET_ORDER.fetch(item[:bucket]), item[:planned_date], item[:issue_id].to_s ] }
     end
 
     # 「目前階段」＝ STAGE_ORDER 由後往前第一個有主要紀錄的階段，與

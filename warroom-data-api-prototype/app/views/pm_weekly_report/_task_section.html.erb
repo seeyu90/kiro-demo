@@ -1,6 +1,8 @@
 <%# 單一專案的 305 任務表（欄位見需求 2.8）。variant 決定最後一欄：
     :overdue → 逾期天數（即時計算，不用試算表的「延遲天數」，見需求 2.9）；
-    :completed → 實際完成日；其餘（:due）→ 不加欄位。 %>
+    :completed → 實際完成日＋試算表的「延誤天數」（那是「當初延遲了幾天」的事實紀錄，
+    與逾期天數語意不同，故已完成的仍照既有 305 頁面慣例顯示試算表的值）；
+    其餘（:due）→ 不加欄位。 %>
 <table class="project-tasks">
   <thead>
     <tr>
@@ -13,6 +15,7 @@
         <th scope="col">逾期天數</th>
       <% elsif variant == :completed %>
         <th scope="col">實際完成日</th>
+        <th scope="col">延誤天數</th>
       <% end %>
     </tr>
   </thead>
@@ -33,6 +36,12 @@
           </td>
         <% elsif variant == :completed %>
           <td><%= pm_weekly_date_label(task[:actual_completion_date]) %></td>
+          <td>
+            <% delay = task[:delay_days].to_i %>
+            <span class="delay-days <%= delay.positive? ? "delayed" : "on-time" %>">
+              <%= delay.positive? ? "+#{delay} 天" : (task[:delay_days].nil? ? "—" : "準時") %>
+            </span>
+          </td>
         <% end %>
       <% end %>
     <% end %>

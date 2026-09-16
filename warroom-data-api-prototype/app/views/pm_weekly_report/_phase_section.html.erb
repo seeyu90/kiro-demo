@@ -2,13 +2,15 @@
     這份資料用的是第三套專案代碼命名系統（Notion/Github 代碼），目前沒有欄位能可靠對照回
     305／306 的專案名稱，猜錯的對照比不對照更危險。 %>
 <section class="issue-section">
-  <h2>階段追蹤（<%= @phase_items.size %>）</h2>
+  <h2>階段追蹤（<%= @phase_tracking_unavailable ? "—" : @phase_items.size %>）</h2>
   <p class="section-note">
     只列目前階段狀態為「延誤未完成」「未完成」「暫緩」，且該階段預計日期已逾期或落在本週／下週的項目。
     本區塊<strong>不受專案篩選影響</strong>（專案命名系統與 305／306 不同，無法可靠對照）。
   </p>
 
-  <% if @phase_items.empty? %>
+  <% if @phase_tracking_unavailable %>
+    <p class="empty-state">此資料來源目前無法讀取，清單暫時無法顯示。</p>
+  <% elsif @phase_items.empty? %>
     <p class="empty-state">目前無逾期或本週／下週到期的階段項目。</p>
   <% else %>
     <table class="project-tasks">

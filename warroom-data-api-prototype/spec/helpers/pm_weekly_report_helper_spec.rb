@@ -101,5 +101,10 @@ RSpec.describe PmWeeklyReportHelper, type: :helper do
     it "returns zero when every group is empty" do
       expect(helper.pm_weekly_count({}, {})).to eq(0)
     end
+
+    it "shows a dash instead of 0 when the data source could not be read at all" do
+      # 0 是「確實沒有」的斷言；降級時我們並不知道有沒有，不能把漏抓講成沒有（需求 1.4）
+      expect(helper.pm_weekly_count({}, unavailable: true)).to eq("—")
+    end
   end
 end

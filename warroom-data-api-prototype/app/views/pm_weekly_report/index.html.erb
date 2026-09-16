@@ -70,7 +70,7 @@
       <span class="stat-label">下週工作</span>
     </div>
     <div class="stat-item">
-      <span class="stat-value"><%= @phase_items.size %></span>
+      <span class="stat-value"><%= @phase_tracking_unavailable ? "—" : @phase_items.size %></span>
       <span class="stat-label">階段追蹤</span>
     </div>
   </div>
@@ -86,10 +86,11 @@
                locals: { grouped: @overdue_tasks, item_partial: "task_section",
                          empty_text: "目前無逾期未完成的任務。", variant: :overdue } %>
 
-    <h3>306 臭蟲議題（<%= pm_weekly_count(@overdue_issues) %>）</h3>
+    <h3>306 臭蟲議題（<%= pm_weekly_count(@overdue_issues, unavailable: @issues_unavailable) %>）</h3>
     <%= render partial: "project_group",
                locals: { grouped: @overdue_issues, item_partial: "issue_section",
-                         empty_text: "目前無逾期未結案的議題。", variant: :overdue } %>
+                         empty_text: "目前無逾期未結案的議題。", variant: :overdue,
+                         unavailable: @issues_unavailable } %>
   </section>
 
   <section class="issue-section">
@@ -97,7 +98,7 @@
     <p class="section-note">
       本週 <%= pm_weekly_range_label(@week_range) %>。
       <% if @undated_issue_count.to_i.positive? %>
-        另有 <%= @undated_issue_count %> 筆未定到期日議題（既無到期日也無適用 SLA），未列入任何週別區塊。
+        另有 <%= @undated_issue_count %> 筆未定到期日議題（沒填到期日且無適用 SLA，或到期日欄位的格式無法解析），未列入任何週別區塊。
       <% end %>
     </p>
 
@@ -111,10 +112,11 @@
                locals: { grouped: @this_week_completed_tasks, item_partial: "task_section",
                          empty_text: "本週尚無已完成的任務。", variant: :completed } %>
 
-    <h3>306 臭蟲議題（<%= pm_weekly_count(@this_week_issues) %>）</h3>
+    <h3>306 臭蟲議題（<%= pm_weekly_count(@this_week_issues, unavailable: @issues_unavailable) %>）</h3>
     <%= render partial: "project_group",
                locals: { grouped: @this_week_issues, item_partial: "issue_section",
-                         empty_text: "本週無到期的議題。", variant: :due } %>
+                         empty_text: "本週無到期的議題。", variant: :due,
+                         unavailable: @issues_unavailable } %>
   </section>
 
   <section class="issue-section">
@@ -126,10 +128,11 @@
                locals: { grouped: @next_week_tasks, item_partial: "task_section",
                          empty_text: "下週無到期的任務。", variant: :due } %>
 
-    <h3>306 臭蟲議題（<%= pm_weekly_count(@next_week_issues) %>）</h3>
+    <h3>306 臭蟲議題（<%= pm_weekly_count(@next_week_issues, unavailable: @issues_unavailable) %>）</h3>
     <%= render partial: "project_group",
                locals: { grouped: @next_week_issues, item_partial: "issue_section",
-                         empty_text: "下週無到期的議題。", variant: :due } %>
+                         empty_text: "下週無到期的議題。", variant: :due,
+                         unavailable: @issues_unavailable } %>
 
     <%# 未定完成日的任務放在下週工作最後（需求 2.5）：PM 需要知道有哪些工作還沒排期。 %>
     <h3>未定完成日（<%= pm_weekly_count(@undated_tasks) %>）</h3>

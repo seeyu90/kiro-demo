@@ -50,7 +50,14 @@ module PmWeeklyReportHelper
   # 區塊筆數（需求 1.3）。Actor 輸出的 305／306 清單都是 { 專案名稱 => [項目, ...] } 的分組
   # 結構，畫面要顯示的卻是跨專案的總筆數，故在此攤平相加；一個區塊常由兩三個分組結構組成
   # （例如「本週工作」＝本週待完成＋本週已完成＋306 議題），所以收可變參數。
-  def pm_weekly_count(*grouped)
+  #
+  # 資料源整個讀不到時回傳「—」而不是 0：0 是「確實沒有」的斷言，但降級狀態下我們並不知道
+  # 到底有沒有，寫 0 等於把「漏抓」講成「確實沒有」（需求 1.4 設空狀態文字正是為了區分這兩者）。
+  # 只有「整個資料源讀不到」的清單才這樣標；跨資料源的合計（例如逾期＝305＋306）仍照常顯示
+  # 數字，由頁面頂部的降級提示說明它可能不完整。
+  def pm_weekly_count(*grouped, unavailable: false)
+    return "—" if unavailable
+
     grouped.sum { |group| group.values.sum(&:size) }
   end
 end

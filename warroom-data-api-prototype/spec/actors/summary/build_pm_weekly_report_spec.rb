@@ -244,6 +244,22 @@ RSpec.describe Summary::BuildPmWeeklyReport do
     end
   end
 
+  describe "階段追蹤排序" do
+    # 階段追蹤的日期欄沒有正規化，同一批資料裡混到兩種格式是常態。這兩筆的字串大小順序
+    # 與日期先後相反（'-' 0x2D < '/' 0x2F，所以 "2026-09-15" 字串上小於 "2026/9/1"），
+    # 排序若用原始字串就會反過來。
+    let(:phase_rows) do
+      [
+        phase_row(project: "HRM", issue_id: "9101", stage: "開發", planned: "2026/9/1", status: "未完成"),
+        phase_row(project: "HRM", issue_id: "9102", stage: "開發", planned: "2026-09-15", status: "未完成")
+      ]
+    end
+
+    it "orders a bucket by the parsed date, not by the raw sheet string" do
+      expect(result.phase_items.map { |i| i[:issue_id] }).to eq(%w[9101 9102])
+    end
+  end
+
   describe "專案篩選" do
     let(:result) { described_class.result(project: "AG 亞炬") }
 

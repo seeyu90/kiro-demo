@@ -1,8 +1,14 @@
 <%# 305／306 項目的專案分組外框（需求 5.1）。分組空的時候仍要渲染空狀態文字而不是整段消失，
     PM 才能確認「確實沒有」而不是「漏抓」（需求 1.4）。
-    item_partial 決定組內用哪張表（task_section／issue_section），variant 決定該表的額外欄位。 %>
+    item_partial 決定組內用哪張表（task_section／issue_section），variant 決定該表的額外欄位。
+    unavailable（選填）＝該資料源整個讀不到：此時清單是空的並不代表「沒有」，空狀態文字要
+    講清楚是讀不到，否則正好傳達成需求 1.4 要避免的那個誤解。 %>
 <% if grouped.blank? %>
-  <p class="empty-state"><%= empty_text %></p>
+  <% if local_assigns.fetch(:unavailable, false) %>
+    <p class="empty-state">此資料來源目前無法讀取，清單暫時無法顯示。</p>
+  <% else %>
+    <p class="empty-state"><%= empty_text %></p>
+  <% end %>
 <% else %>
   <% grouped.each do |project_name, items| %>
     <section class="project-block">
