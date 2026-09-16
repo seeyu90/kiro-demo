@@ -34,15 +34,27 @@ RSpec.describe "Dashboard", type: :request do
     end
   end
 
-  # 統計卡只受「專案」「任務類型」影響，不受「範圍」「預計完成日期」影響——不講清楚的話，
-  # 改了範圍或日期卻發現卡片數字沒變，容易被誤以為篩選沒套用成功（見
-  # warroom-dashboard-ux-audit/tasks.md）。
+  # 統計卡套用「專案」「任務類型」「範圍」「預計完成日期」全部篩選條件，跟下方任務列表算
+  # 同一批任務（需求 7）——原本只套用專案／任務類型、不受範圍與日期區間影響，使用者選
+  # 「範圍＝本週到期」預期看到「這週的統計」卻仍是全部任務總數，被回報不合理後改成現在這樣
+  # （見 warroom-dashboard-ux-audit/tasks.md）。
   describe "GET /dashboard 摘要卡篩選範圍說明" do
-    it "explains which filters the summary cards do and do not respond to" do
+    it "explains what the summary cards' numbers are computed from" do
       get "/dashboard"
 
       expect(response.body).to include("filter-summary")
-      expect(response.body).to include("不受下方「範圍」與「預計完成日期」影響")
+      expect(response.body).to include("以上統計反映目前的篩選結果")
+    end
+  end
+
+  describe "GET /dashboard 摘要卡跟著範圍篩選走" do
+    it "recomputes the summary cards from the scope-filtered task set, not just project/type" do
+      get "/dashboard", params: { scope: "incomplete", "task_type[]" => [ "功能", "PR", "調整" ] }
+
+      # scope=incomplete 排除 Task Alpha 1（完成）；摘要卡總數應只算 Beta 1／Beta 2 這兩筆未完成任務，
+      # 不是專案＋類型篩選下的全部 3 筆。
+      expect(response.body).to include('<span class="stat-value">2</span>')
+      expect(response.body).not_to include('<span class="stat-value">3</span>')
     end
   end
 

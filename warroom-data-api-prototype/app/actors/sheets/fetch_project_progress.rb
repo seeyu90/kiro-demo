@@ -67,11 +67,10 @@ module Sheets
       self.task_types_available = sorted_task_types(all_tasks)
 
       selected_types = task_types.nil? ? DEFAULT_TASK_TYPES : Array(task_types).reject(&:blank?)
-      scoped_tasks = all_tasks.select { |t| matches_base_filters?(t, project, selected_types) }
-      self.summary = compute_summary(scoped_tasks)
+      filtered = filter_tasks(all_tasks, project, selected_types, scope, planned_from, planned_to)
+      self.summary = compute_summary(filtered)
 
       display_project_names = project.presence ? [ project ] : project_names
-      filtered = filter_tasks(all_tasks, project, selected_types, scope, planned_from, planned_to)
       grouped_filtered = filtered.group_by { |t| t[:project_name] }
       self.display_data = display_project_names.index_with { |name| sort_overdue_first(grouped_filtered[name] || []) }
     rescue Google::Apis::ClientError => e
@@ -266,6 +265,11 @@ module Sheets
       week_range.cover?(planned) || (actual.present? && week_range.cover?(actual))
     end
 
+    # 傳入的 tasks 是套用「專案」「任務類型」「範圍」「預計完成日期」四個篩選後的結果
+    # （跟 display_data 同一份 filtered），摘要卡數字因此會隨「範圍」與日期區間變動，回答的是
+    # 「目前這個檢視底下」的整體統計，不是整個專案的全部任務（原本只套用專案／類型，選「範圍
+    # ＝本週到期」時使用者會預期看到「這週的統計」，卻仍是全部任務的總數，容易誤會篩選沒有
+    # 套用成功）。
     def compute_summary(tasks)
       completed = tasks.count { |t| COMPLETED_STATUSES.include?(t[:status]) }
       {

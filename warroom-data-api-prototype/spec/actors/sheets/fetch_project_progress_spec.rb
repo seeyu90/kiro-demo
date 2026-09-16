@@ -518,7 +518,9 @@ RSpec.describe Sheets::FetchProjectProgress do
 
       it "counts it as incomplete, and as overdue once its planned date has passed" do
         travel_to(Date.new(2026, 9, 16)) do
-          summary = described_class.result(task_types: [ "功能" ]).summary
+          # scope: "all"——這裡驗證的是狀態正規化／逾期計算，不是範圍篩選，避免摘要現在
+          # 跟著「範圍」走（見需求 7）之後，兩筆任務被 due_this_week 的日期窗篩掉而誤判。
+          summary = described_class.result(task_types: [ "功能" ], scope: "all").summary
 
           expect(summary[:total]).to eq(2)
           expect(summary[:completed]).to eq(1)
@@ -546,7 +548,8 @@ RSpec.describe Sheets::FetchProjectProgress do
 
       it "counts both the still-open overdue task and the completed-late task" do
         travel_to(Date.new(2026, 9, 16)) do
-          summary = described_class.result(task_types: [ "功能" ]).summary
+          # scope: "all"——這裡驗證的是逾期定義的寬窄，不是範圍篩選。
+          summary = described_class.result(task_types: [ "功能" ], scope: "all").summary
 
           expect(summary[:total]).to eq(3)
           expect(summary[:overdue]).to eq(2)
@@ -676,12 +679,15 @@ RSpec.describe Sheets::FetchProjectProgress do
       before { allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_return(rows_with_one_task) }
 
       it "treats identical cached rows as not-yet-overdue before the deadline and overdue after it" do
+        # scope: "all"——摘要現在跟著「範圍」走（需求 7），預設的 due_this_week 會依「今天」
+        # 落在哪一週決定這筆任務在不在篩選結果內，干擾這裡真正要驗證的東西（overdue 判斷不被
+        # 快取凍結），故固定用不受週次影響的 all。
         travel_to(Date.new(2026, 6, 10)) do
-          expect(described_class.result.summary[:overdue]).to eq(0)
+          expect(described_class.result(scope: "all").summary[:overdue]).to eq(0)
         end
 
         travel_to(Date.new(2026, 6, 20)) do
-          expect(described_class.result.summary[:overdue]).to eq(1)
+          expect(described_class.result(scope: "all").summary[:overdue]).to eq(1)
         end
       end
     end
