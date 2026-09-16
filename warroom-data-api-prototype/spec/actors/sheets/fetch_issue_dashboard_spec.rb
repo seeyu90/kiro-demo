@@ -353,32 +353,52 @@ RSpec.describe Sheets::FetchIssueDashboard do
         ]
       end
 
+      # 客訴／測試／總Bug／攔截率不再讀 month_kpi_rows（上面那份刻意留著跟真實數字不同，
+      # 用來確認 selected_month_record 真的是從這份 issue_rows 即時算出來的，不是抄 sheet）。
+      # 7 月：2 客訴＋1 測試；8 月：1 客訴＋3 測試。
+      let(:issue_rows) do
+        [
+          %w[issue_id subject type tracker status assigned_to start_date due_date work_days sheet_name project total_hours],
+          [ "1001", "7月客訴1", "Complaint", "臭蟲", "已結束", "A", "2026/7/5", "", "", "raw_2026", "P" ],
+          [ "1002", "7月客訴2", "Complaint", "臭蟲", "已結束", "A", "2026/7/10", "", "", "raw_2026", "P" ],
+          [ "1003", "7月測試", "TestingBug", "臭蟲", "已結束", "A", "2026/7/15", "", "", "raw_2026", "P" ],
+          [ "1004", "8月客訴", "Complaint", "臭蟲", "未完成", "A", "2026/8/5", "", "", "raw_2026", "P" ],
+          [ "1005", "8月測試1", "TestingBug", "臭蟲", "未完成", "A", "2026/8/10", "", "", "raw_2026", "P" ],
+          [ "1006", "8月測試2", "TestingBug", "臭蟲", "未完成", "A", "2026/8/15", "", "", "raw_2026", "P" ],
+          [ "1007", "8月測試3", "TestingBug", "臭蟲", "未完成", "A", "2026/8/20", "", "", "raw_2026", "P" ]
+        ]
+      end
+
       around { |example| travel_to(Date.new(2026, 8, 19)) { example.run } }
 
-      it "defaults from/to to the latest settled month's bounds when both are absent" do
+      it "defaults from/to to the current month's bounds, computing complaint/testing/block_rate live from issues" do
         expect(result.selected_from).to eq(Date.new(2026, 8, 1))
         expect(result.selected_to).to eq(Date.new(2026, 8, 31))
         expect(result.matched_months).to eq([ "2026-08" ])
-        expect(result.selected_month_record[:block_rate]).to eq(37.5)
+        # 8 月即時算：1 客訴＋3 測試，跟 month_kpi_rows 寫的 15/9 不同——確認真的是即時算，不是讀 sheet。
+        expect(result.selected_month_record).to include(complaint: 1, testing: 3, total_bug: 4, block_rate: 75.0)
       end
 
-      it "returns the exact settled row (with rates) when exactly one month matches" do
+      it "returns the exact settled row (completed/unresolved/avg_days/sla_rate) when exactly one month matches" do
         result = described_class.result(from: Date.new(2026, 7, 1), to: Date.new(2026, 7, 31))
 
         expect(result.matched_months).to eq([ "2026-07" ])
         expect(result.selected_month_record).to eq(
-          year_month: "2026-07", complaint: 28, testing: 7, total_bug: 35, block_rate: 20.0,
+          complaint: 2, testing: 1, total_bug: 3, block_rate: 33.33,
           completed: 10, unresolved: 7, avg_days: 2.61, sla_rate: 10.71
         )
       end
 
-      it "sums count fields and nils out rate fields when multiple months match" do
+      # 攔截率不再受「跨月無法合併」限制：即時從整個所選區間的 issues 算，橫跨月份也只是
+      # 換一批 issues 重算一次，不是彙總兩個月各自的比率。完成數／未結案（sheet 來源）維持
+      # 加總，平均天數／SLA達標率（sheet 來源）仍無法跨月合併、設為 nil。
+      it "sums sheet-sourced count fields, nils sheet-sourced rate fields, but still computes block_rate live across months" do
         result = described_class.result(from: Date.new(2026, 7, 1), to: Date.new(2026, 8, 31))
 
         expect(result.matched_months).to eq([ "2026-07", "2026-08" ])
-        expect(result.selected_month_record).to include(
-          complaint: 43, testing: 16, total_bug: 59, completed: 16, unresolved: 10,
-          block_rate: nil, avg_days: nil, sla_rate: nil
+        expect(result.selected_month_record).to eq(
+          complaint: 3, testing: 4, total_bug: 7, block_rate: 57.14,
+          completed: 16, unresolved: 10, avg_days: nil, sla_rate: nil
         )
       end
 
@@ -388,11 +408,14 @@ RSpec.describe Sheets::FetchIssueDashboard do
         expect(result.matched_months).to eq([ "2026-08" ])
       end
 
-      it "is nil with no pending flag when the range matches no month at all" do
+      it "still computes live complaint/testing (both zero) with sheet fields nil when the range matches no month at all" do
         result = described_class.result(from: Date.new(2025, 1, 1), to: Date.new(2025, 1, 31))
 
         expect(result.matched_months).to eq([])
-        expect(result.selected_month_record).to be_nil
+        expect(result.selected_month_record).to eq(
+          complaint: 0, testing: 0, total_bug: 0, block_rate: nil,
+          completed: nil, unresolved: nil, avg_days: nil, sla_rate: nil
+        )
         expect(result.selected_month_pending).to be false
       end
 
@@ -404,11 +427,23 @@ RSpec.describe Sheets::FetchIssueDashboard do
           ]
         end
 
-        it "flags selected_month_pending when the sole match is the in-progress current month" do
+        it "flags selected_month_pending but still shows live complaint/testing for the in-progress current month" do
           result = described_class.result(from: Date.new(2026, 8, 1), to: Date.new(2026, 8, 31))
 
           expect(result.matched_months).to eq([ "2026-08" ])
-          expect(result.selected_month_record).to be_nil
+          expect(result.selected_month_record).to eq(
+            complaint: 1, testing: 3, total_bug: 4, block_rate: 75.0,
+            completed: nil, unresolved: nil, avg_days: nil, sla_rate: nil
+          )
+          expect(result.selected_month_pending).to be true
+        end
+
+        # 需求 9.1：預設當月，不是「最新已結算月份」。這裡月度 KPI 只結算到 7 月，若仍退回
+        # 最新已結算月份，未帶 from/to 時會預設落在 7 月而非當月的 8 月。
+        it "defaults to the current (unsettled) month rather than falling back to the latest settled one" do
+          expect(result.selected_from).to eq(Date.new(2026, 8, 1))
+          expect(result.selected_to).to eq(Date.new(2026, 8, 31))
+          expect(result.selected_month_record).to include(complaint: 1, testing: 3, completed: nil)
           expect(result.selected_month_pending).to be true
         end
 
@@ -416,13 +451,15 @@ RSpec.describe Sheets::FetchIssueDashboard do
         # （進行中的當月）根本沒有已結算列，實際只有 1 個月真的貢獻資料。判斷單月／彙總的依據
         # 應該是「有幾個月真的有資料」（settled_month_count），不是「區間橫跨幾個月」，否則會
         # 白白把可以精確顯示的比率隱藏成「－」，且 UI 顯示的「彙總 2 個月」也會誤導。
-        it "returns the exact settled row (not an aggregate) when the range spans an unsettled month" do
+        # 客訴／測試／攔截率不受此限——即時算的是整個區間（7+8 月）的 issues，不是「settled
+        # 月份」的 issues，故跟上面「sums sheet-sourced...」測試算出同一組即時數字。
+        it "returns the exact settled sheet row (not an aggregate) alongside the live-computed range totals" do
           result = described_class.result(from: Date.new(2026, 7, 1), to: Date.new(2026, 8, 31))
 
           expect(result.matched_months).to eq([ "2026-07", "2026-08" ])
           expect(result.settled_month_count).to eq(1)
           expect(result.selected_month_record).to eq(
-            year_month: "2026-07", complaint: 28, testing: 7, total_bug: 35, block_rate: 20.0,
+            complaint: 3, testing: 4, total_bug: 7, block_rate: 57.14,
             completed: 10, unresolved: 7, avg_days: 2.61, sla_rate: 10.71
           )
         end

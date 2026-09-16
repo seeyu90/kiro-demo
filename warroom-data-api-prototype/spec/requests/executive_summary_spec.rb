@@ -29,10 +29,13 @@ RSpec.describe "ExecutiveSummary", type: :request do
   let(:burndown_header) { %w[剩餘人時 專案 議題 人員 議題ID 開案日期 完成日期 狀態 預估人時] }
   let(:burndown_rows) { [ burndown_header + [ "08/25" ] ] }
 
+  # 306 月度 KPI 現在預設抓「當月」而非「最新已結算月份」（需求 9.1），travel_to 固定在
+  # 2026-09-01，故這裡的年月要跟著是 2026-09，SLA達標率／完成數等 sheet 來源欄位才有值
+  # 可顯示，而不是因為當月尚未結算而顯示「－」。
   let(:month_kpi_rows) do
     [
       %w[year_month 客訴 測試 總Bug 攔截率 完成數 未結案 平均天數 SLA達標率 Top3],
-      [ "2026-08", "3", "2", "5", "40", "4", "1", "2.0", "80", "" ]
+      [ "2026-09", "3", "2", "5", "40", "4", "1", "2.0", "80", "" ]
     ]
   end
   let(:daily_kpi_rows) { [ %w[日期 客訴 測試 其他 總計] ] }

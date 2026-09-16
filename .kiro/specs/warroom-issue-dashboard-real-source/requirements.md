@@ -299,8 +299,14 @@ Webhook／排程更新、資料庫或本地快取層、OAuth 使用者登入、�
 
 #### 驗收標準
 
-1. THE **IssueDashboard_Page** SHALL 提供月份選擇（`month` query param），未帶參數時預設最新月份
-   （`month_kpi` 資料中 `year_month` 最大值）。
+1. THE **IssueDashboard_Page** SHALL 提供月份選擇（`month` query param），未帶參數時預設當月
+   （`Date.current` 所在月份），不論該月是否已有 `month_kpi` 結算列。
+
+   > 原本預設「最新已結算月份」（`month_kpi` 資料中 `year_month` 最大值），當月進行中尚未
+   > 結算時會落回上個月。但每日趨勢與依專案分類統計是即時算的，當月進行中就有資料可看
+   > （見需求 9.3），預設停在上個月會讓使用者以為要自己動手切換才看得到「現在」的狀況，
+   > 被回報不合理。改為一律預設當月；月度 KPI 卡片本來就有 `selected_month_pending` 處理
+   > 「本月尚未結算」的顯示，不需要靠切換預設月份來迴避這個狀態。
 2. WHEN 使用者切換月份，THE **IssueDashboard_Page** SHALL 以 Turbo Frame 局部更新 KPI 卡片、每日
    趨勢圖與依專案分類統計（見需求 3a.4、需求 4.5），三者一併隨月份切換重新渲染；議題明細清單
    （「議題資料」分頁籤）不受月份篩選影響，維持顯示全部議題。

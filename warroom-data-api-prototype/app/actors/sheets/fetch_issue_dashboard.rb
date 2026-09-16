@@ -76,8 +76,6 @@ module Sheets
       self.matched_months = available_months.select { |ym| month_overlaps_range?(ym, selected_from, selected_to) }
       matched_rows = month_kpi.select { |m| matched_months.include?(m[:year_month]) }
       self.settled_month_count = matched_rows.size
-      self.selected_month_record = build_month_record(matched_rows)
-      self.selected_month_pending = selected_month_record.nil? && matched_months == [ current_year_month ]
 
       # 每日趨勢與依專案分類統計皆依所選期間呈現（兩者與月度 KPI 同屬「統計摘要」分頁籤，
       # 理應一起隨期間切換）；依專案分類以議題的 start_date（建立日）判斷所屬日期，
@@ -85,6 +83,12 @@ module Sheets
       self.daily_kpi_for_range = daily_kpi.select { |d| date_in_range?(d[:date], selected_from, selected_to) }
       range_issues = issues.select { |i| date_in_range?(i[:start_date], selected_from, selected_to) }
       self.month_project_breakdown = sort_project_breakdown(compute_project_breakdown(range_issues))
+
+      # 客訴／測試／總Bug／攔截率改由 issues 原始資料即時算（見 compute_live_month_kpi 的說明），
+      # 不再受限於 month_kpi 是否已結算，故一律有值。完成數／未結案／平均天數／SLA達標率仍
+      # 讀 month_kpi（見 build_sheet_month_kpi），未結算時個別欄位為 nil，View 顯示「－」。
+      self.selected_month_record = compute_live_month_kpi(range_issues).merge(build_sheet_month_kpi(matched_rows))
+      self.selected_month_pending = settled_month_count.zero? && matched_months == [ current_year_month ]
 
       self.projects = issues.map { |i| i[:project] }.compact.uniq
       self.statuses = issues.map { |i| i[:status] }.compact.uniq
@@ -299,13 +303,15 @@ module Sheets
       }
     end
 
-    # from／to 皆空時，預設沿用「最新已結算月份」的起訖（month_kpi 完全沒有任何列時，退回
-    # 當月，讓 selected_month_pending 判斷仍然成立）；只給一邊時，另一邊視為不限制。
+    # from／to 皆空時，預設當月區間（不是「最新已結算月份」）：每日趨勢與依專案分類統計是
+    # 即時算的，當月進行中也有資料可看，預設卻停在上個月會讓使用者以為要自己動手切換才看
+    # 得到「現在」的狀況。月度 KPI 卡片本來就有 selected_month_pending 處理「本月尚未結算」
+    # 的顯示（見 View 的「尚未結算」文案），不需要靠切換預設月份來迴避這個狀態。
+    # 只給一邊時，另一邊視為不限制。
     def resolve_range(current_year_month)
       return [ from, to ] if from.present? || to.present?
 
-      default_month = month_kpi.map { |m| m[:year_month] }.max || current_year_month
-      month_bounds(default_month)
+      month_bounds(current_year_month)
     end
 
     def month_bounds(year_month)
@@ -323,26 +329,45 @@ module Sheets
       false
     end
 
+    # 客訴／測試／總Bug／攔截率改由這裡即時算，不再讀 month_kpi 表的對應欄位：以真實資料
+    # 逐月比對過，month_kpi 表這幾欄與 issues 原始資料經常對不上（例如 2026-08 客訴，表上
+    # 25、issues 實際算出 27），研判是另一個外部流程（非本 app）產生的預先彙總快照，與
+    # issues 之間存在落差，原因不明。issues 才是單一事實來源，改為即時算後兩邊必定一致。
+    #
+    # 攔截率＝測試 ÷ (客訴＋測試) × 100，已用真實資料反推驗證公式（8 個月全部對上到小數點後
+    # 兩位）；總Bug 皆等於客訴＋測試（month_kpi 表本身也是如此，未獨立計算）。
+    def compute_live_month_kpi(issues_in_range)
+      complaint = issues_in_range.count { |i| i[:type] == "Complaint" }
+      testing = issues_in_range.count { |i| i[:type] == "TestingBug" }
+      total_bug = complaint + testing
+
+      {
+        complaint: complaint,
+        testing: testing,
+        total_bug: total_bug,
+        block_rate: total_bug.positive? ? (testing.to_f / total_bug * 100).round(2) : nil
+      }
+    end
+
+    # 完成數／未結案／平均天數／SLA達標率目前只能讀 month_kpi 表：試過幾種常見定義（依
+    # start_date 所在月份、依狀態關鍵字判斷完成、以 work_days 算平均天數）逐月比對真實資料，
+    # 差距達數十筆／數倍之譜，代表算法本身就猜錯，故不比照上面的客訴／測試改成即時算，避免
+    # 用一個沒有把握的公式取代另一個不確定來源。
+    #
     # 判斷依據是「真的有幾個月已結算資料」（matched_rows.size），不是「區間橫跨幾個月」——
     # 後者可能把尚無資料的進行中當月也算進去，讓「其實只有 1 個月有資料」的情況被誤判成彙總、
     # 白白隱藏掉本來可以精確顯示的比率（code review 回報）。
-    # 剛好 1 個月有已結算列時，原樣回傳那一列（含比率，行為與改動前的單月選擇相同）；有多個月
-    # 時，計數欄位加總、比率欄位（block_rate／avg_days／sla_rate）不彙總、設為 nil（不同月份的
-    # 比率沒有能正確合併的算法，寧可不顯示也不要顯示誤導的近似值，見 View 對 nil 值顯示「－」
-    # 的處理）；一個月已結算資料都沒有時，回傳 nil（View 依此顯示「尚無月度 KPI 資料」或
-    # 「尚未結算」）。
-    def build_month_record(matched_rows)
-      return matched_rows.first if matched_rows.size == 1
-      return nil if matched_rows.empty?
+    # 剛好 1 個月有已結算列時，原樣回傳那一列這 4 個欄位（行為與改動前的單月選擇相同）；有
+    # 多個月時，計數欄位（completed／unresolved）加總、比率欄位（avg_days／sla_rate）不彙總、
+    # 設為 nil（不同月份的比率沒有能正確合併的算法，寧可不顯示也不要顯示誤導的近似值，見
+    # View 對 nil 值顯示「－」的處理）；一個月已結算資料都沒有時，四個欄位皆為 nil。
+    def build_sheet_month_kpi(matched_rows)
+      return { completed: nil, unresolved: nil, avg_days: nil, sla_rate: nil } if matched_rows.empty?
+      return matched_rows.first.slice(:completed, :unresolved, :avg_days, :sla_rate) if matched_rows.size == 1
 
       {
-        year_month: nil,
-        complaint: matched_rows.sum { |m| m[:complaint].to_i },
-        testing: matched_rows.sum { |m| m[:testing].to_i },
-        total_bug: matched_rows.sum { |m| m[:total_bug].to_i },
         completed: matched_rows.sum { |m| m[:completed].to_i },
         unresolved: matched_rows.sum { |m| m[:unresolved].to_i },
-        block_rate: nil,
         avg_days: nil,
         sla_rate: nil
       }

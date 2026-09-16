@@ -46,47 +46,46 @@
 
         <section class="issue-section">
           <h2>月度 KPI</h2>
-          <p class="section-note">月度 KPI 為月結數字，當月進行中尚未結算；每日趨勢與依專案分類統計則依此處所選期間即時呈現；「議題資料」分頁的議題明細不受期間篩選影響（顯示全部議題）<% if @matched_month_count > 1 %>；目前彙總 <%= @matched_month_count %> 個月，攔截率／平均天數／SLA達標率無法跨月合併，顯示「－」<% end %></p>
-          <% if @selected_month_record %>
-            <div class="summary-bar">
-              <div class="stat-item">
-                <span class="stat-value"><%= @selected_month_record[:complaint] %></span>
-                <span class="stat-label">客訴</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-value"><%= @selected_month_record[:testing] %></span>
-                <span class="stat-label">測試</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-value"><%= @selected_month_record[:total_bug] %></span>
-                <span class="stat-label">總Bug</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-value"><%= month_kpi_rate_display(@selected_month_record[:block_rate]) %></span>
-                <span class="stat-label">攔截率</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-value"><%= @selected_month_record[:completed] %></span>
-                <span class="stat-label">完成數</span>
-              </div>
-              <div class="stat-item stat-overdue">
-                <span class="stat-value"><%= @selected_month_record[:unresolved] %></span>
-                <span class="stat-label">未結案</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-value"><%= month_kpi_rate_display(@selected_month_record[:avg_days], unit: "") %></span>
-                <span class="stat-label">平均天數</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-value"><%= month_kpi_rate_display(@selected_month_record[:sla_rate]) %></span>
-                <span class="stat-label">SLA達標率</span>
-              </div>
+          <%# 客訴／測試／總Bug／攔截率即時從 issues 算，一律有值，不受 month_kpi 是否已結算
+              影響；完成數／未結案／平均天數／SLA達標率仍讀 month_kpi 表，該月尚未結算或選到
+              跨月彙總時個別欄位顯示「－」（見 Sheets::FetchIssueDashboard#build_sheet_month_kpi）。
+              不再用「整排都是尚未結算」的訊息取代整個區塊——當月進行中一樣有客訴／測試等
+              即時數字可看，只有還沒結算出來的那 4 項需要顯示「－」。 %>
+          <p class="section-note">客訴／測試／總Bug／攔截率為即時統計，完成數／未結案／平均天數／SLA達標率為月結數字（當月進行中尚未結算，顯示「－」）；每日趨勢與依專案分類統計則依此處所選期間即時呈現；「議題資料」分頁的議題明細不受期間篩選影響（顯示全部議題）<% if @matched_month_count > 1 %>；目前彙總 <%= @matched_month_count %> 個月，平均天數／SLA達標率無法跨月合併，顯示「－」<% end %></p>
+          <div class="summary-bar">
+            <div class="stat-item">
+              <span class="stat-value"><%= @selected_month_record[:complaint] %></span>
+              <span class="stat-label">客訴</span>
             </div>
-          <% elsif @selected_month_pending %>
-            <p class="empty-state">尚未結算（本月進行中，月底才會產生統計數字）</p>
-          <% else %>
-            <p class="empty-state">尚無月度 KPI 資料</p>
-          <% end %>
+            <div class="stat-item">
+              <span class="stat-value"><%= @selected_month_record[:testing] %></span>
+              <span class="stat-label">測試</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-value"><%= @selected_month_record[:total_bug] %></span>
+              <span class="stat-label">總Bug</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-value"><%= month_kpi_rate_display(@selected_month_record[:block_rate]) %></span>
+              <span class="stat-label">攔截率</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-value"><%= @selected_month_record[:completed] || "－" %></span>
+              <span class="stat-label">完成數</span>
+            </div>
+            <div class="stat-item stat-overdue">
+              <span class="stat-value"><%= @selected_month_record[:unresolved] || "－" %></span>
+              <span class="stat-label">未結案</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-value"><%= month_kpi_rate_display(@selected_month_record[:avg_days], unit: "") %></span>
+              <span class="stat-label">平均天數</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-value"><%= month_kpi_rate_display(@selected_month_record[:sla_rate]) %></span>
+              <span class="stat-label">SLA達標率</span>
+            </div>
+          </div>
         </section>
 
         <section class="issue-section">
