@@ -78,13 +78,13 @@ Wave 5   8. RSpec（Actor / Request / Helper）
   - **驗收**：入口頁出現該連結且可點進 `/pm_weekly_report`
   - _需求：1.1_
 
-- [ ] 8. RSpec：Actor spec（週別歸屬各分支、篩選、降級）、Request spec（頁面渲染、
+- [x] 8. RSpec：Actor spec（週別歸屬各分支、篩選、降級）、Request spec（頁面渲染、
       305 失敗、306／階段追蹤失敗、專案篩選）、Helper spec
   - 所有涉及「今天」的測試一律 `travel_to` 固定日期（既有 spec 曾因未固定日期而 flaky，
     見 `warroom-executive-weekly-summary/tasks.md` 備註）
   - **驗收**：`bundle exec rspec` 全綠
   - _需求：全部_
 
-- [ ] 9. 檢查點：`bundle exec rspec`、`bin/rubocop` 全部通過
+- [x] 9. 檢查點：`bundle exec rspec`、`bin/rubocop` 全部通過
   - CI 不跑 rspec，推送前必須本機跑過（見 CLAUDE.md）
   - **驗收**：兩個指令皆 0 失敗

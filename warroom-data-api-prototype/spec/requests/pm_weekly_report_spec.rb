@@ -96,14 +96,42 @@ RSpec.describe "PmWeeklyReport", type: :request do
     expect(response.body).not_to include("逾期未完成（")
   end
 
-  it "shows a degradation notice when 306 fails" do
+  # 降級提示裡的資料源名稱要單獨比對：「306 臭蟲議題」「專案階段追蹤」在頁面別處也是區塊
+  # 標題，直接對整份 body 做 include 分不出提示列到底列了哪幾個資料源。
+  def degradation_notice
+    response.body[%r{<p class="freshness-label">.*?</p>}m]
+  end
+
+  it "shows a degradation notice naming only 306 when 306 fails, and still renders 305 與階段追蹤" do
     allow(IssueSheetsClient).to receive(:fetch_issue_rows).and_raise(Google::Apis::ClientError.new("notFound"))
 
     get "/pm_weekly_report"
 
     expect(response).to have_http_status(200)
-    expect(response.body).to include("部分資料來源目前無法讀取")
-    expect(response.body).to include("306 臭蟲議題")
+    expect(degradation_notice).to include("部分資料來源目前無法讀取")
+    expect(degradation_notice).to include("306 臭蟲議題")
+    expect(degradation_notice).not_to include("專案階段追蹤")
     expect(response.body).to include("很久以前就該完成")
+    expect(response.body).to include("報表模組")
+  end
+
+  it "shows a degradation notice naming only 階段追蹤 when it fails, and still renders 305／306" do
+    allow(PhaseRecordsSheetsClient).to receive(:fetch_rows).and_raise(Google::Apis::ClientError.new("notFound"))
+
+    get "/pm_weekly_report"
+
+    expect(response).to have_http_status(200)
+    expect(degradation_notice).to include("專案階段追蹤")
+    expect(degradation_notice).not_to include("306 臭蟲議題")
+    expect(response.body).to include("階段追蹤（0）")
+    expect(response.body).to include("目前無逾期或本週／下週到期的階段項目。")
+    expect(response.body).to include("很久以前就該完成")
+    expect(response.body).to include("登入失敗")
+  end
+
+  it "renders no degradation notice when every data source is healthy" do
+    get "/pm_weekly_report"
+
+    expect(degradation_notice).to be_nil
   end
 end

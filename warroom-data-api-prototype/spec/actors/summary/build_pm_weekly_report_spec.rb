@@ -94,6 +94,17 @@ RSpec.describe Summary::BuildPmWeeklyReport do
     end
   end
 
+  describe "頁面表頭與篩選狀態" do
+    it "passes through the 305 fetch time for the freshness label" do
+      expect(result.fetched_at).to eq(Time.zone.parse("2026-09-18 09:00"))
+    end
+
+    it "echoes the selected project back so the dropdown can stay selected" do
+      expect(result.selected_project).to be_nil
+      expect(described_class.result(project: "AG 亞炬").selected_project).to eq("AG 亞炬")
+    end
+  end
+
   describe "305 任務的週別歸屬" do
     it "puts every incomplete task past its planned date into 逾期, however old" do
       expect(task_names(result.overdue_tasks)).to contain_exactly("很久以前就該完成", "本週一到期還沒完成")
@@ -138,6 +149,30 @@ RSpec.describe Summary::BuildPmWeeklyReport do
     end
   end
 
+  describe "組內排序" do
+    let(:progress_rows) do
+      [
+        progress_header,
+        # 同一天到期的兩筆刻意讓「後出現的」排序在前，確認排序鍵包含任務名稱而不是依原始列順序
+        [ "AG 亞炬", "B 同一天到期", "未完成", "王贊勛", "2026/09/20", "", "", "功能" ],
+        [ "AG 亞炬", "A 同一天到期", "未完成", "王贊勛", "2026/09/20", "", "", "功能" ],
+        [ "AG 亞炬", "更早到期", "未完成", "王贊勛", "2026/09/18", "", "", "功能" ],
+        # 這兩筆的預計完成日順序與實際完成日相反，用來分辨「本週已完成」排的是哪一個日期
+        [ "AG 亞炬", "週一做完", "完成", "王贊勛", "2026/09/30", "2026/09/14", "", "功能" ],
+        [ "AG 亞炬", "週四做完", "完成", "王贊勛", "2026/09/01", "2026/09/17", "", "功能" ]
+      ]
+    end
+
+    it "sorts by planned completion date ascending, then by task name" do
+      expect(task_names(result.this_week_due_tasks))
+        .to eq([ "更早到期", "A 同一天到期", "B 同一天到期" ])
+    end
+
+    it "sorts 本週已完成 by ACTUAL completion date — the PM reports what got done on which day" do
+      expect(task_names(result.this_week_completed_tasks)).to eq([ "週一做完", "週四做完" ])
+    end
+  end
+
   describe "306 議題的週別歸屬" do
     it "puts unresolved issues past their due date into 逾期" do
       expect(issue_ids(result.overdue_issues)).to contain_exactly("101")
@@ -177,6 +212,23 @@ RSpec.describe Summary::BuildPmWeeklyReport do
     end
   end
 
+  describe "306 到期日超過下週" do
+    let(:issue_rows) do
+      [
+        issue_header,
+        [ "201", "下下週才到期", "Complaint", "Bug", "新建立", "王贊勛", "2026/09/25", "2026/10/05", "1", "", "AG 亞炬", "0" ]
+      ]
+    end
+
+    it "leaves it out of every bucket without counting it as 未定到期日" do
+      listed = issue_ids(result.overdue_issues) + issue_ids(result.this_week_issues) +
+               issue_ids(result.next_week_issues)
+
+      expect(listed).to be_empty
+      expect(result.undated_issue_count).to eq(0)
+    end
+  end
+
   describe "階段追蹤" do
     it "includes unfinished stages that are overdue or fall in this/next week, tagged by bucket" do
       expect(result.phase_items.map { |i| [ i[:issue_id], i[:bucket] ] })
@@ -211,6 +263,23 @@ RSpec.describe Summary::BuildPmWeeklyReport do
 
     it "still reports the full project list for the filter dropdown" do
       expect(result.project_names).to eq([ "AG 亞炬", "Virtuous HRM" ])
+    end
+  end
+
+  describe "專案篩選的雙向包含比對" do
+    # 306 的專案欄位與 305 的專案名稱不保證同一套寫法，故採雙向包含；兩邊完全對不起來的
+    # 議題寧可不顯示，也不要把別的專案的客訴算進這個專案的週報。
+    let(:issue_rows) do
+      [
+        issue_header,
+        [ "301", "306 只寫簡稱", "Complaint", "Bug", "新建立", "王贊勛", "2026/08/20", "2026/09/01", "2", "", "亞炬", "1" ],
+        [ "302", "完全對不上的專案", "Complaint", "Bug", "新建立", "王贊勛", "2026/08/20", "2026/09/01", "2", "", "別家公司", "1" ]
+      ]
+    end
+    let(:result) { described_class.result(project: "AG 亞炬") }
+
+    it "matches a 306 project name contained in the selected 305 name, and drops the unmatchable one" do
+      expect(issue_ids(result.overdue_issues)).to contain_exactly("301")
     end
   end
 
