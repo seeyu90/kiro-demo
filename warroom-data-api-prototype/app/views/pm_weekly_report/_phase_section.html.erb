@@ -1,0 +1,58 @@
+<%# 階段追蹤獨立區塊（需求 4）：不與 305／306 的專案分組合併，也不受專案篩選影響——
+    這份資料用的是第三套專案代碼命名系統（Notion/Github 代碼），目前沒有欄位能可靠對照回
+    305／306 的專案名稱，猜錯的對照比不對照更危險。 %>
+<section class="issue-section">
+  <h2>階段追蹤（<%= @phase_tracking_unavailable ? "—" : @phase_items.size %>）</h2>
+  <p class="section-note">
+    只列目前階段狀態為「延誤未完成」「未完成」「暫緩」，且該階段預計日期已逾期或落在本週／下週的項目。
+    本區塊<strong>不受專案篩選影響</strong>（專案命名系統與 305／306 不同，無法可靠對照）。
+  </p>
+
+  <% if @phase_tracking_unavailable %>
+    <p class="empty-state">此資料來源目前無法讀取，清單暫時無法顯示。</p>
+  <% elsif @phase_items.empty? %>
+    <p class="empty-state">目前無逾期或本週／下週到期的階段項目。</p>
+  <% else %>
+    <table class="project-tasks">
+      <thead>
+        <tr>
+          <th scope="col">專案代碼</th>
+          <th scope="col">議題</th>
+          <th scope="col">客戶</th>
+          <th scope="col">PM</th>
+          <th scope="col">目前階段</th>
+          <th scope="col">狀態</th>
+          <th scope="col">階段預計日期</th>
+          <th scope="col">原因</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% @phase_items.each do |item| %>
+          <%= tag.tr(class: ("row-overdue" if item[:bucket] == :overdue)) do %>
+            <td><%= item[:project].presence || "—" %></td>
+            <td>
+              <%= item[:issue_id].presence || "—" %>
+              <% if item[:issue_name].present? %>
+                <br>
+                <span class="issue-project-sub"><%= item[:issue_name] %></span>
+              <% end %>
+            </td>
+            <td><%= item[:customer].presence || "—" %></td>
+            <td><%= item[:pm].presence || "—" %></td>
+            <td><%= item[:stage].presence || "—" %></td>
+            <td>
+              <span class="tag <%= phase_tracking_status_class(item[:status]) %>"><%= item[:status] %></span>
+            </td>
+            <td>
+              <%= pm_weekly_date_label(item[:planned_date]) %>
+              <% if item[:bucket] == :overdue %>
+                <span class="overdue-tag">逾期</span>
+              <% end %>
+            </td>
+            <td><%= item[:reason].presence || "—" %></td>
+          <% end %>
+        <% end %>
+      </tbody>
+    </table>
+  <% end %>
+</section>

@@ -1,0 +1,145 @@
+<% content_for :title, "戰情室 — PM 週報" %>
+
+<header class="dashboard-header">
+  <div class="header-top">
+    <h1 class="dashboard-title">戰情室 <span>— PM 週報</span></h1>
+    <button type="button" id="theme-toggle" class="theme-toggle" aria-label="切換至淺色模式">🌙 深色</button>
+  </div>
+</header>
+
+<p class="breadcrumb">
+  <%= link_to "入口頁", "/", class: "back-link" %>
+  <span class="breadcrumb-sep">›</span>
+  <span class="breadcrumb-current">PM 週報</span>
+</p>
+
+<% if @error.present? %>
+  <div class="error-message">
+    <strong>錯誤：</strong><%= @error %>
+  </div>
+<% else %>
+  <%# 專案篩選只作用於 305／306（需求 5.2、5.3）。用一般 GET 表單而非 Turbo Frame：
+      篩選結果要能靠網址（?project=）重新整理後維持選取狀態（需求 5.4）。 %>
+  <%= form_with url: "/pm_weekly_report", method: :get, class: "project-selector" do %>
+    <div class="control-group">
+      <label for="project">選擇專案：</label>
+      <%= select_tag :project,
+                     options_for_select([["全部專案", ""]] + @project_names.map { |name| [name, name] },
+                                        @selected_project) %>
+    </div>
+
+    <div class="filter-actions">
+      <%= submit_tag "套用篩選", class: "apply-filters-btn" %>
+    </div>
+  <% end %>
+
+  <% if @issues_unavailable || @phase_tracking_unavailable %>
+    <p class="freshness-label">
+      部分資料來源目前無法讀取，以下區塊可能不完整：
+      <%= [
+        (@issues_unavailable ? "306 臭蟲議題" : nil),
+        (@phase_tracking_unavailable ? "專案階段追蹤" : nil)
+      ].compact.join("、") %>
+    </p>
+  <% end %>
+
+  <p class="section-note section-note-standalone">
+    本週：<%= pm_weekly_range_label(@week_range) %>　·　下週：<%= pm_weekly_range_label(@next_week_range) %>
+    <% if pm_weekly_freshness_label(@fetched_at).present? %>
+      　·　<%= pm_weekly_freshness_label(@fetched_at) %>
+    <% end %>
+  </p>
+
+  <%# 四個區塊的筆數（需求 1.3）：讓 PM 一眼看出這週的工作量。未定到期日的 306 議題只有
+      筆數、沒有明細，不計入「本週工作」的項目數，另以提示文字呈現（需求 3.6）。 %>
+  <% overdue_count = pm_weekly_count(@overdue_tasks, @overdue_issues) %>
+  <% this_week_count = pm_weekly_count(@this_week_due_tasks, @this_week_completed_tasks, @this_week_issues) %>
+  <% next_week_count = pm_weekly_count(@next_week_tasks, @next_week_issues, @undated_tasks) %>
+
+  <div class="summary-bar">
+    <div class="stat-item stat-overdue">
+      <span class="stat-value"><%= overdue_count %></span>
+      <span class="stat-label">逾期未完成</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-value"><%= this_week_count %></span>
+      <span class="stat-label">本週工作</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-value"><%= next_week_count %></span>
+      <span class="stat-label">下週工作</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-value"><%= @phase_tracking_unavailable ? "—" : @phase_items.size %></span>
+      <span class="stat-label">階段追蹤</span>
+    </div>
+  </div>
+
+  <section class="issue-section">
+    <h2>逾期未完成（<%= overdue_count %>）</h2>
+    <p class="section-note">
+      未完成且預計完成日早於今天的項目，<strong>不限本週逾期</strong>——上個月就該完成、拖到現在還沒完成的也列在這裡。
+    </p>
+
+    <h3>305 專案任務（<%= pm_weekly_count(@overdue_tasks) %>）</h3>
+    <%= render partial: "project_group",
+               locals: { grouped: @overdue_tasks, item_partial: "task_section",
+                         empty_text: "目前無逾期未完成的任務。", variant: :overdue } %>
+
+    <h3>306 臭蟲議題（<%= pm_weekly_count(@overdue_issues, unavailable: @issues_unavailable) %>）</h3>
+    <%= render partial: "project_group",
+               locals: { grouped: @overdue_issues, item_partial: "issue_section",
+                         empty_text: "目前無逾期未結案的議題。", variant: :overdue,
+                         unavailable: @issues_unavailable } %>
+  </section>
+
+  <section class="issue-section">
+    <h2>本週工作（<%= this_week_count %>）</h2>
+    <p class="section-note">
+      本週 <%= pm_weekly_range_label(@week_range) %>。
+      <% if @undated_issue_count.to_i.positive? %>
+        另有 <%= @undated_issue_count %> 筆未定到期日議題（沒填到期日且無適用 SLA，或到期日欄位的格式無法解析），未列入任何週別區塊。
+      <% end %>
+    </p>
+
+    <h3>本週待完成（<%= pm_weekly_count(@this_week_due_tasks) %>）</h3>
+    <%= render partial: "project_group",
+               locals: { grouped: @this_week_due_tasks, item_partial: "task_section",
+                         empty_text: "本週無待完成的任務。", variant: :due } %>
+
+    <h3>本週已完成（<%= pm_weekly_count(@this_week_completed_tasks) %>）</h3>
+    <%= render partial: "project_group",
+               locals: { grouped: @this_week_completed_tasks, item_partial: "task_section",
+                         empty_text: "本週尚無已完成的任務。", variant: :completed } %>
+
+    <h3>306 臭蟲議題（<%= pm_weekly_count(@this_week_issues, unavailable: @issues_unavailable) %>）</h3>
+    <%= render partial: "project_group",
+               locals: { grouped: @this_week_issues, item_partial: "issue_section",
+                         empty_text: "本週無到期的議題。", variant: :due,
+                         unavailable: @issues_unavailable } %>
+  </section>
+
+  <section class="issue-section">
+    <h2>下週工作（<%= next_week_count %>）</h2>
+    <p class="section-note">下週 <%= pm_weekly_range_label(@next_week_range) %>。</p>
+
+    <h3>305 專案任務（<%= pm_weekly_count(@next_week_tasks) %>）</h3>
+    <%= render partial: "project_group",
+               locals: { grouped: @next_week_tasks, item_partial: "task_section",
+                         empty_text: "下週無到期的任務。", variant: :due } %>
+
+    <h3>306 臭蟲議題（<%= pm_weekly_count(@next_week_issues, unavailable: @issues_unavailable) %>）</h3>
+    <%= render partial: "project_group",
+               locals: { grouped: @next_week_issues, item_partial: "issue_section",
+                         empty_text: "下週無到期的議題。", variant: :due,
+                         unavailable: @issues_unavailable } %>
+
+    <%# 未定完成日的任務放在下週工作最後（需求 2.5）：PM 需要知道有哪些工作還沒排期。 %>
+    <h3>未定完成日（<%= pm_weekly_count(@undated_tasks) %>）</h3>
+    <%= render partial: "project_group",
+               locals: { grouped: @undated_tasks, item_partial: "task_section",
+                         empty_text: "目前無未排期的任務。", variant: :due } %>
+  </section>
+
+  <%= render partial: "phase_section" %>
+<% end %>

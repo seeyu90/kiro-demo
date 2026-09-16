@@ -481,7 +481,10 @@ turbo-frame[busy]::after {
   border-color: var(--color-border-hover);
 }
 
-.project-block h2 {
+/* PM 週報的專案分組標題用 h4（該頁的 h1/h2/h3 已經分給頁標題、四大區塊、區塊內小標），
+   標題階層不同但視覺角色相同，共用同一組樣式而不是再開一套。 */
+.project-block h2,
+.project-block h4 {
   font-size: 1.1rem;
   font-weight: 600;
   color: var(--color-accent);
@@ -491,7 +494,8 @@ turbo-frame[busy]::after {
   gap: 0.5rem;
 }
 
-.project-block h2::before {
+.project-block h2::before,
+.project-block h4::before {
   content: "";
   display: inline-block;
   width: 3px;

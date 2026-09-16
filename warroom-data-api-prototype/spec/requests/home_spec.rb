@@ -15,6 +15,10 @@ RSpec.describe "Home", type: :request do
       get "/"
     end
 
+    it "renders a link to /pm_weekly_report" do
+      expect(response.body).to match(%r{<a class="entry-card" href="/pm_weekly_report">})
+    end
+
     it "renders a link to /dashboard" do
       expect(response.body).to match(%r{<a class="entry-card" href="/dashboard">})
     end
