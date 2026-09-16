@@ -19,8 +19,10 @@ warroom-data-api-real-source 是 warroom-data-api-prototype 的延續，目標�
 - **Actor**：遵循 service_actor 模式的服務物件，封裝單一商業邏輯。
 - **ProjectProgress_Actor**：`Sheets::FetchProjectProgress` Actor，負責提供 305 專案進度資料；本階段替換其內部資料讀取邏輯，對外輸出介面維持不變。
 - **ProjectProgress_Endpoint**：回傳 305 專案進度資料的 HTTP 端點（`GET /api/project_progress`）；介面與雛型一致，不變動。
-- **SheetsClient**：封裝 Google Sheets API 呼叫的內部物件（`SheetsApiClient` 或同等模組），負責初始化 `google-apis-sheets_v4` service 物件、對 5 個類型分頁分別執行 `spreadsheets.values.get` 呼叫、合併回傳單一原始列陣列。
-- **類型分頁**：試算表中依任務類型各自獨立的分頁，本階段涵蓋 `功能`、`PR`、`調整`、`遺漏`、`臭蟲` 共 5 個，欄位結構完全相同。與 `warroom-data-api-prototype` requirements.md 排除的「306 臭蟲議題」是不同的資料來源，`臭蟲` 分頁本身是 305 進度表的一種任務類型，兩者無關。
+- **SheetsClient**：封裝 Google Sheets API 呼叫的內部物件（`ProjectProgressSheetsClient`），負責初始化 `google-apis-sheets_v4` service 物件、對**年度分頁**執行 `spreadsheets.values.get` 呼叫、將來源欄位重新對應為對外的列格式後回傳。
+- **年度分頁**：以年度命名的分頁（目前為 `2026`），由 n8n 從各專案 Slack 頻道同步，欄位 A~J 為 `sheetName`、`專案名稱`、`類型`、`任務名稱`、`狀態`、`負責人`、`預計完成日期`、`實際完成日期`、`最後更新`、`record_key`。**這是 305 的唯一資料來源。**
+- **類型分頁**（已不再讀取）：`功能`、`PR`、`調整`、`遺漏`、`臭蟲` 五個依類型切出來的衍生視圖。改為讀年度分頁的理由見需求 2 的附註。
+- **類型設定分頁**：`類型 → 寬限天數` 對照表（目前 功能 0、PR 2、臭蟲 0、調整 0、遺漏 0），供延誤天數計算扣除。
 - **Service_Account**：Google Cloud Service Account，用於以程式方式向 Google Sheets API 認證，不需人工登入。
 - **Credentials_JSON**：Service Account 的 JSON 金鑰檔，存放於 Rails credentials 或環境變數，不寫在程式碼或版控中。
 - **ISO 8601**：國際日期格式，本文件中指 `YYYY-MM-DD` 字串格式。
@@ -30,7 +32,7 @@ warroom-data-api-real-source 是 warroom-data-api-prototype 的延續，目標�
 - **統一錯誤格式**：`{ "error": { "code": "<錯誤代碼>", "message": "<描述>" } }` 的 JSON 結構。
 - **FORMATTED_VALUE**：Google Sheets API 的 `valueRenderOption` 參數值，指示 API 回傳儲存格的顯示字串（日期型別儲存格將回傳 `YYYY/MM/DD` 格式）。
 - **模擬資料**：雛型階段使用的 `lib/mock_data/project_progress.rb` 記憶體常數，本階段由真實 Google Sheets API 取代，不再使用。
-- **task_type**：任務所屬的類型分頁名稱（`功能`、`PR`、`調整`、`遺漏`、`臭蟲`其中之一），本次戰情室 Dashboard UX 強化新增的第 8 個任務欄位；此值並非讀取自試算表的儲存格內容，而是由 **SheetsClient** 依「這一列資料是向哪一個類型分頁請求取得」推導附加，5 個類型分頁本身即代表 5 種任務類型。
+- **task_type**：任務類型，直接讀取自年度分頁的「類型」欄。除了 `功能`、`PR`、`調整`、`遺漏`、`臭蟲` 之外，實際資料還存在 `未分類`（沒有對應的類型分頁，這正是不能用類型分頁當來源的原因之一）。
 
 ---
 
@@ -55,14 +57,18 @@ warroom-data-api-real-source 是 warroom-data-api-prototype 的延續，目標�
 
 #### 驗收標準
 
-1. WHEN **ProjectProgress_Actor** 被呼叫，THE **SheetsClient** SHALL 對試算表 ID `11gwDnOqEiGqj_VF2XF7AzxiJTiOW_k2knF6-4yQCej8` 的 5 個類型分頁（`功能`、`PR`、`調整`、`遺漏`、`臭蟲`）各自以範圍 `A:G` 發起 `spreadsheets.values.get` 請求，並指定 `valueRenderOption: 'FORMATTED_VALUE'`。
-2. WHEN **SheetsClient** 取得 5 個分頁的回應，THE **SheetsClient** SHALL 將其合併為單一列陣列：僅保留第一個分頁的標題列，其餘分頁只併入資料列（不重複的標題列）。
-3. WHEN **ProjectProgress_Actor** 收到合併後的列陣列，THE **ProjectProgress_Actor** SHALL 跳過第 1 列（標題列），從第 2 列起逐列解析為任務紀錄。
-4. WHEN 解析列資料時，THE **ProjectProgress_Actor** SHALL 依以下欄位對應產生任務 Hash（每個類型分頁欄位結構相同）：A 欄 → `project_name`、B 欄 → `task_name`、C 欄 → `status`、D 欄 → `owner`、E 欄 → `planned_completion_date`、F 欄 → `actual_completion_date`、G 欄 → `delay_days`（試算表既有公式算好的值，直接讀取）。
-5. WHEN 列陣列長度不足 8 個元素，THE **ProjectProgress_Actor** SHALL 以 `nil` 填補不足的欄位，不拋出陣列索引例外。
+1. WHEN **ProjectProgress_Actor** 被呼叫，THE **SheetsClient** SHALL 對試算表（ID 由環境變數 `PROJECT_PROGRESS_SPREADSHEET_ID` 決定）的**年度分頁**（名稱由 `PROJECT_PROGRESS_SHEET_NAME` 決定，預設 `2026`）以範圍 `A:J` 發起單一次 `spreadsheets.values.get` 請求，並指定 `valueRenderOption: 'FORMATTED_VALUE'`。
+
+   > **為什麼不讀類型分頁：** 原本讀 `功能`／`PR`／`調整`／`遺漏`／`臭蟲` 五個分頁。以真實資料比對後發現年度分頁 499 筆、五個類型分頁合計僅 483 筆，差異的 16 筆類型為 `未分類`（沒有對應分頁，永遠讀不到，其中含 4 筆未完成任務）；另有 18 筆兩邊內容不一致，且一律是年度分頁較新（例：RAG「平台 前端」年度分頁已是「完成／實際完成日 2026-09-16」，類型分頁仍是「未完成」；3 筆 HRM 任務年度分頁已填「未完成」，類型分頁仍是空白）。類型分頁是衍生視圖且會落後於來源，故一律以年度分頁為準。
+
+2. WHEN **SheetsClient** 取得年度分頁的回應，THE **SheetsClient** SHALL 將來源欄位重新對應為既有的對外列格式 `[專案名稱, 任務名稱, 狀態, 負責人, 預計完成日期, 實際完成日期, 延誤天數, 類型]`，其中「延誤天數」一律為 `nil`（年度分頁無此欄，改由 Actor 計算，見需求 4.3b），並以固定標題列取代來源標題列。
+3. WHEN **ProjectProgress_Actor** 收到列陣列，THE **ProjectProgress_Actor** SHALL 跳過第 1 列（標題列），從第 2 列起逐列解析為任務紀錄。
+4. WHEN 解析列資料時，THE **ProjectProgress_Actor** SHALL 依以下欄位對應產生任務 Hash：第 1 欄 → `project_name`、2 → `task_name`、3 → `status`、4 → `owner`、5 → `planned_completion_date`、6 → `actual_completion_date`、7 → `delay_days`、8 → `task_type`。
+5. WHEN 列陣列長度不足應有欄數，THE **SheetsClient** SHALL 於欄位對應前先以 `nil` 補滿（Google Sheets API 會省略列尾端的空白儲存格），確保欄位不會錯位。
 6. WHEN **SheetsClient** 收到空列（列陣列為 `nil` 或所有元素皆為空字串），THE **ProjectProgress_Actor** SHALL 跳過該列，不將其納入解析結果。
-7. WHEN **SheetsClient** 對某一類型分頁發起請求並取得資料列，THE **SheetsClient** SHALL 為該分頁的每一筆資料列附加該分頁名稱（`功能`／`PR`／`調整`／`遺漏`／`臭蟲`之一）作為第 8 個元素；THE **SheetsClient** SHALL 為合併後保留的唯一標題列附加固定文字「類型」作為第 8 個元素。
-8. WHEN **ProjectProgress_Actor** 解析已附加第 8 個元素的資料列，THE **ProjectProgress_Actor** SHALL 將該元素對應為任務 Hash 的 `task_type` 欄位。
+7. WHEN 年度分頁本身沒有任何列，THE **SheetsClient** SHALL 回傳空陣列。
+8. WHEN 任務的類型在「類型設定」分頁中沒有對應列，THE **ProjectProgress_Actor** SHALL 視為寬限天數 0。
+9. WHEN 呼叫端未指定任務類型，THE **ProjectProgress_Actor** SHALL 預設選取 `功能`、`PR` 與 `未分類`。`未分類` 代表尚未被歸類、而非不重要，不納入預設會讓這些任務在預設檢視下等於不存在。
 
 ---
 
@@ -89,7 +95,18 @@ warroom-data-api-real-source 是 warroom-data-api-prototype 的延續，目標�
 
 1. IF Google Sheets API 回傳 HTTP 404，或任一類型分頁名稱在試算表中不存在（API 回傳訊息包含 `"Unable to parse range"`），THEN THE **ProjectProgress_Actor** SHALL 以 `failure_code: :sheet_not_found` 及 HTTP 404 回傳失敗結果。
 2. IF Google Sheets API 回傳 HTTP 403，THEN THE **ProjectProgress_Actor** SHALL 以 `failure_code: :access_denied` 及 HTTP 403 回傳失敗結果。
-3. IF 任意紀錄的 `project_name`、`task_name`、`status` 或 `owner` 為空白，THEN THE **ProjectProgress_Actor** SHALL 跳過該筆紀錄、不納入 `grouped_data`，其餘正常紀錄仍照常回傳成功結果；不因單筆紀錄不完整而讓整個 request 失敗（真實試算表資料難免有少量不完整列，需與其他正常列分開處理）。
+3. IF 任意紀錄的 `project_name` 或 `task_name` 為空白，THEN THE **ProjectProgress_Actor** SHALL 跳過該筆紀錄、不納入 `grouped_data`，其餘正常紀錄仍照常回傳成功結果；不因單筆紀錄不完整而讓整個 request 失敗。少了這兩個欄位，該列無從辨識是什麼任務，是唯一真正「不完整」的情況。
+3a. IF 任意紀錄的 `status` 或 `owner` 為空白，THEN THE **ProjectProgress_Actor** SHALL 保留該筆紀錄並分別正規化為 `"未完成"` 與 `"未指派"`，使其一併納入未完成／逾期統計與清單。
+
+   > 原本 `status` 與 `owner` 都列在必要欄位、空白即整列跳過。以真實試算表驗算後發現：HRM 有
+   > 5 筆狀態欄空白但其餘齊全的任務（2 筆已逾期），RAG 有 3 筆未完成但無人認領的任務，全部
+   > 都不會出現在畫面上。這兩種空白都不代表資料不完整——狀態空白是填表的人還沒更新，負責人
+   > 空白代表這件事還沒有人認領，而未完成又無人認領的工作，對戰情室來說比已指派的更需要被
+   > 看見。把它們藏起來與這個頁面存在的目的正好相反。
+3b. THE **ProjectProgress_Actor** SHALL 以 `max(工作日數 − 該類型寬限天數, 0)` 計算 `delay_days`，不採用試算表上任何既有的延誤欄位值。工作日數排除週六日（無國定假日表，故不扣國定假日），基準日為：已完成任務取「實際完成日期」、未完成且已逾期的任務取「今天」；未到期、無預計完成日期、或已完成卻無實際完成日期者一律回傳 `nil`（畫面顯示「—」，不判定準時）。寬限天數即時讀自「類型設定」分頁，讀取失敗時全部視為 0，不使整個 request 失敗。
+
+   > 原本直接讀取試算表的「延誤天數」欄。以真實資料驗算後發現該欄與畫面上的「逾期」判斷基準不同（會出現「顯示 +7 天、實際已過 13 個日曆日」），且該欄混用公式與手填，456 筆已完成任務中只有 84.4% 對得上單純的工作日差；改用 `max(工作日 − 寬限天數, 0)` 後命中率 98.9%，可確認這就是業務認定的算法。
+
 4. IF Google Sheets API 請求逾時、配額超過，或發生上述情況以外的未預期例外（含憑證載入失敗），THEN THE **ProjectProgress_Actor** SHALL 以 `failure_code: :internal_error` 及 HTTP 500 回傳失敗結果。
 5. THE **API** SHALL 以統一錯誤格式 `{ "error": { "code": "<錯誤代碼>", "message": "<描述>" } }` 回傳所有錯誤回應；此格式與雛型一致，不變動。
 
@@ -159,7 +176,7 @@ warroom-data-api-real-source 是 warroom-data-api-prototype 的延續，目標�
 
 ### 需求 10：Dashboard 任務類型與未完成／逾期篩選（戰情室 UX 強化延伸）
 
-**使用者故事：** 身為戰情室使用者，我希望 Dashboard 預設顯示全部專案，任務類型可多選並預設聚焦「功能」＋「PR」，範圍預設為「本週到期」（含所有已逾期任務，不限本週內），以便直接看到真實 Google Sheets 資料中最需要處理的工作，不需自己再篩選。
+**使用者故事：** 身為戰情室使用者，我希望 Dashboard 預設顯示全部專案，任務類型可多選並預設聚焦「功能」＋「PR」＋「未分類」，範圍預設為「本週到期」（含所有已逾期任務，不限本週內），以便直接看到真實 Google Sheets 資料中最需要處理的工作，不需自己再篩選。
 
 本需求延續 [warroom-dashboard-ux-enhancements](../warroom-dashboard-ux-enhancements/requirements.md) spec 於靜態展示頁（`docs/`）已定義的 UX 邏輯，套用至本 spec 的真實 Rails Dashboard（`app/views/dashboard/`），資料來源改為 `grouped_data`（來自真實 Google Sheets，經 `task_type` 標記）。
 
@@ -168,8 +185,24 @@ warroom-data-api-real-source 是 warroom-data-api-prototype 的延續，目標�
 1. THE **Dashboard_Page** SHALL 在未帶 `project` 參數（首次載入）時，預設顯示全部專案，不預先收斂至單一專案。
 2. THE **Dashboard_Page** SHALL 提供任務類型**多選**篩選（`task_type[]` query param），選項為試算表中實際出現的類型；「功能」與「PR」排列於其他類型之前。
 3. THE **Dashboard_Page** SHALL 在未帶 `task_type[]` 參數（首次載入）時，預設勾選「功能」與「PR」兩者；若使用者將全部勾選取消（`task_type[]` 帶空值），視為不套用類型篩選，顯示所有類型。
-4. THE **Dashboard_Page** SHALL 提供「只顯示未完成」開關（`incomplete_only` query param），未帶參數時預設為開啟。
-5. THE **Dashboard_Page** SHALL 提供「範圍」篩選（`scope` query param：`all`／`due_this_week`／`overdue`，單選），未帶參數時預設為 `due_this_week`；`due_this_week` 邏輯定義與 [warroom-dashboard-ux-enhancements/requirements.md](../warroom-dashboard-ux-enhancements/requirements.md) 的「本週到期任務」定義一致：`planned_completion_date` 不晚於本週週日、且不限下界（因此涵蓋所有已逾期任務，不論逾期發生於本週內或更早），以 `Date.current`（伺服器當地時間）為判斷基準。
+4. THE **Dashboard_Page** SHALL NOT 提供任務狀態（已完成／未完成）的**獨立**篩選控制項；「只看未完成」改由「範圍」的 `incomplete` 檢視提供（見需求 5）。
+
+   > 這一項調整過三次：原本是「只顯示未完成」的勾選框，但 `due_this_week`／`overdue` 兩個範圍在程式中一併排除了已完成任務，導致取消勾選時畫面毫無變化（控制項等同故障）。修正範圍語意後一度改為三選一的狀態篩選，再評估認為多一軸篩選增加操作負擔而移除；但移除後「看所有未完成任務」就沒有任何入口了（`due_this_week` 只涵蓋本週，16 筆未完成中有 5 筆看不到），故改為在「範圍」這一組具名檢視中加入 `incomplete`——維持單一控制項，同時保留這個最常見的意圖。
+
+5. THE **Dashboard_Page** SHALL 提供「範圍」篩選（`scope` query param：`all`／`incomplete`／`due_this_week`／`overdue`，單選），未帶參數時預設為 `due_this_week`。範圍是一組**具名檢視**，各自回答一個常見問題。除 `incomplete` 之外都是**日期條件**，不得因任務已完成或未完成而排除；各檢視對未完成／已完成任務的條件如下（一律以 `Date.current` 伺服器當地時間為基準）：
+
+   | 範圍 | 未完成任務 | 已完成任務 |
+   |---|---|---|
+   | `all` | 無日期條件 | 無日期條件 |
+   | `incomplete` | 無日期條件（全部列出） | 一律排除 |
+   | `due_this_week` | `planned_completion_date` 不晚於本週週日，不限下界（涵蓋所有逾期未完成，不論逾期發生於本週內或更早） | `planned_completion_date` 或 `actual_completion_date` 落在本週 |
+   | `overdue` | `planned_completion_date` 早於今天 | `delay_days` 大於 0（當初逾期完成的） |
+
+   > 已完成任務不能沿用未完成那條日期條件：`due_this_week` 對未完成不限下界是對的（一月就該交、現在還沒交，今天依然欠著），但同一條件套在已完成任務上，等於把歷來每一筆完成的任務都算進「本週」。以實際資料驗證：一筆預計 2026-09-03、實際 2026-09-16 完成的 RAG 任務（delay 到本週才完成）原本在任何篩選組合下都看不到，這正是使用者回報的缺口。
 6. WHEN 任一專案區塊經篩選後仍有逾期任務，THE **Dashboard_Page** SHALL 將逾期任務排列於該區塊清單最前面。
-7. THE **Dashboard_Page** SHALL 在任務列表上方顯示摘要列（任務總數、已完成、進行中、待開始、逾期），統計範圍僅套用「專案」與「任務類型」篩選，不受「只顯示未完成」與「範圍」篩選影響。
-8. THE **Dashboard_Page** SHALL 確保切換專案下拉選單時，保留使用者當下的任務類型／範圍／只顯示未完成篩選狀態。
+7. THE **Dashboard_Page** SHALL 在任務列表上方顯示摘要列（任務總數、已完成、未完成、逾期），統計範圍僅套用「專案」與「任務類型」篩選，不受「範圍」與日期區間篩選影響。
+8. THE **Dashboard_Page** SHALL 確保切換專案下拉選單時，保留使用者當下的任務類型／範圍／日期區間篩選。
+9. THE **Dashboard_Page** SHALL NOT 提供「年度」篩選；時間維度一律由日期區間（`from`／`to`）表達。
+
+   > 曾短暫加過年度下拉。但 305 的資料源鎖在單一年度分頁（`PROJECT_PROGRESS_SHEET_NAME`），實測 476 筆全部屬於同一年，下拉永遠只有「全部年度」與當年兩個選項，等於沒有作用；而日期區間表達力涵蓋年度（整年＝1/1～12/31），反之不然。日後若真要跨年度瀏覽，需要的是「讀哪幾個年度分頁」的資料源機制，不是在已載入資料上再篩一次年份——留著那個下拉只會讓人誤以為可以跨年查詢。
+10. THE **Dashboard_Page** SHALL NOT 提供頁面層級的「重新整理資料」按鈕；全站唯一的快取重新整理入口位於入口頁（`POST /refresh`，一次清除所有 Sheets 快取）。頁面亦不再顯示「資料更新於 X 分鐘前」時效標籤。

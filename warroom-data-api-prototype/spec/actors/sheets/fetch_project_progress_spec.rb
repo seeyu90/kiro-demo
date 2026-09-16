@@ -187,10 +187,15 @@ RSpec.describe Sheets::FetchProjectProgress do
         expect(project_a_tasks[1][:actual_completion_date]).to be_nil
       end
 
-      it "converts delay_days to Integer when valid" do
+      # 延誤天數一律由程式以工作日計算（需求 4.3b），試算表第 7 欄的值不再採用。
+      # Task 1 狀態不在「完成／已確認」之列＝未完成，預計 2024-01-05 早已逾期，故以今天為基準；
+      # Task 2 同樣未完成、預計 2024-02-10 也已逾期。兩者都不會是試算表上寫的 5 / -4。
+      it "ignores the spreadsheet delay column and computes workdays instead" do
         project_a_tasks = result.grouped_data["Project A"]
-        expect(project_a_tasks[0][:delay_days]).to eq(5)
-        expect(project_a_tasks[1][:delay_days]).to eq(-4)
+
+        expect(project_a_tasks[0][:delay_days]).to be_a(Integer)
+        expect(project_a_tasks[0][:delay_days]).not_to eq(5)
+        expect(project_a_tasks[1][:delay_days]).not_to eq(-4)
       end
     end
 
@@ -238,7 +243,8 @@ RSpec.describe Sheets::FetchProjectProgress do
           project_name task_name status owner
           planned_completion_date actual_completion_date delay_days task_type
         ])
-        expect(task1[:delay_days]).to be_nil
+        # delay_days 不再取自試算表，改為計算值（Task 1 未完成且預計日已過 → Integer）
+        expect(task1[:delay_days]).to be_a(Integer)
 
         # Check second task (had 3 columns)
         task2 = result.grouped_data["Project A"][1]
@@ -301,40 +307,133 @@ RSpec.describe Sheets::FetchProjectProgress do
       end
     end
 
-    # Test 6: stub 回傳 delay_days 為 "-4" → 驗證輸出為 Integer -4
-    context "with delay_days as negative integer string" do
-      let(:negative_delay_rows) do
-        [
-          [ "專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延遲天數" ],
-          [ "Project A", "Task 1", "completed", "Alice", "2024/1/5", "2024-01-10", "-4" ]
+    # Test 6/7（原本驗證「照抄試算表延誤欄、負數保留、非數字保留原字串」）已不適用：
+    # 延誤天數改由程式以工作日計算（需求 4.3b）。以下改為驗證計算規則本身。
+    context "delay_days (工作日計算)" do
+      def delay_for(status:, planned:, actual:)
+        rows = [
+          [ "專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延遲天數", "類型" ],
+          [ "Project A", "Task 1", status, "Alice", planned, actual, "999", "功能" ]
         ]
+        allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_return(rows)
+        described_class.result.grouped_data["Project A"].first[:delay_days]
       end
 
-      before { allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_return(negative_delay_rows) }
+      around { |example| travel_to(Date.new(2026, 9, 16)) { example.run } }
 
-      it "converts negative delay_days string to Integer" do
-        expect(result).to be_success
-        task = result.grouped_data["Project A"].first
-        expect(task[:delay_days]).to be_a(Integer)
-        expect(task[:delay_days]).to eq(-4)
+      it "counts workdays between the planned and actual date for completed tasks" do
+        # 2026-09-03（四）→ 2026-09-08（二）：9/4、9/7、9/8＝3 個工作日（9/5、9/6 為週末）
+        expect(delay_for(status: "完成", planned: "2026/9/3", actual: "2026/9/8")).to eq(3)
+      end
+
+      it "reports 0 when a completed task finished on or before its planned date" do
+        expect(delay_for(status: "完成", planned: "2026/9/3", actual: "2026/9/3")).to eq(0)
+        expect(delay_for(status: "已確認", planned: "2026/9/3", actual: "2026/9/1")).to eq(0)
+      end
+
+      it "counts workdays up to today for an overdue incomplete task" do
+        # 2026-09-03（四）→ 今天 2026-09-16（三）：9/4、9/7~9/11、9/14~9/16＝9 個工作日
+        expect(delay_for(status: "未完成", planned: "2026/9/3", actual: "")).to eq(9)
+      end
+
+      it "returns nil for an incomplete task that is not due yet" do
+        expect(delay_for(status: "未完成", planned: "2026/9/17", actual: "")).to be_nil
+      end
+
+      it "returns nil when there is no planned date, or a completed task has no actual date" do
+        expect(delay_for(status: "未完成", planned: "", actual: "")).to be_nil
+        expect(delay_for(status: "完成", planned: "2026/9/3", actual: "")).to be_nil
+      end
+
+      it "ignores whatever the spreadsheet delay column says" do
+        expect(delay_for(status: "完成", planned: "2026/9/3", actual: "2026/9/3")).not_to eq(999)
+      end
+
+      # 寬限天數由業務維護在試算表的「類型設定」分頁（例如 PR 給 2 天），程式即時讀取後
+      # 從工作日數扣掉，扣完為負一律當 0。
+      context "with 寬限天數 from the 類型設定 sheet" do
+        before { allow(ProjectProgressSheetsClient).to receive(:fetch_grace_days).and_return({ "PR" => 2, "功能" => 0 }) }
+
+        def delay_for_type(type, planned:, actual:)
+          rows = [
+            [ "專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延遲天數", "類型" ],
+            [ "Project A", "Task 1", "完成", "Alice", planned, actual, "", type ]
+          ]
+          allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_return(rows)
+          described_class.result.grouped_data["Project A"].first[:delay_days]
+        end
+
+        it "subtracts the grace days configured for that task type" do
+          # 2026-09-03（四）→ 2026-09-08（二）＝3 個工作日；PR 有 2 天寬限 → 1
+          expect(delay_for_type("PR", planned: "2026/9/3", actual: "2026/9/8")).to eq(1)
+          expect(delay_for_type("功能", planned: "2026/9/3", actual: "2026/9/8")).to eq(3)
+        end
+
+        it "never reports a negative delay when the grace period covers the slip" do
+          # 1 個工作日的延遲被 PR 的 2 天寬限完全吸收
+          expect(delay_for_type("PR", planned: "2026/9/3", actual: "2026/9/4")).to eq(0)
+        end
+
+        it "treats a task type with no configured grace as zero grace" do
+          expect(delay_for_type("未分類", planned: "2026/9/3", actual: "2026/9/8")).to eq(3)
+        end
       end
     end
 
-    # Test 7: stub 回傳 delay_days 為 "TBD" → 驗證保留原始字串
-    context "with delay_days as non-numeric string" do
-      let(:tbd_delay_rows) do
+    # 「範圍」（日期條件）與「只顯示未完成」（狀態條件）必須彼此獨立：原本 due_this_week／
+    # overdue 兩個範圍都寫死排除已完成任務，取消勾選「只顯示未完成」時畫面不會有任何變化。
+    # 「範圍」是純日期條件，不再依任務做完與否而排除——原本 due_this_week／overdue 都在
+    # 開頭直接濾掉已完成任務，導致「delay 到本週才完成」這種最該被看見的任務永遠不會出現。
+    context "範圍（日期條件）" do
+      around { |example| travel_to(Date.new(2026, 9, 16)) { example.run } } # 本週 9/14~9/20
+
+      let(:scope_rows) do
         [
-          [ "專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延遲天數" ],
-          [ "Project A", "Task 1", "completed", "Alice", "2024/1/5", "2024-01-10", "TBD" ]
+          [ "專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延遲天數", "類型" ],
+          # 逾期未完成（預計早於本週）
+          [ "P", "逾期未完成", "未完成", "A", "2026/8/20", "", "", "功能" ],
+          # 本週到期、還沒完成
+          [ "P", "本週到期未完成", "未完成", "A", "2026/9/18", "", "", "功能" ],
+          # delay 很久、本週才完成
+          [ "P", "延遲本週完成", "完成", "A", "2026/8/20", "2026/9/15", "", "功能" ],
+          # 本週到期、上週就先完成了
+          [ "P", "本週到期提前完成", "完成", "A", "2026/9/18", "2026/9/10", "", "功能" ],
+          # 三月的陳年舊帳，不該出現在「本週」
+          [ "P", "三月完成", "完成", "A", "2026/3/2", "2026/3/2", "", "功能" ]
         ]
       end
 
-      before { allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_return(tbd_delay_rows) }
+      before { allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_return(scope_rows) }
 
-      it "keeps non-numeric delay_days as original string" do
-        expect(result).to be_success
-        task = result.grouped_data["Project A"].first
-        expect(task[:delay_days]).to eq("TBD")
+      def names(scope:)
+        described_class.result(scope: scope, task_types: [ "功能" ])
+                       .display_data.values.flatten.map { |t| t[:task_name] }
+      end
+
+      it "shows both unfinished work and work finished this week under 本週到期" do
+        expect(names(scope: "due_this_week"))
+          .to contain_exactly("逾期未完成", "本週到期未完成", "延遲本週完成", "本週到期提前完成")
+      end
+
+      it "does not flood 本週到期 with every historically completed task" do
+        expect(names(scope: "due_this_week")).not_to include("三月完成")
+      end
+
+      it "includes tasks that were delivered late under 已逾期" do
+        expect(names(scope: "overdue")).to contain_exactly("逾期未完成", "延遲本週完成")
+      end
+
+      # 拿掉獨立的狀態篩選後，「只看未完成」改由範圍的 incomplete 檢視提供——那是使用這頁
+      # 最常見的意圖之一，不能沒有入口。與日期條件無關，純看做完了沒。
+      it "lists every unfinished task regardless of date under 未完成" do
+        expect(names(scope: "incomplete"))
+          .to contain_exactly("逾期未完成", "本週到期未完成")
+      end
+
+      it "applies no date condition under 全部" do
+        expect(names(scope: "all")).to contain_exactly(
+          "逾期未完成", "本週到期未完成", "延遲本週完成", "本週到期提前完成", "三月完成"
+        )
       end
     end
 
@@ -344,7 +443,7 @@ RSpec.describe Sheets::FetchProjectProgress do
       let(:mixed_validity_rows) do
         [
           [ "專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延遲天數" ],
-          [ "Project A", "Task 1", "", "Alice", "2024/1/5", "2024-01-10", "5" ], # Empty status, should be skipped
+          [ "Project A", "", "完成", "Alice", "2024/1/5", "2024-01-10", "5" ], # 任務名稱空白 → 跳過
           [ "Project A", "Task 2", "in_progress", "Bob", "2024/2/10", "", "-4" ]
         ]
       end
@@ -354,6 +453,78 @@ RSpec.describe Sheets::FetchProjectProgress do
       it "skips the invalid row and returns success with the remaining valid rows" do
         expect(result).to be_success
         expect(result.grouped_data["Project A"].map { |t| t[:task_name] }).to eq([ "Task 2" ])
+      end
+    end
+
+    # 負責人空白代表這件事還沒有人認領，不是資料不完整——未完成且無人認領的任務，對戰情室
+    # 而言比已指派的更需要被看見（需求 4.3a）。
+    context "with a row whose owner is blank" do
+      before do
+        allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_return(
+          [
+            [ "專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延遲天數", "類型" ],
+            [ "Project A", "無人認領的任務", "未完成", "", "", "", "", "未分類" ]
+          ]
+        )
+      end
+
+      it "keeps the row and labels the owner 未指派" do
+        task = result.grouped_data["Project A"]&.first
+
+        expect(task).to be_present
+        expect(task[:owner]).to eq("未指派")
+      end
+    end
+
+    # 「未分類」是還沒被歸類，不等於不重要；預設類型篩選必須包含它，否則這些任務在預設
+    # 檢視下等於不存在。
+    context "default task type selection" do
+      it "selects 功能, PR and 未分類 when the caller does not specify task types" do
+        expect(described_class::DEFAULT_TASK_TYPES).to contain_exactly("功能", "PR", "未分類")
+      end
+
+      it "includes uncategorized tasks in the default view" do
+        allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_return(
+          [
+            [ "專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延遲天數", "類型" ],
+            [ "Project A", "未分類未完成任務", "未完成", "Alice", "", "", "", "未分類" ]
+          ]
+        )
+
+        expect(described_class.result(scope: "all").display_data.values.flatten.map { |t| t[:task_name] })
+          .to include("未分類未完成任務")
+      end
+    end
+
+    # Test 8a: 狀態欄空白不算資料不完整，保留該筆並視為「未完成」（需求 4.3a）。真實試算表上
+    # 有一批狀態空白但已逾期的任務，跳過它們等於讓戰情室看不到真的在延誤的工作。
+    context "with a row whose status is blank" do
+      let(:blank_status_rows) do
+        [
+          [ "專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延遲天數", "類型" ],
+          [ "Project A", "Blank Status Task", "", "Alice", "2026/9/7", "", "7", "功能" ],
+          [ "Project A", "Done Task", "完成", "Bob", "2026/9/1", "2026/9/1", "0", "功能" ]
+        ]
+      end
+
+      before { allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_return(blank_status_rows) }
+
+      it "keeps the row and normalizes the status to 未完成" do
+        task = result.grouped_data["Project A"].find { |t| t[:task_name] == "Blank Status Task" }
+
+        expect(task).to be_present
+        expect(task[:status]).to eq("未完成")
+      end
+
+      it "counts it as incomplete, and as overdue once its planned date has passed" do
+        travel_to(Date.new(2026, 9, 16)) do
+          summary = described_class.result(task_types: [ "功能" ]).summary
+
+          expect(summary[:total]).to eq(2)
+          expect(summary[:completed]).to eq(1)
+          expect(summary[:incomplete]).to eq(1)
+          expect(summary[:overdue]).to eq(1)
+        end
       end
     end
 

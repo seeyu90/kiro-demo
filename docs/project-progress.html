@@ -6,11 +6,11 @@
     (function () {
       try {
         var saved = localStorage.getItem("warroom-theme");
-        if (saved === "light") {
-          document.documentElement.setAttribute("data-theme", "light");
+        if (saved === "dark") {
+          document.documentElement.setAttribute("data-theme", "dark");
         }
       } catch (e) {
-        // localStorage 不可用：靜默忽略，維持預設深色
+        // localStorage 不可用：靜默忽略，維持預設淺色
       }
     })();
   </script>
@@ -25,7 +25,7 @@
       <h1 class="dashboard-title">戰情室 <span>— 專案進度</span></h1>
       <p class="subtitle">靜態展示版（模擬資料） · <a class="back-link" href="index.html">返回入口頁</a></p>
     </div>
-    <button type="button" id="theme-toggle" class="theme-toggle" aria-label="切換至淺色模式">🌙 深色</button>
+    <button type="button" id="theme-toggle" class="theme-toggle" aria-label="切換至深色模式">☀️ 淺色</button>
   </header>
 
   <main>

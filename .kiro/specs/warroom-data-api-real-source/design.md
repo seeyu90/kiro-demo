@@ -6,7 +6,9 @@ warroom-data-api-real-source 是 warroom-data-api-prototype 的延續，目標�
 
 替換範圍僅限於 `Sheets::FetchProjectProgress` Actor 的**內部資料讀取層**：新增 `SheetsApiClient` 封裝 Google Sheets API 的初始化與呼叫，Actor 改為呼叫 `SheetsApiClient` 取得原始列陣列，再執行與雛型相同的解析、正規化、分組邏輯。
 
-305 進度資料實際分散在試算表的 5 個「類型」分頁（`功能`、`PR`、`調整`、`遺漏`、`臭蟲`），並非單一分頁；`SheetsApiClient` 對 5 個分頁分別呼叫 API 後合併為單一列陣列。每個分頁欄位結構完全相同，且「延誤」欄位是試算表既有公式已經算好的值，直接讀取，不在程式中重新計算日期差。
+305 進度資料的唯一來源是試算表的**年度分頁**（目前為 `2026`，n8n 從各專案 Slack 頻道同步，欄位 A~J 含 `record_key` 與最後更新時間）。`ProjectProgressSheetsClient` 對這一個分頁發起單次 API 呼叫，並把來源欄位重新對應為對外的列格式，呼叫端不需要知道來源分頁的欄位順序。
+
+過去讀的是 `功能`／`PR`／`調整`／`遺漏`／`臭蟲` 五個類型分頁，實測後確認那是會落後於來源、且會漏掉 `未分類` 的衍生視圖（詳見 requirements.md 需求 2.1 附註）。延誤天數也不再讀試算表既有欄位，改由 Actor 以 `max(工作日 − 寬限天數, 0)` 計算（需求 4.3b）。
 
 真實資料難免有少量不完整列（例如缺狀態或負責人），這類列會被個別跳過、不納入結果，不會讓整個 request 失敗——這點與雛型階段用固定乾淨模擬資料的假設不同。
 
@@ -63,7 +65,7 @@ HTTP 請求
 1. HTTP 請求進入 Rails Router
 2. Router 分派至對應 Controller action（與雛型相同）
 3. Controller 呼叫 `Sheets::FetchProjectProgress.result()`（不再傳入 `simulate_error`）
-4. Actor 呼叫 `SheetsApiClient.fetch_rows`，`SheetsApiClient` 內部對 5 個類型分頁分別發起請求並合併為單一列陣列
+4. Actor 呼叫 `ProjectProgressSheetsClient.fetch_rows`，Client 內部對年度分頁發起單次請求並重新對應欄位；Actor 另呼叫 `fetch_grace_days` 取得類型→寬限天數對照
 5. Actor 跳過標題列（第 1 列），過濾空列，將各列映射為任務 Hash
 6. Actor 執行欄位正規化（日期格式、`delay_days` 型別轉換）
 7. Actor 執行 `reject_invalid_records` 篩掉缺少必要欄位的紀錄（該筆跳過，不影響其餘紀錄）
@@ -87,28 +89,37 @@ HTTP 請求
 
 **檔案**：`app/clients/sheets_api_client.rb`
 
-負責初始化 `google-apis-sheets_v4` service 物件、對 5 個類型分頁分別執行 `spreadsheets.values.get` 呼叫並合併結果，回傳原始列陣列（`Array<Array<String>>`）。將 Google API 的具體細節完全隔離於此類，Actor 不直接依賴任何 Google gem。
+負責初始化 `google-apis-sheets_v4` service 物件、對年度分頁執行 `spreadsheets.values.get` 呼叫，並將來源欄位重新對應為對外列格式後回傳（`Array<Array<String>>`）。另提供 `fetch_grace_days` 讀取「類型設定」分頁。將 Google API 的具體細節完全隔離於此類，Actor 不直接依賴任何 Google gem。
 
 ```ruby
 # frozen_string_literal: true
 
-class SheetsApiClient
-  SPREADSHEET_ID = "11gwDnOqEiGqj_VF2XF7AzxiJTiOW_k2knF6-4yQCej8"
-  SHEET_NAMES    = ["功能", "PR", "調整", "遺漏", "臭蟲"].freeze
-  RANGE_SUFFIX   = "!A:G"
+class ProjectProgressSheetsClient
+  # 試算表每年換一份、分頁每年換一個，皆以環境變數切換，不依系統日期自動判斷
+  # （跨年當天不保證新的試算表／分頁已建好）。
+  SPREADSHEET_ID = ENV.fetch("PROJECT_PROGRESS_SPREADSHEET_ID", "11gwDnOqEiGqj_VF2XF7AzxiJTiOW_k2knF6-4yQCej8")
+  SHEET_NAME     = ENV.fetch("PROJECT_PROGRESS_SHEET_NAME", "2026")
+  RANGE_SUFFIX   = "!A:J"
+  GRACE_SHEET_NAME = ENV.fetch("PROJECT_PROGRESS_GRACE_SHEET_NAME", "類型設定")
   SCOPES         = ["https://www.googleapis.com/auth/spreadsheets.readonly"].freeze
 
-  # 305 進度資料分散在 5 個「類型」分頁，每個分頁欄位結構完全相同（A~G：專案名稱、
-  # 任務名稱、狀態、負責人、預計完成日期、實際完成日期、延誤；「延誤」為試算表既有
-  # 公式算好的值，直接讀取即可，不在程式中重新計算）。
-  # 回傳單一合併後的列陣列：僅保留第一個分頁的標題列，其餘分頁只取資料列。
-  #
-  # @return [Array<Array<String>>] 合併後的原始列陣列（第 1 列為標題列）
+  # 來源欄位 A~J：sheetName、專案名稱、類型、任務名稱、狀態、負責人、預計完成日期、
+  # 實際完成日期、最後更新、record_key。
+  # 對外仍維持既有列格式（專案名稱、任務名稱、狀態、負責人、預計完成日期、實際完成日期、
+  # 延誤天數、類型），第 7 欄固定 nil——延誤天數由 Actor 計算。
+  OUTPUT_HEADER = ["專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延誤天數", "類型"].freeze
+
+  # @return [Array<Array<String>>] 列陣列（第 1 列為標題列）
   # @raise [Google::Apis::ClientError]  403 / 404 等 API 層級錯誤
   # @raise [Google::Apis::ServerError]  5xx 伺服器端錯誤
   # @raise [StandardError]              憑證載入失敗或其他未預期錯誤
-  def self.fetch_rows
-    new.fetch_rows
+  def self.fetch_rows(force: false)
+    new.fetch_rows(force: force)
+  end
+
+  # 類型 → 寬限天數。讀取失敗時回傳空 Hash（視為沒有寬限），不讓整頁掛掉。
+  def self.fetch_grace_days(force: false)
+    new.fetch_grace_days(force: force)
   end
 
   def fetch_rows
@@ -225,7 +236,8 @@ module Sheets
       planned_completion_date actual_completion_date delay_days task_type
     ].freeze
 
-    REQUIRED_KEYS = %i[project_name task_name status owner].freeze
+    REQUIRED_KEYS = %i[project_name task_name owner].freeze
+    DEFAULT_STATUS = "未完成"  # status 空白時補上，不跳過該列（需求 4.3a）
 
     def call
       rows = SheetsApiClient.fetch_rows
@@ -591,7 +603,7 @@ Controller 根據 `result.failure_code` 對應 HTTP 狀態碼，統一回傳：
 
 ### Property 11: 不完整紀錄篩選正確性
 
-*For any* 任務 Hash 陣列（混合完整與缺欄位紀錄），`reject_invalid_records` 的輸出必須恰好排除所有 `project_name`／`task_name`／`status`／`owner` 任一欄為空白的紀錄，其餘完整紀錄必須全數保留、不受影響。
+*For any* 任務 Hash 陣列（混合完整與缺欄位紀錄），`reject_invalid_records` 的輸出必須恰好排除所有 `project_name`／`task_name`／`owner` 任一欄為空白的紀錄，其餘完整紀錄必須全數保留、不受影響；`status` 為空白的紀錄不得被排除（已於 `normalize_record` 補為 `"未完成"`，見需求 4.3a）。
 
 **Validates: Requirements 4.3**
 
@@ -620,7 +632,8 @@ Controller 根據 `result.failure_code` 對應 HTTP 狀態碼，統一回傳：
 - 空值日期 → 驗證輸出為 `nil`
 - 負數 `delay_days`（如 `"-4"`）→ 驗證轉為 `-4`（Integer）
 - 非數字 `delay_days`（如 `"TBD"`）→ 驗證保留原始字串
-- `project_name`、`task_name`、`status` 或 `owner` 任一欄為空白 → 驗證回傳 `failure_code: :invalid_data_format`
+- `project_name`、`task_name` 或 `owner` 任一欄為空白 → 驗證該筆被跳過（不再觸發 `:invalid_data_format`）
+- `status` 為空白 → 驗證該筆仍被保留，且 `status` 正規化為 `"未完成"`（需求 4.3a）
 - `SheetsApiClient` 拋出 `ClientError` 404 → 驗證 `failure_code: :sheet_not_found`
 - `SheetsApiClient` 拋出 `ClientError` 403 → 驗證 `failure_code: :access_denied`
 - `SheetsApiClient` 拋出 `StandardError`（憑證錯誤）→ 驗證 `failure_code: :internal_error`

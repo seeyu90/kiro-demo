@@ -49,13 +49,19 @@ RSpec.describe "Api::ProjectProgress", type: :request do
       end
     end
 
-    it "converts delay_days to Integer or nil" do
+    # delay_days 改由程式以工作日計算（需求 4.3b），不再照抄試算表的「延誤」欄。
+    # Task 1：「已完成」不在 COMPLETED_STATUSES（完成／已確認）之列＝未完成，預計 2026-01-05
+    # 早已逾期，故為到今天為止的工作日數（Integer）。
+    # Task 3：「已確認」＋當天完成 → 0。
+    it "returns delay_days as an Integer computed in workdays, or nil" do
       json = JSON.parse(response.body)
       task1 = json["Project A"].find { |t| t["task_name"] == "Task 1" }
       task2 = json["Project A"].find { |t| t["task_name"] == "Task 2" }
+      task3 = json["Project B"].find { |t| t["task_name"] == "Task 3" }
 
-      expect(task1["delay_days"]).to eq(1)
-      expect(task2["delay_days"]).to be_nil
+      expect(task1["delay_days"]).to be_a(Integer)
+      expect(task2["delay_days"]).to be_a(Integer)
+      expect(task3["delay_days"]).to eq(0)
       expect(task2["actual_completion_date"]).to be_nil
     end
   end

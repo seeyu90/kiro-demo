@@ -34,7 +34,7 @@ module Summary
     def call
       # 305 是核心資料（跟 Sheets::FetchProjectHistory 同一個取捨）：沒有 305 就沒有「有哪些
       # 專案、有沒有逾期任務」這個健康度儀表板最基本的依據，讀取失敗即整頁失敗。
-      progress_result = Sheets::FetchProjectProgress.result(scope: "all", incomplete_only: false)
+      progress_result = Sheets::FetchProjectProgress.result(scope: "all")
       return fail!(failure_code: progress_result.failure_code, message: progress_result.message) unless progress_result.success?
 
       roster = fetch_roster

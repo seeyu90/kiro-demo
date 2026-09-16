@@ -27,7 +27,7 @@ module Sheets
         self.roster_unavailable = true
       end
 
-      progress_result = Sheets::FetchProjectProgress.result(scope: "all", incomplete_only: false)
+      progress_result = Sheets::FetchProjectProgress.result(scope: "all")
       return propagate_failure(progress_result) unless progress_result.success?
 
       # 307 的專案命名跟 305/roster 是兩套完全獨立的體系（見 matched_burndown_issues 附註），

@@ -1,11 +1,24 @@
-<%# 305／306／307 共用的起訖日期區間篩選欄位：留白＝不限制。呼叫端在自己的 form_with 區塊內
-    render，並傳入 from:／to:（Date 或 nil），選填 min:／max:（Date，用已知資料範圍當
-    guardrail，避免使用者選到明知沒有資料的日期）。 %>
-<div class="control-group">
-  <label for="from">起始日期：</label>
-  <%= date_field_tag :from, from&.iso8601, min: min&.iso8601, max: max&.iso8601 %>
-</div>
-<div class="control-group">
-  <label for="to">結束日期：</label>
-  <%= date_field_tag :to, to&.iso8601, min: min&.iso8601, max: max&.iso8601 %>
-</div>
+<%# 305／306／307 共用的日期區間篩選：留白＝不限制。呼叫端在自己的 form_with 區塊內 render，
+    並傳入 from:／to:（Date 或 nil），選填：
+      min:／max: —— Date，用已知資料範圍當 guardrail，避免使用者選到明知沒有資料的日期
+      label:    —— 這組日期篩的是「哪一個日期」，各頁語意不同（305 是預計完成日、306 是統計
+                   期間、307 是週次），預設「日期區間」
+
+    起訖兩個欄位原本是兩個各自獨立的 .control-group、各有各的標籤，視覺權重跟「專案」
+    這種單一下拉選單一模一樣，但它們其實是一個概念（一個區間）被拆成兩格。改成一個標籤、
+    中間用「～」連接，讀起來才是一組篩選條件。
+
+    外層維持 fieldset（兩個輸入框確實是一組），但不畫外框——這一列裡只有「任務類型」「範圍」
+    那種多選項群組需要用外框圈起來，日期區間只有兩個輸入框，加了框反而比鄰居重。legend
+    視覺隱藏，留給螢幕閱讀器。 %>
+<% label ||= "日期區間" %>
+<fieldset class="date-range-filter">
+  <legend><%= label %></legend>
+  <span class="filter-group-label" aria-hidden="true"><%= label %></span>
+  <%# 視覺上不再有「起始日期：」「結束日期：」兩個 label，改用 aria-label 保留無障礙名稱。 %>
+  <%= date_field_tag :from, from&.iso8601, min: min&.iso8601, max: max&.iso8601,
+                     "aria-label": "#{label}起始" %>
+  <span class="date-range-sep" aria-hidden="true">～</span>
+  <%= date_field_tag :to, to&.iso8601, min: min&.iso8601, max: max&.iso8601,
+                     "aria-label": "#{label}結束" %>
+</fieldset>

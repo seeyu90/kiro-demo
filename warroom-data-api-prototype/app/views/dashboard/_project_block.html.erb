@@ -1,6 +1,10 @@
 <% if tasks.empty? %>
   <p class="empty-state">目前無符合條件的任務</p>
 <% else %>
+  <%# data-label 供窄螢幕的卡片式版面當欄位標籤用（見 application.css 的 @media 區塊）：
+      768px 以下表頭會被隱藏、每一列改成直排，靠 td::before 印出 data-label 才知道每個值
+      是什麼欄位。原本窄螢幕是整表橫向捲動，7 欄在 375px 只看得到前 3 欄，「負責人」與
+      「延誤天數」——這頁最核心的兩個資訊——完全落在螢幕外，而且沒有任何提示。 %>
   <table class="project-tasks">
     <thead>
       <tr>
@@ -16,25 +20,24 @@
     <tbody>
       <% tasks.each do |task| %>
         <tr>
-          <td>
+          <td data-label="任務名稱">
             <%= task[:task_name] %>
             <% if overdue?(task) %>
               <span class="overdue-tag">逾期</span>
             <% end %>
           </td>
-          <td><%= task[:task_type] %></td>
-          <td>
+          <td data-label="類型"><%= task[:task_type] %></td>
+          <td data-label="狀態">
             <span class="status-badge status-<%= task[:status]&.to_s&.gsub(' ', '_') %>">
               <%= task[:status] %>
             </span>
           </td>
-          <td><%= task[:owner] %></td>
-          <td><%= task[:planned_completion_date] %></td>
-          <td><%= task[:actual_completion_date].presence || "—" %></td>
-          <td>
-            <% delay = task[:delay_days].to_i %>
-            <span class="delay-days <%= delay > 0 ? 'delayed' : 'on-time' %>">
-              <%= delay > 0 ? "+#{delay} 天" : (task[:delay_days].nil? ? "—" : "準時") %>
+          <td data-label="負責人"><%= task[:owner] %></td>
+          <td data-label="預計完成日期"><%= task[:planned_completion_date] %></td>
+          <td data-label="實際完成日期"><%= task[:actual_completion_date].presence || "—" %></td>
+          <td data-label="延誤天數">
+            <span class="delay-days <%= delay_days_class(task) %>">
+              <%= delay_days_label(task) %>
             </span>
           </td>
         </tr>

@@ -12,6 +12,9 @@ Rails.application.routes.draw do
   # Entry page
   root "home#index"
 
+  # 全站唯一的資料快取重新整理入口（按鈕位於入口頁）
+  post "refresh", to: "home#refresh", as: :refresh_cache
+
   # Dashboard routes
   get "/dashboard", to: "dashboard#index"
   get "/issues", to: "issues#index"

@@ -5,15 +5,15 @@
       (function () {
         try {
           var saved = localStorage.getItem("warroom-theme");
-          if (saved === "light") {
-            document.documentElement.setAttribute("data-theme", "light");
+          if (saved === "dark") {
+            document.documentElement.setAttribute("data-theme", "dark");
           }
         } catch (e) {
-          // localStorage 不可用：靜默忽略，維持預設深色
+          // localStorage 不可用：靜默忽略，維持預設淺色
         }
       })();
     </script>
-    <title><%= content_for(:title) || "戰情室 — 專案進度" %></title>
+    <title><%= content_for(:title) || "戰情室 — 305 專案任務進度" %></title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="application-name" content="戰情室">
@@ -41,8 +41,9 @@
         "use strict";
         var THEME_KEY = "warroom-theme";
 
+        // 預設為淺色：只有明確標上 data-theme="dark" 才是深色（見 application.css 的主題變數）。
         function getCurrentTheme() {
-          return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+          return document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
         }
 
         function applyThemeToggleLabel(theme) {
@@ -59,8 +60,8 @@
 
         function toggleTheme() {
           var next = getCurrentTheme() === "light" ? "dark" : "light";
-          if (next === "light") {
-            document.documentElement.setAttribute("data-theme", "light");
+          if (next === "dark") {
+            document.documentElement.setAttribute("data-theme", "dark");
           } else {
             document.documentElement.removeAttribute("data-theme");
           }
@@ -72,11 +73,24 @@
           }
         }
 
-        document.addEventListener("DOMContentLoaded", function () {
+        // Turbo Drive 換頁時只替換 <body>，不會再次觸發 DOMContentLoaded（那個事件整個工作階段
+        // 只發生一次），因此原本只綁 DOMContentLoaded 的寫法，在使用者從入口頁點進任一頁面之後，
+        // 新的按鈕元素身上就沒有任何 click 監聽器，按了完全沒反應——這就是「有時候切換按鈕會失效」
+        // 的原因（重新整理頁面後又正常，因為那是一次真正的初次載入）。改為同時監聽 turbo:load。
+        //
+        // 不改用 document 層的事件委派：body 內的 <script> 在每次 Turbo 換頁都會重新執行，
+        // 委派會一次次疊加同一個監聽器，變成一次點擊切換兩次（看起來同樣像沒反應）。綁在按鈕
+        // 元素上則沒有這個問題（每次換頁都是全新的元素），再用 dataset 旗標防止重複綁定。
+        function setupThemeToggle() {
           applyThemeToggleLabel(getCurrentTheme());
           var btn = document.getElementById("theme-toggle");
-          if (btn) btn.addEventListener("click", toggleTheme);
-        });
+          if (!btn || btn.dataset.themeBound) return;
+          btn.dataset.themeBound = "1";
+          btn.addEventListener("click", toggleTheme);
+        }
+
+        document.addEventListener("DOMContentLoaded", setupThemeToggle);
+        document.addEventListener("turbo:load", setupThemeToggle);
       })();
     </script>
 
@@ -84,9 +98,8 @@
       (function () {
         "use strict";
         // 篩選表單只更新對應的 Turbo Frame（見 dashboard/index.html.erb、issues/index.html.erb，
-        // 後者一個頁面有兩個獨立表單；Dashboard 的表單則有兩個送出按鈕：套用篩選／重新整理資料），
-        // 送出期間停用該表單內所有送出按鈕、把「實際被點擊的那個」文字改成載入中提示，完成後
-        // 全部恢復，避免使用者以為沒反應而重複點擊。
+        // 後者一個頁面有兩個獨立表單），送出期間停用該表單內所有送出按鈕、把「實際被點擊的
+        // 那個」文字改成載入中提示，完成後全部恢復，避免使用者以為沒反應而重複點擊。
         //
         // 用事件委派綁在 document 上（而非個別表單節點）：issues/index.html.erb 的表單位於
         // 會被 Turbo Frame 替換掉的 turbo-frame 內，每次篩選送出後表單都是全新的 DOM 節點，

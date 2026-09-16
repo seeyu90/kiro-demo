@@ -5,7 +5,16 @@ require "rails_helper"
 RSpec.describe ProjectProgressSheetsClient do
   include ActiveSupport::Testing::TimeHelpers
 
-  let(:header_row) { [ "專案名稱", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "延誤" ] }
+  # 來源是以年度命名的分頁（n8n 從 Slack 同步），欄位 A~J。
+  let(:source_header) do
+    [ "sheetName", "專案名稱", "類型", "任務名稱", "狀態", "負責人", "預計完成日期", "實際完成日期", "最後更新", "record_key" ]
+  end
+  let(:source_row) do
+    [ "2026", "P1", "功能", "T1", "完成", "Alice", "2026/1/1", "2026/1/2", "2026/1/2 10:00", "k1" ]
+  end
+  # 對外仍維持既有列格式，呼叫端不需要知道來源換了分頁。
+  let(:output_header) { described_class::OUTPUT_HEADER }
+  let(:output_row) { [ "P1", "T1", "完成", "Alice", "2026/1/1", "2026/1/2", nil, "功能" ] }
   let(:fake_creds_json) { '{"type":"service_account","project_id":"fake"}' }
 
   before do
@@ -21,7 +30,11 @@ RSpec.describe ProjectProgressSheetsClient do
       .and_return(fake_creds_json)
   end
 
-  # rows_by_range: { "功能!A:G" => [[...], ...] or nil, ... }
+  def main_range
+    "#{described_class::SHEET_NAME}#{described_class::RANGE_SUFFIX}"
+  end
+
+  # rows_by_range: { "2026!A:J" => [[...], ...] or nil }
   def stub_service_for(rows_by_range)
     fake_service = double("SheetsService")
     allow(Google::Apis::SheetsV4::SheetsService).to receive(:new).and_return(fake_service)
@@ -35,50 +48,48 @@ RSpec.describe ProjectProgressSheetsClient do
     fake_service
   end
 
-  def all_sheets_rows(header_only: false)
-    described_class::SHEET_NAMES.each_with_object({}) do |name, acc|
-      row = [ "#{name}-project", "#{name}-task", "done", "owner", "2026/1/1", "2026/1/2", "0" ]
-      acc["#{name}!A:G"] = header_only ? [ header_row ] : [ header_row, row ]
-    end
+  def source_rows(header_only: false)
+    { main_range => header_only ? [ source_header ] : [ source_header, source_row ] }
   end
 
   describe ".fetch_rows" do
     context "when Rails credentials exist" do
       before { stub_credentials }
 
-      it "calls the API once per type sheet with correct parameters" do
-        fake_service = stub_service_for(all_sheets_rows)
+      it "reads the year sheet once with the expected range" do
+        fake_service = stub_service_for(source_rows)
 
         described_class.fetch_rows
 
-        described_class::SHEET_NAMES.each do |name|
-          expect(fake_service).to have_received(:get_spreadsheet_values)
-            .with(described_class::SPREADSHEET_ID, "#{name}!A:G", value_render_option: "FORMATTED_VALUE")
-            .once
-        end
+        expect(fake_service).to have_received(:get_spreadsheet_values)
+          .with(described_class::SPREADSHEET_ID, main_range, value_render_option: "FORMATTED_VALUE")
+          .once
       end
 
-      it "merges all sheets' rows, keeping only the first sheet's header row" do
-        stub_service_for(all_sheets_rows)
-
-        result = described_class.fetch_rows
-        tagged_header = header_row + [ "類型" ]
-
-        expect(result.first).to eq(tagged_header)
-        expect(result.count { |row| row == tagged_header }).to eq(1)
-        expect(result.size).to eq(described_class::SHEET_NAMES.size + 1)
-      end
-
-      it "tags each data row with its originating sheet name as an 8th element" do
-        stub_service_for(all_sheets_rows)
+      # 類型是來源資料的一個欄位，不再靠「這一列是從哪個分頁抓的」推斷，所以「未分類」這種
+      # 沒有對應衍生分頁的任務也讀得到（舊做法會整批漏掉）。
+      it "remaps the source columns onto the existing row contract, type included" do
+        uncategorized = [ "2026", "P2", "未分類", "T2", "未完成", "Bob", "", "", "", "k2" ]
+        stub_service_for(main_range => [ source_header, source_row, uncategorized ])
 
         result = described_class.fetch_rows
 
-        described_class::SHEET_NAMES.each do |name|
-          expect(result).to include(
-            [ "#{name}-project", "#{name}-task", "done", "owner", "2026/1/1", "2026/1/2", "0", name ]
-          )
-        end
+        expect(result.first).to eq(output_header)
+        expect(result[1]).to eq(output_row)
+        expect(result[2]).to eq([ "P2", "T2", "未完成", "Bob", "", "", nil, "未分類" ])
+      end
+
+      it "pads short rows (trailing empty cells trimmed by the Sheets API) so columns do not shift" do
+        short_row = [ "2026", "P3", "PR", "T3", "未完成", "Carol" ] # 預計/實際/最後更新/record_key 皆空
+        stub_service_for(main_range => [ source_header, short_row ])
+
+        expect(described_class.fetch_rows.last).to eq([ "P3", "T3", "未完成", "Carol", nil, nil, nil, "PR" ])
+      end
+
+      it "returns an empty array when the sheet has no rows at all" do
+        stub_service_for(main_range => nil)
+
+        expect(described_class.fetch_rows).to eq([])
       end
     end
 
@@ -90,11 +101,11 @@ RSpec.describe ProjectProgressSheetsClient do
       end
 
       it "uses the environment variable for credentials" do
-        stub_service_for(all_sheets_rows(header_only: true))
+        stub_service_for(source_rows(header_only: true))
 
         result = described_class.fetch_rows
 
-        expect(result).to eq([ header_row + [ "類型" ] ])
+        expect(result).to eq([ output_header ])
       end
     end
 
@@ -102,49 +113,6 @@ RSpec.describe ProjectProgressSheetsClient do
       it "raises StandardError with a Chinese message" do
         expect { described_class.fetch_rows }
           .to raise_error(StandardError, /找不到 Google Service Account 憑證/)
-      end
-    end
-
-    context "when Google API returns successfully" do
-      before { stub_credentials }
-
-      it "returns the merged array of rows" do
-        stub_service_for(all_sheets_rows)
-
-        result = described_class.fetch_rows
-
-        expect(result).to eq(
-          [ header_row + [ "類型" ] ] + described_class::SHEET_NAMES.map do |name|
-            [ "#{name}-project", "#{name}-task", "done", "owner", "2026/1/1", "2026/1/2", "0", name ]
-          end
-        )
-      end
-
-      it "pads short rows (trailing empty cells trimmed by the Sheets API) before tagging, so the type lands in the 8th slot" do
-        # Google Sheets omits trailing empty cells: a row with a blank "延誤" column
-        # comes back with only 6 elements instead of 7.
-        short_row = [ "功能-project", "功能-task", "done", "owner", "2026/1/1", "2026/1/2" ]
-        rows = all_sheets_rows
-        rows["功能!A:G"] = [ header_row, short_row ]
-        stub_service_for(rows)
-
-        result = described_class.fetch_rows
-
-        tagged_short_row = result.find { |row| row[0] == "功能-project" }
-        expect(tagged_short_row).to eq(short_row + [ nil, "功能" ])
-      end
-
-      it "treats a sheet with a nil response as contributing no rows" do
-        rows = all_sheets_rows
-        rows["PR!A:G"] = nil
-        stub_service_for(rows)
-
-        result = described_class.fetch_rows
-
-        # 功能(header+data) + PR(nil→0) + 調整/遺漏/臭蟲(data only, header dropped) = 2+0+1+1+1
-        expect(result).not_to include(nil)
-        expect(result.size).to eq(5)
-        expect(result).not_to include([ "PR-project", "PR-task", "done", "owner", "2026/1/1", "2026/1/2", "0", "PR" ])
       end
     end
 
@@ -190,7 +158,7 @@ RSpec.describe ProjectProgressSheetsClient do
       # 測試環境的 cache_store 是 :null_store（快取實質停用），無法驗證真的「命中快取」，
       # 這裡換成真實的 MemoryStore，只為了確認 fetched_at 真的會被寫入並可讀回。
       stub_credentials
-      stub_service_for(all_sheets_rows(header_only: true))
+      stub_service_for(source_rows(header_only: true))
       allow(Rails).to receive(:cache).and_return(ActiveSupport::Cache::MemoryStore.new)
 
       travel_to Time.zone.parse("2026-03-01 09:00:00") do
@@ -203,7 +171,7 @@ RSpec.describe ProjectProgressSheetsClient do
   describe ".fetch_rows with force: true" do
     it "passes force: true through to Rails.cache.fetch, bypassing any existing cache entry" do
       stub_credentials
-      stub_service_for(all_sheets_rows(header_only: true))
+      stub_service_for(source_rows(header_only: true))
 
       expect(Rails.cache).to receive(:fetch)
         .with(described_class::CACHE_KEY, hash_including(force: true))
@@ -216,14 +184,14 @@ RSpec.describe ProjectProgressSheetsClient do
       # 真實情境：快取內已有先前成功寫入的資料，使用者按「重新整理資料」(force: true)，
       # 這次 API 呼叫卻失敗（額度、網路錯誤等）。舊的快取資料與 fetched_at 都不應被
       # 這次失敗的嘗試污染──fetched_at 必須仍然反映「上一次真正成功」的時間，
-      # 否則 Dashboard 會顯示「資料剛剛更新」，但實際資料早就過期了。
+      # 否則後續依 fetched_at 做的判斷會以為資料是新的。
       allow(Rails).to receive(:cache).and_return(ActiveSupport::Cache::MemoryStore.new)
       stub_credentials
 
       success_time = Time.zone.parse("2026-03-01 09:00:00")
       failure_time = Time.zone.parse("2026-03-01 09:02:00")
 
-      fake_service = stub_service_for(all_sheets_rows(header_only: true))
+      fake_service = stub_service_for(source_rows(header_only: true))
 
       travel_to success_time do
         described_class.fetch_rows
