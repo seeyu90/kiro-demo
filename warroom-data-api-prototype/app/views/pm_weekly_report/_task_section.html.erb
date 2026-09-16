@@ -1,0 +1,40 @@
+<%# 單一專案的 305 任務表（欄位見需求 2.8）。variant 決定最後一欄：
+    :overdue → 逾期天數（即時計算，不用試算表的「延遲天數」，見需求 2.9）；
+    :completed → 實際完成日；其餘（:due）→ 不加欄位。 %>
+<table class="project-tasks">
+  <thead>
+    <tr>
+      <th scope="col">任務名稱</th>
+      <th scope="col">類型</th>
+      <th scope="col">狀態</th>
+      <th scope="col">負責人</th>
+      <th scope="col">預計完成日</th>
+      <% if variant == :overdue %>
+        <th scope="col">逾期天數</th>
+      <% elsif variant == :completed %>
+        <th scope="col">實際完成日</th>
+      <% end %>
+    </tr>
+  </thead>
+  <tbody>
+    <% items.each do |task| %>
+      <%= tag.tr(class: ("row-overdue" if variant == :overdue)) do %>
+        <td><%= task[:task_name] %></td>
+        <td><%= task[:task_type].presence || "—" %></td>
+        <td>
+          <span class="status-badge status-<%= task[:status].to_s.gsub(" ", "_") %>"><%= task[:status].presence || "—" %></span>
+        </td>
+        <td><%= task[:owner].presence || "—" %></td>
+        <td><%= pm_weekly_date_label(task[:planned_completion_date]) %></td>
+        <% if variant == :overdue %>
+          <td>
+            <% days = pm_weekly_overdue_days(task) %>
+            <span class="delay-days delayed"><%= days ? "#{days} 天" : "—" %></span>
+          </td>
+        <% elsif variant == :completed %>
+          <td><%= pm_weekly_date_label(task[:actual_completion_date]) %></td>
+        <% end %>
+      <% end %>
+    <% end %>
+  </tbody>
+</table>

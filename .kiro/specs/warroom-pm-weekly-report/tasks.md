@@ -64,7 +64,7 @@ Wave 5   8. RSpec（Actor / Request / Helper）
   - **驗收**：helper spec 以 `travel_to` 驗證三個方法的輸出字串
   - _需求：1.1、2.9、3.5_
 
-- [ ] 6. 新增 View：`index` + `_task_section` + `_issue_section` + `_phase_section` + `_project_group`
+- [x] 6. 新增 View：`index` + `_task_section` + `_issue_section` + `_phase_section` + `_project_group`
   - 四個區塊（逾期未完成／本週工作／下週工作／階段追蹤），各顯示筆數
   - 空區塊顯示空狀態文字，不隱藏區塊
   - 專案下拉篩選（`?project=`），維持選取狀態
@@ -74,7 +74,7 @@ Wave 5   8. RSpec（Actor / Request / Helper）
     只剩該專案的 305／306 項目、階段追蹤區塊筆數不變
   - _需求：1.1–1.4、2.8、3.5、4.1、4.3、5.1–5.4、6.2_
 
-- [ ] 7. `app/views/home/index.html.erb` 新增 PM 週報 `.entry-card` 連結
+- [x] 7. `app/views/home/index.html.erb` 新增 PM 週報 `.entry-card` 連結
   - **驗收**：入口頁出現該連結且可點進 `/pm_weekly_report`
   - _需求：1.1_
 

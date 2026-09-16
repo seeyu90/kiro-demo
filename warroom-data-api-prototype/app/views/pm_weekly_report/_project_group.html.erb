@@ -1,0 +1,13 @@
+<%# 305／306 項目的專案分組外框（需求 5.1）。分組空的時候仍要渲染空狀態文字而不是整段消失，
+    PM 才能確認「確實沒有」而不是「漏抓」（需求 1.4）。
+    item_partial 決定組內用哪張表（task_section／issue_section），variant 決定該表的額外欄位。 %>
+<% if grouped.blank? %>
+  <p class="empty-state"><%= empty_text %></p>
+<% else %>
+  <% grouped.each do |project_name, items| %>
+    <section class="project-block">
+      <h4><%= project_name %>（<%= items.size %>）</h4>
+      <%= render partial: item_partial, locals: { items: items, variant: variant } %>
+    </section>
+  <% end %>
+<% end %>

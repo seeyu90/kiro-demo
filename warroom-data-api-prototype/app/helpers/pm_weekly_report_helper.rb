@@ -46,4 +46,11 @@ module PmWeeklyReportHelper
     minutes = (elapsed / 60).floor
     minutes.zero? ? "資料剛剛更新" : "資料更新於 #{minutes} 分鐘前"
   end
+
+  # 區塊筆數（需求 1.3）。Actor 輸出的 305／306 清單都是 { 專案名稱 => [項目, ...] } 的分組
+  # 結構，畫面要顯示的卻是跨專案的總筆數，故在此攤平相加；一個區塊常由兩三個分組結構組成
+  # （例如「本週工作」＝本週待完成＋本週已完成＋306 議題），所以收可變參數。
+  def pm_weekly_count(*grouped)
+    grouped.sum { |group| group.values.sum(&:size) }
+  end
 end

@@ -83,4 +83,23 @@ RSpec.describe PmWeeklyReportHelper, type: :helper do
       expect(helper.pm_weekly_freshness_label(nil)).to be_nil
     end
   end
+
+  describe "#pm_weekly_count" do
+    it "flattens one grouped structure into a total item count" do
+      grouped = { "AG 亞炬" => [ {}, {} ], "Virtuous HRM" => [ {} ] }
+
+      expect(helper.pm_weekly_count(grouped)).to eq(3)
+    end
+
+    it "adds up several grouped structures (一個區塊由多個清單組成)" do
+      tasks = { "AG 亞炬" => [ {}, {} ] }
+      issues = { "Virtuous HRM" => [ {} ] }
+
+      expect(helper.pm_weekly_count(tasks, issues)).to eq(3)
+    end
+
+    it "returns zero when every group is empty" do
+      expect(helper.pm_weekly_count({}, {})).to eq(0)
+    end
+  end
 end
