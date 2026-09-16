@@ -1,5 +1,5 @@
 <svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-  <!-- 深色底，呼應戰情室 dashboard 的深色主題（--color-surface）。 -->
+  <!-- 深色底，呼應戰情室 dashboard 的深色主題（CSS 變數 color-surface）。 -->
   <circle cx="256" cy="256" r="256" fill="#151a24"/>
 
   <!-- 單圈雷達環：線寬加粗，確保縮到瀏覽器分頁的 16px favicon 仍看得出是個環。 -->
