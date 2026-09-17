@@ -77,9 +77,16 @@ module Sheets
       # KPI 已經全部改成即時算（見 compute_month_kpi），不再依賴 month_kpi 的涵蓋範圍——月份
       # 選單改依 issues 實際的 start_date 範圍，使用者才能查到 month_kpi 表本來就沒涵蓋到的
       # 更早期資料（該表只有 2026 年幾個月，但 issues 一路回溯到 2023 年）。
+      # start_date 若正規化失敗會保留原始字串（見 normalize_date 的說明，故意不拋例外），
+      # 只取前 7 碼可能產生「看起來像月份、實際上不是合法日期」的字串（例如原始資料月份
+      # 打錯的 "2026/13/05" 會被正規化成 "2026-13-05"、切出 "2026-13"）；IssuesHelper
+      # #available_month_bounds 會拿這個清單第一筆／最後一筆去 Date.parse 算輸入欄位的
+      # min/max，若混進不合法的月份字串會讓整個 /issues 頁面 500。故在這裡先過濾掉無法
+      # 解析成真實日期的月份，不合法的原始資料只是不會被列進月份選單，不會讓頁面掛掉。
       current_year_month = Date.current.strftime("%Y-%m")
       issue_year_months = issues.filter_map { |i| i[:start_date]&.slice(0, 7) }
-      self.available_months = (issue_year_months + [ current_year_month ]).uniq.sort
+      self.available_months =
+        (issue_year_months + [ current_year_month ]).uniq.select { |ym| valid_year_month?(ym) }.sort
 
       self.selected_from, self.selected_to = resolve_range(current_year_month)
 
@@ -410,6 +417,15 @@ module Sheets
 
       date = Date.parse(date_str.to_s)
       (from_bound.blank? || date >= from_bound) && (to_bound.blank? || date <= to_bound)
+    rescue ArgumentError, TypeError
+      false
+    end
+
+    # 供 available_months 過濾用：確認「YYYY-MM」字串真的是合法月份（月份 1~12），不是單純
+    # 形狀符合但語意錯誤的字串（例如原始資料月份打錯的 "2026-13"）。
+    def valid_year_month?(year_month)
+      Date.parse("#{year_month}-01")
+      true
     rescue ArgumentError, TypeError
       false
     end

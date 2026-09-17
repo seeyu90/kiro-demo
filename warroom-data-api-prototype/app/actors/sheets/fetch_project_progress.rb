@@ -55,7 +55,7 @@ module Sheets
       rows = ProjectProgressSheetsClient.fetch_rows(force: force)
       records = parse_rows(rows)
       normalized = records.map { |record| normalize_record(record) }
-      grace_days = ProjectProgressSheetsClient.fetch_grace_days
+      grace_days = parse_grace_days(ProjectProgressSheetsClient.fetch_grace_days(force: force))
       valid_records = reject_invalid_records(normalized).map do |record|
         record.merge(delay_days: self.class.delay_workdays(record, grace_days: grace_days))
       end
@@ -172,6 +172,20 @@ module Sheets
         # 試算表上混用了公式與手填，用真實資料驗算過 456 筆已完成任務，只有 84% 對得上
         # 工作日差，其餘對不上任何單一公式；改由 .delay_workdays 以工作日即時計算。
         COLUMN_KEYS.zip(values[0, 6] + [ nil, values[7] ]).to_h
+      end
+    end
+
+    # 類型 → 寬限天數（Hash<String, Integer>）。讀不到或格式不符的列一律略過（業務自己維護
+    # 在試算表上，難免有填錯的列），不讓單一壞列擋掉其他寬限設定，也不讓整頁 305 因此掛掉。
+    def parse_grace_days(rows)
+      return {} if rows.nil? || rows.size <= 1
+
+      rows.drop(1).each_with_object({}) do |row, grace|
+        type = row[0].to_s.strip
+        next if type.empty?
+
+        days = Integer(row[1].to_s.strip, 10) rescue next
+        grace[type] = days
       end
     end
 

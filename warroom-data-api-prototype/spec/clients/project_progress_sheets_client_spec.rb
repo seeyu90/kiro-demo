@@ -205,4 +205,75 @@ RSpec.describe ProjectProgressSheetsClient do
       end
     end
   end
+
+  describe ".fetch_grace_days" do
+    def grace_range
+      "#{described_class::GRACE_SHEET_NAME}#{described_class::GRACE_RANGE_SUFFIX}"
+    end
+
+    def stub_grace_service_for(rows)
+      fake_service = double("SheetsService")
+      allow(Google::Apis::SheetsV4::SheetsService).to receive(:new).and_return(fake_service)
+      allow(fake_service).to receive(:authorization=)
+      response = double("Response", values: rows)
+      allow(fake_service).to receive(:get_spreadsheet_values)
+        .with(described_class::SPREADSHEET_ID, grace_range, value_render_option: "FORMATTED_VALUE")
+        .and_return(response)
+      fake_service
+    end
+
+    # 只負責取得原始列（不驗證、不轉成 Hash），比照 .fetch_rows；格式驗證與 Integer 轉換
+    # 交給 Sheets::FetchProjectProgress#parse_grace_days（Actor 層）。
+    it "returns the raw rows including the header row, unparsed" do
+      stub_credentials
+      stub_grace_service_for([ [ "類型", "寬限天數" ], [ "PR", "2" ] ])
+
+      expect(described_class.fetch_grace_days).to eq([ [ "類型", "寬限天數" ], [ "PR", "2" ] ])
+    end
+
+    it "returns an empty array when the sheet has no rows" do
+      stub_credentials
+      stub_grace_service_for(nil)
+
+      expect(described_class.fetch_grace_days).to eq([])
+    end
+
+    # 寬限天數只是加分項，讀取失敗（額度、權限等外部錯誤）不該讓整頁 305 掛掉，改為記錄
+    # 錯誤後退回空陣列，由 Actor 當成「沒有寬限」處理。
+    it "logs and returns an empty array when the Google API raises an error, instead of letting it propagate" do
+      stub_credentials
+      fake_service = double("SheetsService")
+      allow(Google::Apis::SheetsV4::SheetsService).to receive(:new).and_return(fake_service)
+      allow(fake_service).to receive(:authorization=)
+      allow(fake_service).to receive(:get_spreadsheet_values).and_raise(Google::Apis::ClientError.new("403 Forbidden"))
+
+      expect(Rails.logger).to receive(:error).with(/ProjectProgressSheetsClient#fetch_grace_days/)
+      expect(described_class.fetch_grace_days).to eq([])
+    end
+
+    # 這裡刻意連 Google::Apis::Error 以外的例外（含程式本身的 bug）都一併接住並記錄，是明確
+    # 的設計取捨（見 fetch_grace_days 的說明）：不讓寬限天數功能本身的任何問題連累整頁失敗，
+    # 但也不再對錯誤保持沉默。
+    it "logs and returns an empty array for a non-Google internal error too (deliberately broad rescue, no longer silent)" do
+      stub_credentials
+      fake_service = double("SheetsService")
+      allow(Google::Apis::SheetsV4::SheetsService).to receive(:new).and_return(fake_service)
+      allow(fake_service).to receive(:authorization=)
+      allow(fake_service).to receive(:get_spreadsheet_values).and_raise(NoMethodError, "undefined method")
+
+      expect(Rails.logger).to receive(:error).with(/ProjectProgressSheetsClient#fetch_grace_days/)
+      expect(described_class.fetch_grace_days).to eq([])
+    end
+
+    it "passes force: true through to Rails.cache.fetch, bypassing any existing cache entry" do
+      stub_credentials
+      stub_grace_service_for([ [ "類型", "寬限天數" ] ])
+
+      expect(Rails.cache).to receive(:fetch)
+        .with(described_class::GRACE_CACHE_KEY, hash_including(force: true))
+        .and_call_original
+
+      described_class.fetch_grace_days(force: true)
+    end
+  end
 end

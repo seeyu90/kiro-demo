@@ -95,14 +95,14 @@
               <span class="stat-value"><%= month_kpi_rate_display(@selected_month_record[:block_rate]) %></span>
               <span class="stat-label">
                 攔截率
-                <%= render "shared/info_tooltip", text: "測試 ÷（客訴＋測試）× 100，其他類型不計入分子分母；反映問題在測試階段被攔下的比例" %>
+                <%= render "shared/info_tooltip", size: "small", text: "測試 ÷（客訴＋測試）× 100，其他類型不計入分子分母；反映問題在測試階段被攔下的比例" %>
               </span>
             </div>
             <div class="stat-item">
               <span class="stat-value"><%= month_kpi_rate_display(@selected_month_record[:sla_rate]) %></span>
               <span class="stat-label">
                 SLA達標率
-                <%= render "shared/info_tooltip", text: "客訴中在 1 個工作天內完成的筆數 ÷ 客訴總數 × 100（SLA 天數＝1 天）" %>
+                <%= render "shared/info_tooltip", size: "small", text: "客訴中在 1 個工作天內完成的筆數 ÷ 客訴總數 × 100（SLA 天數＝1 天）" %>
               </span>
             </div>
           </div>

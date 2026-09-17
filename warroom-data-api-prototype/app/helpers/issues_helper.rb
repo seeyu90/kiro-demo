@@ -26,12 +26,19 @@ module IssuesHelper
   # 起訖日期輸入欄位的 min/max guardrail：用 @available_months（"YYYY-MM" 字串陣列，已排序）
   # 換算成第一個月的月初與最後一個月的月底，避免使用者選到明知沒有資料的日期。
   # @available_months 為空時（理論上不會發生，fetch_issue_dashboard 一定會納入當月）回傳 nil。
+  #
+  # Sheets::FetchIssueDashboard 已經先過濾掉無法解析成合法月份的字串（見該檔案
+  # valid_year_month? 的說明），這裡的 rescue 是第二層防線：即使未來上游的過濾邏輯有漏網
+  # 之魚，也不該讓整個 /issues 頁面因為一個月份選單的輸入而 500——沒有可靠的日期範圍，
+  # 回傳 [nil, nil]（不限制輸入欄位的 min/max）比讓頁面掛掉安全。
   def available_month_bounds
     return [ nil, nil ] if @available_months.blank?
 
     first_day = Date.parse("#{@available_months.first}-01")
     last_day = Date.parse("#{@available_months.last}-01").end_of_month
     [ first_day, last_day ]
+  rescue ArgumentError, TypeError
+    [ nil, nil ]
   end
 
   # 議題 KPI 卡片的比率欄位（攔截率／平均天數／SLA達標率），全部即時從 issues 算（見
@@ -116,9 +123,19 @@ module IssuesHelper
 
   # 依專案分類表格的可排序欄位標題連結：同一欄位再次點選時反轉方向，切換到不同欄位時預設降冪
   # （筆數統計通常最關心「最多」的專案）；連結保留目前所選起訖日期，並固定停留在「統計摘要」
-  # 分頁籤。同時帶入 project／status，因為這也是一個不含這兩個 query params 的 GET 請求，
+  # 分頁籤。同時帶入 project／status／type，因為這也是一個不含這些 query params 的 GET 請求，
   # 若不帶入，點擊排序連結會把「議題資料」分頁目前的篩選值重設為預設值（與兩個表單各自獨立的
   # 設計意圖牴觸）。
+  #
+  # status／type 帶入時要注意：這兩個是陣列參數，Rails 的路由序列化遇到「空陣列」會直接把整個
+  # query key 從網址拿掉（實測 `issues_path(status: [])` 產生的網址完全沒有 status 參數），
+  # 這樣一來跟「使用者根本沒送出過篩選表單」（也是沒有 status 參數）就無法區分——對應到
+  # Controller／Actor 端會被誤判成後者，套用 DEFAULT_STATUSES 預設值，等於使用者主動清空
+  # 勾選（=不篩選）的選擇被悄悄復原。用 `.presence || [""]` 讓「空陣列」改送出一個內容為空
+  # 字串的陣列（`status[]=`），保留這個 query key「有被送出」的事實，讓 Controller 端的
+  # `params.key?(:status)` 判斷維持為真，同時 `.reject(&:blank?)` 還是會把空字串濾掉、
+  # 還原成正確的空陣列。跟表單那邊用隱藏欄位（`value=""`）保底是同一個道理，只是換一種
+  # 送出方式。
   def breakdown_sort_link(key, label)
     active = @breakdown_sort == key.to_s
     next_dir = active && @breakdown_dir == "desc" ? "asc" : "desc"
@@ -127,7 +144,9 @@ module IssuesHelper
     link_to label + indicator,
              issues_path(from: @selected_from&.iso8601, to: @selected_to&.iso8601, tab: "stats",
                           breakdown_sort: key, breakdown_dir: next_dir,
-                          project: @selected_project, status: @selected_status),
+                          project: @selected_project,
+                          status: @selected_status.presence || [ "" ],
+                          type: @selected_type.presence || [ "" ]),
              class: "sort-button", "aria-label": "依「#{label}」排序"
   end
 

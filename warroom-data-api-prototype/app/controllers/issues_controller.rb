@@ -18,14 +18,14 @@ class IssuesController < ApplicationController
       from: from,
       to: to,
       project: params[:project].presence,
-      # 狀態／類型改成多選（比照 305 的 task_type[] 慣例）：params.key? 判斷「這次請求有沒有
+      # 狀態／類型改成多選（比照 305 的 task_type[] 慣例）：multi_param 判斷「這次請求有沒有
       # 帶這個 query param」，沒帶（使用者還沒送出過篩選表單）傳 nil 讓 Actor 套預設值；有帶
       # （即使全部取消勾選、值是空陣列）就照實傳陣列，交給 Actor 判斷是否要套用預設值。
-      status: params.key?(:status) ? Array(params[:status]).reject(&:blank?) : nil,
+      status: multi_param(:status, nil),
       breakdown_sort: BREAKDOWN_SORT_KEYS.include?(params[:breakdown_sort]) ? params[:breakdown_sort] : nil,
       breakdown_dir: BREAKDOWN_SORT_DIRS.include?(params[:breakdown_dir]) ? params[:breakdown_dir] : DEFAULT_BREAKDOWN_SORT_DIR,
       q: params[:q].presence,
-      type: params.key?(:type) ? Array(params[:type]).reject(&:blank?) : nil
+      type: multi_param(:type, nil)
     )
     if result.success?
       build_success(result)
@@ -41,7 +41,6 @@ class IssuesController < ApplicationController
     # 各自帶一個隱藏欄位 tab= 標明來源，送出後仍停留在原本的分頁，而非固定跳回第一個分頁。
     @active_tab = TABS.include?(params[:tab]) ? params[:tab] : DEFAULT_TAB
 
-    @month_kpi = MonthKpiBlueprint.render_as_hash(result.month_kpi)
     @available_months = result.available_months
     @selected_from = result.selected_from
     @selected_to = result.selected_to
@@ -57,9 +56,9 @@ class IssuesController < ApplicationController
     @statuses = result.statuses
     @types = result.types
     @selected_project = params[:project].presence
-    @selected_status = params.key?(:status) ? Array(params[:status]).reject(&:blank?) : DEFAULT_STATUSES.dup
+    @selected_status = multi_param(:status, DEFAULT_STATUSES.dup)
     @selected_q = params[:q].presence
-    @selected_type = params.key?(:type) ? Array(params[:type]).reject(&:blank?) : []
+    @selected_type = multi_param(:type, [])
     @issue_kpis = result.issue_kpis
 
     # 分頁交給 Pagy 處理（Countable 直接支援 Array，不需要額外的 gem extra）：先對 Actor 回傳
@@ -72,7 +71,6 @@ class IssuesController < ApplicationController
 
   def build_failure(message)
     @active_tab = DEFAULT_TAB
-    @month_kpi = []
     @daily_kpi = []
     @project_breakdown = []
     @breakdown_sort = nil
@@ -92,5 +90,13 @@ class IssuesController < ApplicationController
     @pagy = nil
     @issues = []
     @error = message
+  end
+
+  # status／type 皆為多選 query params（status[]／type[]）：params.key? 判斷「這次請求有沒有
+  # 帶這個 query param」，沒帶（使用者還沒送出過篩選表單）回傳 default；有帶（即使全部取消
+  # 勾選、值是空陣列）就照實回傳陣列。同一組判斷邏輯原本在 #index 與 #build_success 各寫兩次
+  # （status／type），抽成這個方法只差呼叫端各自要的 default。
+  def multi_param(key, default)
+    params.key?(key) ? Array(params[key]).reject(&:blank?) : default
   end
 end

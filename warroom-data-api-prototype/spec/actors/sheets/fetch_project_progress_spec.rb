@@ -93,6 +93,36 @@ RSpec.describe Sheets::FetchProjectProgress do
     end
   end
 
+  # 格式驗證與 Integer 轉換原本在 Client 層（ProjectProgressSheetsClient），已移到這裡
+  # （Actor 層），Client 只回傳原始列，比照 fetch_rows／parse_rows 的分工。
+  describe "#parse_grace_days" do
+    let(:actor) { described_class.new(ServiceActor::Result.to_result({})) }
+
+    it "maps rows to a Hash<type, integer_days>, dropping the header row" do
+      rows = [ [ "類型", "寬限天數" ], [ "PR", "2" ], [ "功能", "0" ] ]
+
+      expect(actor.send(:parse_grace_days, rows)).to eq({ "PR" => 2, "功能" => 0 })
+    end
+
+    it "skips a row whose type is blank" do
+      rows = [ [ "類型", "寬限天數" ], [ "", "2" ], [ "PR", "2" ] ]
+
+      expect(actor.send(:parse_grace_days, rows)).to eq({ "PR" => 2 })
+    end
+
+    it "skips a row whose grace-days value isn't a valid integer, instead of raising" do
+      rows = [ [ "類型", "寬限天數" ], [ "PR", "TBD" ], [ "功能", "1" ] ]
+
+      expect(actor.send(:parse_grace_days, rows)).to eq({ "功能" => 1 })
+    end
+
+    it "returns an empty Hash for nil or header-only input" do
+      expect(actor.send(:parse_grace_days, nil)).to eq({})
+      expect(actor.send(:parse_grace_days, [ [ "類型", "寬限天數" ] ])).to eq({})
+      expect(actor.send(:parse_grace_days, [])).to eq({})
+    end
+  end
+
   describe "#group_by_project" do
     let(:actor) { described_class.new(ServiceActor::Result.to_result({})) }
 
@@ -352,7 +382,13 @@ RSpec.describe Sheets::FetchProjectProgress do
       # 寬限天數由業務維護在試算表的「類型設定」分頁（例如 PR 給 2 天），程式即時讀取後
       # 從工作日數扣掉，扣完為負一律當 0。
       context "with 寬限天數 from the 類型設定 sheet" do
-        before { allow(ProjectProgressSheetsClient).to receive(:fetch_grace_days).and_return({ "PR" => 2, "功能" => 0 }) }
+        # fetch_grace_days 現在回傳原始列（比照 fetch_rows），Hash 化交給 Actor 的
+        # parse_grace_days 處理，故 stub 也要回傳原始列而非已經轉好的 Hash。
+        before do
+          allow(ProjectProgressSheetsClient).to receive(:fetch_grace_days).and_return(
+            [ [ "類型", "寬限天數" ], [ "PR", "2" ], [ "功能", "0" ] ]
+          )
+        end
 
         def delay_for_type(type, planned:, actual:)
           rows = [
@@ -659,6 +695,23 @@ RSpec.describe Sheets::FetchProjectProgress do
         expect(ProjectProgressSheetsClient).to receive(:fetch_rows).with(force: true).and_return(default_rows)
 
         described_class.result(force: true)
+      end
+
+      # fetch_grace_days 原本沒有跟著 fetch_rows 一起收到 force，force: true 時寬限天數仍
+      # 悄悄讀舊快取（最多 5 分鐘），與呼叫端「要求略過快取」的意圖不一致，已修正為兩者
+      # 一併轉發同一個 force 值。
+      it "also passes force: true through to ProjectProgressSheetsClient.fetch_grace_days when requested" do
+        allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_return(default_rows)
+        expect(ProjectProgressSheetsClient).to receive(:fetch_grace_days).with(force: true).and_return([])
+
+        described_class.result(force: true)
+      end
+
+      it "defaults fetch_grace_days's force to false when not given" do
+        allow(ProjectProgressSheetsClient).to receive(:fetch_rows).and_return(default_rows)
+        expect(ProjectProgressSheetsClient).to receive(:fetch_grace_days).with(force: false).and_return([])
+
+        result
       end
     end
 

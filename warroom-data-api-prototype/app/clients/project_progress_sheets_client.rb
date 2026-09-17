@@ -52,9 +52,10 @@ class ProjectProgressSheetsClient
     new.fetch_rows(force: force)
   end
 
-  # 類型 → 寬限天數（Hash<String, Integer>）。讀不到或格式不符的列一律略過，對照表整個讀不到
-  # 時回傳空 Hash，由呼叫端當成「沒有寬限」處理——寬限天數只是讓延誤天數更貼近業務定義，
-  # 不值得為了它讓整頁掛掉。
+  # 「類型設定」分頁的原始列（第 1 列為標題列）。格式驗證與 Integer 轉換交給呼叫端
+  # （Sheets::FetchProjectProgress）處理，這裡只負責取得原始資料，比照 fetch_rows。
+  # 對照表整個讀不到時回傳空陣列，由呼叫端當成「沒有寬限」處理——寬限天數只是讓延誤天數
+  # 更貼近業務定義，不值得為了它讓整頁掛掉。
   def self.fetch_grace_days(force: false)
     new.fetch_grace_days(force: force)
   end
@@ -75,12 +76,21 @@ class ProjectProgressSheetsClient
     end
   end
 
+  # 這裡刻意連非預期的內部錯誤（例如程式本身的 bug）都一併接住，是明確的設計取捨：寬限天數
+  # 只是讓延誤天數更貼近業務定義的加分項，即使抓取邏輯本身壞掉，也不該連累整頁 305 掛掉。
+  # 但原本完全靜默吞掉、沒有任何紀錄，會讓「程式本身的 bug」跟「試算表暫時讀不到」這兩種
+  # 完全不同的情況都變成「悄悄退回沒有寬限」，除錯時無從追起——故補上錯誤紀錄，行為
+  # （退回空陣列、不讓整頁失敗）維持不變，只是不再對錯誤保持沉默。
   def fetch_grace_days(force: false)
     Rails.cache.fetch(GRACE_CACHE_KEY, expires_in: CACHE_EXPIRY, force: force) do
       fetch_grace_days_from_api
     end
-  rescue Google::Apis::Error, StandardError
-    {}
+  rescue Google::Apis::Error, StandardError => e
+    Rails.logger.error(
+      "ProjectProgressSheetsClient#fetch_grace_days 讀取「#{GRACE_SHEET_NAME}」失敗，" \
+      "寬限天數退回空表：#{e.class}: #{e.message}"
+    )
+    []
   end
 
   private
@@ -115,6 +125,8 @@ class ProjectProgressSheetsClient
     ]
   end
 
+  # 只取原始列，不做業務層轉換或驗證（比照 fetch_rows_from_api）：格式驗證與 Integer 轉換
+  # 交給 Actor 層的 Sheets::FetchProjectProgress#parse_grace_days。
   def fetch_grace_days_from_api
     service = build_service
     response = service.get_spreadsheet_values(
@@ -122,15 +134,7 @@ class ProjectProgressSheetsClient
       "#{GRACE_SHEET_NAME}#{GRACE_RANGE_SUFFIX}",
       value_render_option: "FORMATTED_VALUE"
     )
-    rows = (response.values || []).map { |row| retag_utf8(row) }
-
-    rows.drop(1).each_with_object({}) do |row, grace|
-      type = row[0].to_s.strip
-      next if type.empty?
-
-      days = Integer(row[1].to_s.strip, 10) rescue next
-      grace[type] = days
-    end
+    (response.values || []).map { |row| retag_utf8(row) }
   end
 
   # google-apis-sheets_v4 回傳的儲存格字串會被標記為 ASCII-8BIT，即使實際內容是合法 UTF-8

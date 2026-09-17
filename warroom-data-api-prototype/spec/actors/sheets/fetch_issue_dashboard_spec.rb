@@ -361,6 +361,26 @@ RSpec.describe Sheets::FetchIssueDashboard do
       end
     end
 
+    # available_months 改依 issues 的 start_date 算（不再受限於 month_kpi 的涵蓋範圍），
+    # 但 start_date 若正規化失敗會保留原始字串（見 normalize_date），slice(0,7) 可能切出
+    # 「形狀像月份、實際上不是合法日期」的字串（例如月份打錯的 "2026-13-05"）。
+    # IssuesHelper#available_month_bounds 會拿 available_months 的第一筆／最後一筆做
+    # Date.parse，混進不合法字串會讓整個 /issues 頁面 500，故這裡要先過濾掉。
+    context "available_months filters out unparseable year-month strings" do
+      let(:issue_rows) do
+        [
+          %w[issue_id subject type tracker status assigned_to start_date due_date work_days sheet_name project],
+          [ "9001", "合法日期", "Complaint", "臭蟲", "新建立", "A", "2026/8/1", "", "", "raw_2026", "P" ],
+          [ "9002", "月份打錯", "Complaint", "臭蟲", "新建立", "A", "2026/13/5", "", "", "raw_2026", "P" ]
+        ]
+      end
+
+      it "excludes the malformed month (2026-13) but keeps the valid one (2026-08)" do
+        expect(result.available_months).to include("2026-08")
+        expect(result.available_months).not_to include("2026-13")
+      end
+    end
+
     # 所有欄位現在全部即時從 issues 算（見 Sheets::FetchIssueDashboard#compute_month_kpi），
     # 不再讀 month_kpi 表，故這裡的 month_kpi_rows 刻意留著跟下面算出來的數字不同，藉此確認
     # selected_month_record 真的是即時算出來的，不是抄 sheet。公式細節（完成數只認「已解決」、

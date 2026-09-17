@@ -305,8 +305,11 @@ body {
   margin-bottom: 1.5rem;
 }
 
-/* 統計卡數字只受「專案」「任務類型」篩選影響，「範圍」「預計完成日期」都不影響它（見
-   dashboard/index.html.erb 的說明），不點明的話容易被誤以為篩選沒套用成功。 */
+/* 統計卡數字套用目前全部的篩選條件（專案／任務類型／範圍／預計完成日期），見
+   dashboard/index.html.erb 的說明文字；不點明的話容易被誤以為篩選沒套用成功。
+   （這裡原本寫「範圍／預計完成日期不影響統計卡」，是舊版行為的殘留說明，跟
+   Sheets::FetchProjectProgress#call 現在對 summary 套用 filter_tasks 的實際行為不符，
+   已更正。） */
 .filter-summary {
   font-size: 0.8rem;
   color: var(--color-text-muted);
@@ -1075,15 +1078,17 @@ turbo-frame[busy]::after {
   color: var(--color-text-strong);
 }
 
-/* 議題 KPI 的攔截率／SLA達標率兩張卡，圖示縮小到 11px（原本共用的 14px 在這裡使用者覺得
-   偏大）；縮小後圖示box本身變矮，vertical-align:middle 的落差量也要重新量，不能沿用
-   14px 版本校正好的 -1px（見上面 .chart-info 的說明）。 */
-.stat-label .chart-info-icon svg {
+/* 圖示尺寸修飾（見 shared/_info_tooltip 的 size: "small"），不是靠呼叫端的祖先 class
+   （例如 .stat-label）覆寫樣式——那樣做的話，任何頁面只要重用同一個祖先 class 就會意外
+   繼承這個尺寸變化。議題 KPI 的攔截率／SLA達標率兩張卡覺得共用的 14px 偏大，改用這個
+   修飾 class 縮小到 11px；縮小後圖示 box 本身變矮，vertical-align:middle 的落差量也要
+   重新量，不能沿用 14px 版本校正好的 -1px（見上面 .chart-info 的說明）。 */
+.chart-info--small .chart-info-icon svg {
   width: 11px;
   height: 11px;
 }
 
-.stat-label .chart-info {
+.chart-info--small {
   transform: translateY(-1.1px);
 }
 
