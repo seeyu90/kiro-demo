@@ -129,11 +129,6 @@
           <%= hidden_field_tag :to, @selected_to&.iso8601 %>
           <%= hidden_field_tag :breakdown_sort, @breakdown_sort %>
           <%= hidden_field_tag :breakdown_dir, @breakdown_dir %>
-          <%# 快捷篩選 Tag（見下方）是獨立連結、不經過這個表單送出，但點擊後仍會落在
-              「議題資料」分頁；type 本身不需要在這裡當隱藏欄位，因為它是靠連結參數帶入，
-              送出這個表單（套用篩選）時維持目前的 type 選擇，故仍要帶。 %>
-          <%= hidden_field_tag :type, @selected_type %>
-
           <div class="control-group">
             <label for="project">專案：</label>
             <%= select_tag :project,
@@ -147,19 +142,15 @@
           </div>
 
           <div class="control-group">
+            <label for="type">類型：</label>
+            <%= select_tag :type,
+                           options_for_select([["全部類型", ""]] + @types.map { |t| [issue_type_label(t), t] }, @selected_type) %>
+          </div>
+
+          <div class="control-group">
             <label for="q">搜尋：</label>
             <%= text_field_tag :q, @selected_q, placeholder: "主旨／編號／負責人" %>
           </div>
-
-          <%# 快捷篩選只有「只看客訴」：這個 App 沒有登入／使用者身分機制，assigned_to 只是
-              試算表裡的姓名字串，沒有「目前使用者是誰」的資訊來源，無法做「只看我的議題」。
-              放在同一個 flex row 裡（跟專案／狀態／搜尋同一行），不需要另外獨立一行。 %>
-          <span class="quick-filters">
-            <%= link_to "只看客訴",
-                        issues_path(issue_filter_params(type: (@selected_type == "Complaint" ? nil : "Complaint"))),
-                        class: "quick-filter-tag #{'is-active' if @selected_type == 'Complaint'}",
-                        data: { turbo_frame: "issue-content" } %>
-          </span>
 
           <div class="filter-actions">
             <%= submit_tag "套用篩選", class: "apply-filters-btn" %>

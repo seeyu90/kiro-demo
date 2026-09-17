@@ -2,7 +2,7 @@
 
 module Sheets
   class FetchIssueDashboard < ApplicationActor
-    # 起訖日期區間篩選，取代原本的單一 month 參數：兩者皆空時預設沿用「最新已結算月份」；
+    # 起訖日期區間篩選，取代原本的單一 month 參數：兩者皆空時預設當月（需求 9.1）；
     # 只給一邊時另一邊視為不限制（比照 305/307 共用的 DateRangeFilterable 慣例）。
     input :from, default: nil
     input :to, default: nil
@@ -10,8 +10,7 @@ module Sheets
     input :status, default: "新建立"
     input :breakdown_sort, default: nil
     input :breakdown_dir, default: "desc"
-    # 「議題資料」分頁的搜尋框（比對主旨／議題編號／負責人）與快捷篩選 Tag（目前只有
-    # 「只看客訴」，固定送出 type="Complaint"，不是自由輸入）。
+    # 「議題資料」分頁的搜尋框（比對主旨／議題編號／負責人）與類型篩選（見 TYPE_CATEGORIES）。
     input :q, default: nil
     input :type, default: nil
 
@@ -41,6 +40,7 @@ module Sheets
     output :month_project_breakdown
     output :projects
     output :statuses
+    output :types
     output :filtered_issues
     output :issue_kpis
 
@@ -61,6 +61,11 @@ module Sheets
     # 類型（Other）沒填到期日時維持「未定」，不會被視為逾期。
     ISSUE_SLA_DAYS = { "Complaint" => 2, "TestingBug" => 0 }.freeze
 
+    # 「類型」篩選下拉的固定選項：不是「試算表裡目前出現過哪些值」（那樣會冒出空字串跟
+    # 「Other」兩個分別代表同一件事的選項），而是業務本來就只認這三種分類，其餘原始值一律
+    # 歸「Other」（見 issue_type_category）。
+    TYPE_CATEGORIES = %w[Complaint TestingBug Other].freeze
+
     def call
       self.month_kpi          = parse_month_kpi(IssueSheetsClient.fetch_month_kpi_rows)
       self.daily_kpi          = parse_daily_kpi(IssueSheetsClient.fetch_daily_kpi_rows)
@@ -80,7 +85,9 @@ module Sheets
       # 每日趨勢與依專案分類統計皆依所選期間呈現（兩者與月度 KPI 同屬「統計摘要」分頁籤，
       # 理應一起隨期間切換）；依專案分類以議題的 start_date（建立日）判斷所屬日期，
       # 議題明細本身則不受期間篩選（見需求 8）。
-      self.daily_kpi_for_range = daily_kpi.select { |d| date_in_range?(d[:date], selected_from, selected_to) }
+      self.daily_kpi_for_range = fill_daily_kpi_gaps(
+        daily_kpi.select { |d| date_in_range?(d[:date], selected_from, selected_to) }, selected_from, selected_to
+      )
       range_issues = issues.select { |i| date_in_range?(i[:start_date], selected_from, selected_to) }
       self.month_project_breakdown = sort_project_breakdown(compute_project_breakdown(range_issues))
 
@@ -92,8 +99,9 @@ module Sheets
 
       self.projects = issues.map { |i| i[:project] }.compact.uniq
       self.statuses = issues.map { |i| i[:status] }.compact.uniq
+      self.types = TYPE_CATEGORIES
       self.filtered_issues = filter_issues(issues)
-      # KPI 卡片依「目前篩選結果」（含搜尋／快捷篩選，分頁之前的完整結果）計算，不是
+      # KPI 卡片依「目前篩選結果」（含搜尋／類型篩選，分頁之前的完整結果）計算，不是
       # 分頁後那一頁的子集合，也不是完全未篩選的 issues 全量。
       self.issue_kpis = compute_issue_kpis(filtered_issues)
     rescue Google::Apis::ClientError => e
@@ -240,7 +248,7 @@ module Sheets
         key = issue[:project].to_s.strip.empty? ? "未分類" : issue[:project]
         acc[key] ||= { project: key, complaint: 0, testing: 0, other: 0 }
 
-        case issue[:type]
+        case issue_type_category(issue[:type])
         when "Complaint" then acc[key][:complaint] += 1
         when "TestingBug" then acc[key][:testing] += 1
         else acc[key][:other] += 1
@@ -265,8 +273,18 @@ module Sheets
       issues
         .select { |i| project.blank? || i[:project] == project }
         .select { |i| status.blank? || i[:status] == status }
-        .select { |i| type.blank? || i[:type] == type }
+        .select { |i| type.blank? || issue_type_category(i[:type]) == type }
         .select { |i| q.blank? || issue_matches_query?(i, q) }
+        # 原始順序是 raw_2023～raw_2027 依分頁串接，等於「最舊的排最前面」——清空篩選會先看到
+        # 447 筆裡最早的 2023 年資料。改成依議題編號降冪，新的排最前面（議題編號遞增產生，
+        # 數字比字串排序才不會把「999」排在「1002」後面）。
+        .sort_by { |i| -i[:issue_id].to_i }
+    end
+
+    # 三分類：Complaint／TestingBug 照原值，其餘（空白或任何其他字串，例如 "Other"）一律歸
+    # 「Other」。跟 compute_project_breakdown、type 篩選共用同一套分類，只需要維護一處。
+    def issue_type_category(type)
+      TYPE_CATEGORIES.include?(type) ? type : "Other"
     end
 
     def issue_matches_query?(issue, query)
@@ -380,6 +398,27 @@ module Sheets
       (from_bound.blank? || date >= from_bound) && (to_bound.blank? || date <= to_bound)
     rescue ArgumentError, TypeError
       false
+    end
+
+    # 每日趨勢圖用陣列索引決定 X 軸間距（見 IssuesHelper#trend_chart_points），不是依日期本身
+    # 的間隔，兩個相鄰資料點永遠等距。daily_kpi 分頁本身沒有假日／週末的列（業務不在假日回報，
+    # 一年約 185 列對應約 260 個平日），若直接拿這些「有資料的日子」當資料點，週末造成的 2～3
+    # 天空隙跟平日的 1 天空隙在圖上會畫成同樣寬度，時間軸因此失真。改為把整個所選區間逐日補
+    # 齊，缺的日子補 0，X 軸間距才會真正對應日曆天數。
+    #
+    # 區間橫跨到未來（例如當月預設到月底，但月份還沒過完）時，上限收在「今天」，不畫還沒發生
+    # 的日子（那些不是「當天 0 筆」，是「還沒到那一天」，補 0 反而是謊報）。任一邊界為 nil
+    # （開放式區間，例如只給 from 沒給 to）時無法決定要補到哪一天，維持原樣不補。
+    def fill_daily_kpi_gaps(records, from_bound, to_bound)
+      return records if from_bound.blank? || to_bound.blank?
+
+      range_end = [ to_bound, Date.current ].min
+      return records if from_bound > range_end
+
+      by_date = records.index_by { |r| r[:date] }
+      (from_bound..range_end).map do |date|
+        by_date[date.iso8601] || { date: date.iso8601, complaint: 0, testing: 0, other: 0, total: 0 }
+      end
     end
 
     # 與 305 Sheets::FetchProjectProgress#normalize_date 邏輯相同；維持獨立實作而非抽共用

@@ -472,6 +472,46 @@ RSpec.describe Sheets::FetchIssueDashboard do
       end
     end
 
+    # 每日趨勢圖用陣列索引決定 X 軸間距，不是依日期本身的間隔（見 IssuesHelper#trend_chart_points）。
+    # daily_kpi 分頁本身沒有假日的列（一年約 185 列對應約 260 個平日），若直接拿「有資料的日子」
+    # 當資料點，週末造成的空隙跟平日的 1 天間距在圖上會畫成一樣寬，時間軸因此失真。
+    describe "daily_kpi_for_range fills gaps so the trend chart's X axis matches real calendar days" do
+      let(:daily_kpi_rows) do
+        [
+          %w[日期 客訴 測試 其他 總計],
+          # 8/3（一）有資料，8/4～8/7（週末＋兩個平日）完全沒有列，8/10（一）才又有資料，
+          # 模擬業務不在假日回報、平日偶爾也沒紀錄的真實情形。
+          [ "2026-08-03", "1", "0", "0", "1" ],
+          [ "2026-08-10", "0", "1", "0", "1" ]
+        ]
+      end
+
+      it "fills missing calendar days within the range with zero-count records" do
+        result = described_class.result(from: Date.new(2026, 8, 1), to: Date.new(2026, 8, 10))
+
+        expect(result.daily_kpi_for_range.map { |d| d[:date] }).to eq(
+          (Date.new(2026, 8, 1)..Date.new(2026, 8, 10)).map(&:iso8601)
+        )
+        expect(result.daily_kpi_for_range.find { |d| d[:date] == "2026-08-05" })
+          .to eq(date: "2026-08-05", complaint: 0, testing: 0, other: 0, total: 0)
+        expect(result.daily_kpi_for_range.find { |d| d[:date] == "2026-08-03" }[:complaint]).to eq(1)
+      end
+
+      it "caps the filled range at today, not the full selected range, when the range extends into the future" do
+        travel_to(Date.new(2026, 8, 5)) do
+          result = described_class.result(from: Date.new(2026, 8, 1), to: Date.new(2026, 8, 31))
+
+          expect(result.daily_kpi_for_range.last[:date]).to eq("2026-08-05")
+        end
+      end
+
+      it "does not fill gaps for an open-ended range (only one bound given)" do
+        result = described_class.result(from: Date.new(2026, 8, 1), to: nil)
+
+        expect(result.daily_kpi_for_range.map { |d| d[:date] }).to eq([ "2026-08-03", "2026-08-10" ])
+      end
+    end
+
     describe "q/type filters and issue_kpis" do
       let(:issue_rows) do
         [
@@ -481,7 +521,11 @@ RSpec.describe Sheets::FetchIssueDashboard do
           [ "1002", "測試無到期日", "TestingBug", "臭蟲", "新建立", "蔡秉逸",
             "2026/8/12", "", "", "raw_2026", "P1", "0.5" ],
           [ "1003", "已完成客訴", "Complaint", "臭蟲", "已確認", "黃靖益",
-            "2026/7/1", "2026/7/5", "", "raw_2026", "P1", "1.25" ]
+            "2026/7/1", "2026/7/5", "", "raw_2026", "P1", "1.25" ],
+          [ "1004", "類型欄空白", "", "臭蟲", "新建立", "陳謹皓",
+            "2026/8/3", "", "", "raw_2026", "P1", "0" ],
+          [ "1005", "類型欄寫Other", "Other", "臭蟲", "新建立", "陳謹皓",
+            "2026/8/4", "", "", "raw_2026", "P1", "0" ]
         ]
       end
 
@@ -496,17 +540,40 @@ RSpec.describe Sheets::FetchIssueDashboard do
       it "filters filtered_issues by exact type match" do
         result = described_class.result(status: nil, type: "Complaint")
 
-        expect(result.filtered_issues.map { |i| i[:issue_id] }).to eq([ "1001", "1003" ])
+        # 依議題編號降冪排序（見下面的排序測試），1003 排在 1001 前面。
+        expect(result.filtered_issues.map { |i| i[:issue_id] }).to eq([ "1003", "1001" ])
+      end
+
+      # 原始順序是 raw_2023～raw_2027 分頁依序串接，等於「最舊的排最前面」；改為依議題編號
+      # 降冪，數字比較（不是字串比較，字串排序會把 "999" 排在 "1002" 後面）。
+      it "sorts filtered_issues by issue_id descending (newest first), not sheet-concatenation order" do
+        result = described_class.result(status: nil)
+
+        expect(result.filtered_issues.map { |i| i[:issue_id] }).to eq(%w[1005 1004 1003 1002 1001])
+      end
+
+      # 類型篩選下拉的「其他」選項要同時比對到「類型欄位真的空白」跟「類型欄位寫著 Other」
+      # 這兩種原始值——對使用者來說兩者是同一件事，篩選時不該分開（見 issue_type_category）。
+      it "matches both a blank type and a literal Other value when filtering by the Other category" do
+        result = described_class.result(status: nil, type: "Other")
+
+        expect(result.filtered_issues.map { |i| i[:issue_id] }).to eq([ "1005", "1004" ])
+      end
+
+      it "exposes the fixed 3-category list as types, not whatever raw values happen to be in the data" do
+        result = described_class.result(status: nil)
+
+        expect(result.types).to eq(%w[Complaint TestingBug Other])
       end
 
       it "computes issue_kpis from the filtered (not paginated) issue set, excluding done issues" do
         result = described_class.result(status: nil)
 
-        # 1001（處理中、客訴、已逾期）／1002（新建立、測試、無到期日）算 pending；
-        # 1003（已確認）已完成，前三個數字都不算它，但 total_hours_sum 不分完成與否，
-        # 三筆的花費工時（2 + 0.5 + 1.25）都要加總進去。
+        # 1001（處理中、客訴、已逾期）／1002（新建立、測試、無到期日）／1004／1005（新建立、
+        # 類型空白或 Other、無到期日）都算 pending；1003（已確認）已完成，前三個數字都不算它，
+        # 但 total_hours_sum 不分完成與否，五筆的花費工時（2 + 0.5 + 1.25 + 0 + 0）都要加總。
         expect(result.issue_kpis).to eq(
-          pending: 2, urgent_complaints: 1, overdue_or_undated: 2, total_hours_sum: 3.75
+          pending: 4, urgent_complaints: 1, overdue_or_undated: 4, total_hours_sum: 3.75
         )
       end
     end

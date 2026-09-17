@@ -54,6 +54,7 @@ class IssuesController < ApplicationController
 
     @projects = result.projects
     @statuses = result.statuses
+    @types = result.types
     @selected_project = params[:project].presence
     @selected_status = params.key?(:status) ? params[:status] : DEFAULT_STATUS
     @selected_q = params[:q].presence
@@ -83,6 +84,7 @@ class IssuesController < ApplicationController
     @selected_month_pending = false
     @projects = []
     @statuses = []
+    @types = []
     @selected_project = nil
     @selected_status = DEFAULT_STATUS
     @selected_q = nil

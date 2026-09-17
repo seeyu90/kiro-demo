@@ -12,6 +12,15 @@ module IssuesHelper
     ATTRIBUTION_CLASSES[type] || "attribution-other"
   end
 
+  # 「類型」篩選下拉的選項文字：跟月度 KPI 卡片（客訴／測試／總Bug）用同一套詞彙，不是上面
+  # 「歸屬責任」的框架（專案共同責任／個人責任）——同一份資料改用哪套詞彙看情境，這裡篩選
+  # 的是「哪一種議題」，用「歸屬責任」的說法反而讓人一時看不出跟「只看客訴」是同一件事。
+  ISSUE_TYPE_LABELS = { "Complaint" => "客訴", "TestingBug" => "測試", "Other" => "其他" }.freeze
+
+  def issue_type_label(type)
+    ISSUE_TYPE_LABELS.fetch(type, type)
+  end
+
   # 起訖日期輸入欄位的 min/max guardrail：用 @available_months（"YYYY-MM" 字串陣列，已排序）
   # 換算成第一個月的月初與最後一個月的月底，避免使用者選到明知沒有資料的日期。
   # @available_months 為空時（理論上不會發生，fetch_issue_dashboard 一定會納入當月）回傳 nil。
@@ -32,16 +41,6 @@ module IssuesHelper
     value.nil? ? "－" : "#{value}#{unit}"
   end
 
-  # 「議題資料」分頁目前的篩選狀態，供快捷篩選 Tag 這類需要手動組 issues_path(...) 的連結共用
-  # （分頁連結不需要這個——Pagy 直接沿用當前請求的 query params，見 index.html.erb），
-  # 避免同一組 project／status／q／type／from／to／breakdown_sort／breakdown_dir 在多處各自重複。
-  def issue_filter_params(overrides = {})
-    {
-      tab: "detail", project: @selected_project, status: @selected_status, q: @selected_q,
-      type: @selected_type, from: @selected_from&.iso8601, to: @selected_to&.iso8601,
-      breakdown_sort: @breakdown_sort, breakdown_dir: @breakdown_dir
-    }.merge(overrides)
-  end
 
   # 「是否已完成」直接引用 Actor 的 ISSUE_DONE_STATUS_PATTERN（而不是自己另外寫一份關鍵字），
   # 確保 badge 顏色、KPI 卡片、時程欄位的「是否已完成」判斷永遠是同一套規則，不會改一邊忘了
@@ -80,7 +79,12 @@ module IssuesHelper
 
     range =
       if issue[:due_date].present?
-        "#{short_date(start_text)} ~ #{short_date(issue[:due_date])}"
+        # 開始日＝到期日（當天開始、當天到期）時省略「～」，只顯示單一日期：「08-05 ~ 08-05」
+        # 這種寫法看起來像零天區間，卻又在後面標「工作 1 天」，兩者放在一起顯得矛盾又累贅。
+        # work_days 是含頭尾的工作日計數（同一天＝1 天，已用真實資料驗證：90 筆同日案例
+        # work_days 皆為 1，與跨日案例的工作日算法一致），數字本身沒有錯，只是這裡的日期
+        # 顯示格式該精簡。
+        issue[:due_date] == start_text ? short_date(start_text) : "#{short_date(start_text)} ~ #{short_date(issue[:due_date])}"
       else
         end_label = issue_done_status?(issue[:status]) ? "未指定" : "進行中"
         "#{short_date(start_text)} ~ #{end_label}"

@@ -90,6 +90,15 @@ RSpec.describe IssuesHelper, type: :helper do
     it "shows — when start_date is also blank" do
       expect(helper.issue_timeline_label(start_date: nil, due_date: nil)).to eq("—")
     end
+
+    # 開始日＝到期日時省略「～」，避免「08-05 ~ 08-05」這種看起來像零天區間、卻又標「工作 1
+    # 天」的矛盾寫法（work_days 本身沒有錯——含頭尾工作日計數，同一天就是 1 天，已用真實
+    # 資料驗證：90 筆同日案例 work_days 皆為 1）。
+    it "collapses to a single date (no ~) when start_date equals due_date" do
+      issue = { start_date: "2026-08-05", due_date: "2026-08-05", work_days: 1 }
+
+      expect(helper.issue_timeline_label(issue)).to eq("08-05（工作 1 天）")
+    end
   end
 
   describe "#trend_chart_points" do

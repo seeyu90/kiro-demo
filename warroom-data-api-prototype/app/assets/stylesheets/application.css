@@ -678,6 +678,37 @@ turbo-frame[busy]::after {
   white-space: nowrap;
 }
 
+/* 「議題資料」單一表格（_issue_list.html.erb）跟上面的 .project-tasks 共用邊框／字級／
+   hover 等基礎樣式，但 table-layout: fixed 與依欄位「位置」訂的寬度是為了讓 305「每個專案
+   各自一張表」在欄位對不齊的問題（見上方說明）而存在，這裡只有單一一張表，欄位語意也完全
+   不同——例如這裡 nth-child(3) 是「主旨」，套用到 305 那組規則卻是「狀態」該有的 6rem，
+   主旨整段文字被壓到只剩兩三個字寬；窄螢幕卡片式版面下，.issue-subject-truncate 的
+   overflow: hidden 疊加這個塌陷的欄寬，甚至讓欄寬直接變成 0px、主旨完全看不見（CSS Grid／
+   Flex 子項目 overflow 非 visible 時，自動最小寬度規格上是 0，不是內容實際寬度）。改回瀏覽器
+   依內容自動配欄寬，並允許換行。 */
+.issue-tasks {
+  table-layout: auto;
+}
+
+.issue-tasks th:nth-child(n),
+.issue-tasks td:nth-child(n) {
+  width: auto;
+  white-space: normal;
+}
+
+/* .issue-subject-truncate 的單行省略號截斷是給桌機固定欄寬設計的；這張表欄寬已經改回自動
+   配寬（見上），主旨欄位有實際空間，改成完整換行顯示，不再省略——使用者反應看不到完整主旨
+   時還要另外 hover 才看得到，不如直接排版時就顯示出來。只在這張表覆寫，PM 週報
+   （_issue_section.html.erb）用的是同一個 class，維持原本單行截斷（那邊要顧列表密度，
+   不在這次調整範圍內）。 */
+.issue-tasks .issue-subject-truncate {
+  display: block;
+  max-width: none;
+  overflow: visible;
+  white-space: normal;
+  text-overflow: clip;
+}
+
 .project-tasks tbody tr:hover td {
   background: var(--table-row-hover-bg);
 }
@@ -770,34 +801,6 @@ turbo-frame[busy]::after {
   margin-top: 0.75rem;
 }
 
-.quick-filters {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.quick-filter-tag {
-  display: inline-block;
-  padding: 0.3rem 0.85rem;
-  border-radius: 9999px;
-  border: 1px solid var(--color-border-hover);
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--color-text-muted);
-  text-decoration: none;
-  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
-}
-
-.quick-filter-tag:hover {
-  border-color: var(--color-accent);
-  color: var(--color-text-strong);
-}
-
-.quick-filter-tag.is-active {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
-  color: var(--btn-text);
-}
-
 .pagination {
   display: flex;
   align-items: center;
@@ -847,8 +850,12 @@ turbo-frame[busy]::after {
   font-weight: 700;
 }
 
+/* 目前頁的連結 Pagy 也會標 aria-disabled="true"（語意上「點了沒作用，你已經在這頁」），
+   跟下面這條「停用樣式」的屬性選擇器特異度打平，交由來源順序決定——這條排在
+   a[aria-current="page"] 那條後面，字色會蓋掉目前頁原本要的白字，變成深灰字疊在強調色
+   底色上，兩者色調接近、幾乎看不見數字。用 :not() 排除目前頁，兩條規則不再互相覆蓋。 */
 .pagy.series-nav a[role="separator"],
-.pagy.series-nav a[aria-disabled="true"] {
+.pagy.series-nav a[aria-disabled="true"]:not([aria-current="page"]) {
   border-color: transparent;
   color: var(--color-text-faint);
   cursor: default;
@@ -1300,9 +1307,14 @@ turbo-frame[busy]::after {
   /* 用兩欄格線而非 space-between：後者會把值推到最右邊，各列的值左緣參差不齊
      （「王贊勛、楊采維」「2026-08-12」「+23 天」每一列都從不同位置開始），很難掃讀。
      固定標籤欄寬後，同一張卡片裡所有值對齊在同一條左邊界上。 */
+  /* justify-items: start——CSS Grid 的預設是 stretch，帶背景色的值（狀態／類別 badge）
+     沒有明確寬度時會被撐滿整個值欄，變成一整條色塊而不是原本的小圓角標籤（在 306 議題資料
+     表格把欄寬從 305 沿用過來、意外被誤用的窄欄寬改回依內容自動配寬後才會明顯看到——欄夠寬
+     才有空間可撐）。純文字值不受影響（文字本身沒有背景色，撐滿與否肉眼看不出差異）。 */
   .project-tasks td {
     display: grid;
     grid-template-columns: 6.5rem 1fr;
+    justify-items: start;
     align-items: baseline;
     gap: 0.5rem;
     padding: 0.2rem 0;

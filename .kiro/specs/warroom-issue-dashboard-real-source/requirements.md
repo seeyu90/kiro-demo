@@ -289,6 +289,18 @@ Webhook／排程更新、資料庫或本地快取層、OAuth 使用者登入、�
 3. WHEN 使用者變更專案或狀態篩選，THE **IssueDashboard_Page** SHALL 以 Turbo Frame 局部更新議題明細
    清單，不觸發整頁重載，與既有 `warroom-data-api-prototype` Dashboard 頁面的互動模式一致。
 4. WHEN 篩選後無符合條件的議題，THE **IssueDashboard_Page** SHALL 顯示「目前無符合條件的議題」。
+5. THE **IssueDashboard_Page** SHALL 提供依「類型」篩選（`type` query param，`Complaint`／
+   `TestingBug`／`Other` 三選一或不篩選），下拉選項與「專案」「狀態」同一種控制項；`Other`
+   須同時比對類型欄位為空白與寫著 `Other` 兩種原始值（對使用者而言是同一件事）。
+6. THE **IssueDashboard_Page** SHALL 將議題明細依議題編號降冪排序（最新建立的議題排最前面）。
+
+   > 需求 5.5（原始版本）中類型篩選是單一「只看客訴」快捷 Tag（
+   > `warroom-issue-dashboard-ux-refresh` 任務 3），只能二選一（看客訴或看全部）；改為與
+   > 專案／狀態一致的下拉選單，可個別篩選客訴／測試／其他任一類型。
+   >
+   > 排序原本沒有明確規格，實際行為是 `raw_2023`〜`raw_2027` 分頁依序串接後的原始順序，
+   > 等於「最舊的議題排最前面」——清空篩選會先看到 2023 年的資料，447 筆要翻好幾頁才看得到
+   > 最近的議題，被使用者回報不合理。改為依議題編號降冪，最新的排最前面。
 
 ---
 

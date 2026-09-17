@@ -107,8 +107,11 @@ RSpec.describe "Issues", type: :request do
       expect(section).not_to include("▼")
     end
 
-    it "renders the trend chart SVG with one point per daily_kpi row" do
-      expect(response.body.scan("trend-point").size).to eq(2)
+    # X 軸現在逐日補齊到「今天」（travel_to 固定 2026-08-19），不是只畫 daily_kpi_rows 裡
+    # 剛好有資料的 2 天，才不會讓週末等空隙的間距在圖上跟平常的 1 天看起來一樣寬（見
+    # fill_daily_kpi_gaps 的說明）。8/1～8/19 共 19 天。
+    it "renders one trend point per calendar day from the 1st of the month through today" do
+      expect(response.body.scan("trend-point").size).to eq(19)
     end
 
     it "defaults the status filter to 新建立, showing only the matching issue" do
@@ -162,6 +165,42 @@ RSpec.describe "Issues", type: :request do
     end
   end
 
+  # 類型篩選原本是「只看客訴」快捷 Tag（單一開關），改成跟專案／狀態一致的下拉選單，可以選
+  # 客訴／測試／其他三種之一，不再只能二選一（看客訴 or 看全部）。
+  describe "GET /issues?type=... (類型篩選下拉)" do
+    it "renders a 類型 dropdown with 全部類型／客訴／測試／其他 as options" do
+      get "/issues"
+
+      expect(response.body).to match(/<label for="type">類型：<\/label>/)
+      expect(response.body).to include('<option value="">全部類型</option>')
+      expect(response.body).to include('<option value="Complaint">客訴</option>')
+      expect(response.body).to include('<option value="TestingBug">測試</option>')
+      expect(response.body).to include('<option value="Other">其他</option>')
+    end
+
+    it "shows only Complaint-type issues when type=Complaint" do
+      get "/issues", params: { type: "Complaint", status: "" }
+
+      expect(response.body).to include("未匯入行事曆").and include("客訴：儀表板顯示異常")
+      expect(response.body).not_to include("白名單申請時間錯誤")
+      expect(response.body).not_to include("結案小工序DeadlockVictim")
+    end
+
+    it "matches the literal Other type value when type=Other" do
+      get "/issues", params: { type: "Other", status: "" }
+
+      expect(response.body).to include("結案小工序DeadlockVictim")
+      expect(response.body).not_to include("客訴：儀表板顯示異常")
+      expect(response.body).not_to include("白名單申請時間錯誤")
+    end
+
+    it "keeps the selected type pre-selected in the dropdown" do
+      get "/issues", params: { type: "TestingBug", status: "" }
+
+      expect(response.body).to match(/<option [^>]*selected="selected"[^>]*value="TestingBug"/)
+    end
+  end
+
   describe "GET /issues?from=2026-07-01&to=2026-07-31" do
     before { get "/issues", params: { from: "2026-07-01", to: "2026-07-31", status: "" } }
 
@@ -182,8 +221,10 @@ RSpec.describe "Issues", type: :request do
       expect(section).not_to include("AG 亞炬")
     end
 
-    it "filters the trend chart to daily_kpi rows in the selected month" do
-      expect(response.body.scan("trend-point").size).to eq(1)
+    # 7 月已經過完（不受 travel_to 影響，這個 describe 沒有固定「今天」），逐日補齊後是完整
+    # 31 天，不是只有 daily_kpi_rows 裡剛好有資料的那 1 天。
+    it "fills every calendar day in the selected month, not just the one with a daily_kpi row" do
+      expect(response.body.scan("trend-point").size).to eq(31)
     end
   end
 
