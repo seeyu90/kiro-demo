@@ -26,16 +26,7 @@ module Sheets
     output :available_months
     output :selected_from
     output :selected_to
-    # 依 [selected_from, selected_to] 與 month_kpi 各月區間重疊判斷出的月份清單（含尚無已結算
-    # 列的進行中當月），供 selected_month_pending 判斷「唯一命中的月份是不是當月」用。
-    output :matched_months
-    # matched_months 之中「真的有已結算 month_kpi 列」的月份數，這才是 selected_month_record
-    # 實際彙總了幾個月的依據——區間橫跨的月份數（matched_months.size）可能包含尚無資料的
-    # 進行中當月，若拿它判斷單月／彙總會誤把「只有 1 個月真的有資料」的情況當成彙總，白白
-    # 隱藏掉其實可以精確顯示的比率（code review 回報）。
-    output :settled_month_count
     output :selected_month_record
-    output :selected_month_pending
     output :daily_kpi_for_range
     output :month_project_breakdown
     output :projects
@@ -72,15 +63,15 @@ module Sheets
       self.issues              = parse_issues(IssueSheetsClient.fetch_issue_rows)
       self.project_breakdown = compute_project_breakdown(issues)
 
-      # 月份選單（起訖日期輸入的 min/max guardrail）納入進行中的當月（即使 month_kpi 尚無該月
-      # 列，因為月結數字要等月底才產生）。
+      # 月份選單（起訖日期輸入的 min/max guardrail）：原本納入 month_kpi 的月份清單，但月度
+      # KPI 已經全部改成即時算（見 compute_month_kpi），不再依賴 month_kpi 的涵蓋範圍——月份
+      # 選單改依 issues 實際的 start_date 範圍，使用者才能查到 month_kpi 表本來就沒涵蓋到的
+      # 更早期資料（該表只有 2026 年幾個月，但 issues 一路回溯到 2023 年）。
       current_year_month = Date.current.strftime("%Y-%m")
-      self.available_months = (month_kpi.map { |m| m[:year_month] } + [ current_year_month ]).uniq.sort
+      issue_year_months = issues.filter_map { |i| i[:start_date]&.slice(0, 7) }
+      self.available_months = (issue_year_months + [ current_year_month ]).uniq.sort
 
       self.selected_from, self.selected_to = resolve_range(current_year_month)
-      self.matched_months = available_months.select { |ym| month_overlaps_range?(ym, selected_from, selected_to) }
-      matched_rows = month_kpi.select { |m| matched_months.include?(m[:year_month]) }
-      self.settled_month_count = matched_rows.size
 
       # 每日趨勢與依專案分類統計皆依所選期間呈現（兩者與月度 KPI 同屬「統計摘要」分頁籤，
       # 理應一起隨期間切換）；依專案分類以議題的 start_date（建立日）判斷所屬日期，
@@ -90,14 +81,13 @@ module Sheets
       )
       range_issues = issues.select { |i| date_in_range?(i[:start_date], selected_from, selected_to) }
       self.month_project_breakdown = sort_project_breakdown(compute_project_breakdown(range_issues))
+      self.selected_month_record = compute_month_kpi(range_issues)
 
-      # 客訴／測試／總Bug／攔截率改由 issues 原始資料即時算（見 compute_live_month_kpi 的說明），
-      # 不再受限於 month_kpi 是否已結算，故一律有值。完成數／未結案／平均天數／SLA達標率仍
-      # 讀 month_kpi（見 build_sheet_month_kpi），未結算時個別欄位為 nil，View 顯示「－」。
-      self.selected_month_record = compute_live_month_kpi(range_issues).merge(build_sheet_month_kpi(matched_rows))
-      self.selected_month_pending = settled_month_count.zero? && matched_months == [ current_year_month ]
-
-      self.projects = issues.map { |i| i[:project] }.compact.uniq
+      # 原本沒有排序，是掃描 raw_2023～raw_2027（依年度分頁串接）時每個專案第一次出現的巧合
+      # 順序，跟字母、注音都無關，被使用者回報看不出規則。改依字母排序（大小寫不分）；中文
+      # 專案名稱沒有現成的注音／拼音排序函式庫可用（Ruby 內建 String 比較是萬國碼碼位序，不是
+      # 注音），退而求其次至少讓中英文各自的排序都符合直覺，不是原本的隨機順序。
+      self.projects = issues.map { |i| i[:project] }.compact.uniq.sort_by(&:downcase)
       self.statuses = issues.map { |i| i[:status] }.compact.uniq
       self.types = TYPE_CATEGORIES
       self.filtered_issues = filter_issues(issues)
@@ -294,38 +284,30 @@ module Sheets
 
     # KPI 卡片：待處理議題（未完成）／緊急客訴（未完成的客訴且已逾期——資料裡沒有優先權／
     # 嚴重度欄位，「客訴+已逾期」是目前能從既有資料算出最接近「緊急」的定義，見
-    # warroom-issue-dashboard-ux-refresh 任務 2.1 的取捨說明）／逾期或未定到期日（未完成
-    # 且到期日已過，或沒填到期日、也沒有對應 SLA 可判斷）。三者都只算「未完成」的議題，
-    # 已完成的議題不算緊急也不算逾期。
+    # warroom-issue-dashboard-ux-refresh 任務 2.1 的取捨說明）。兩者都只算「未完成」的議題，
+    # 已完成的議題不算緊急。
+    #
+    # 原本還有第三張「逾期或未定到期日」卡（未完成且已逾期，或沒填到期日又沒有對應 SLA 可
+    # 判斷），跟「緊急客訴」高度重疊（逾期的客訴兩張卡都算）、又把「已逾期」跟「不知道到期日」
+    # 兩種不同性質的東西用一個 OR 混在一起，使用者反應看不出這張卡實際在回答什麼問題，決定
+    # 直接移除，不再計算。
     def compute_issue_kpis(issues)
       pending = issues.reject { |i| self.class.done?(i) }
-      # overdue? 每筆只算一次（Date.parse 有成本），urgent_complaints／overdue_or_undated
-      # 共用同一個結果，不各自重算一次。
-      urgent_count = 0
-      overdue_or_undated_count = 0
-      pending.each do |i|
-        overdue = self.class.overdue?(i)
-        undated = i[:due_date].blank? && !ISSUE_SLA_DAYS.key?(i[:type])
-        urgent_count += 1 if i[:type] == "Complaint" && overdue
-        overdue_or_undated_count += 1 if undated || overdue
-      end
+      urgent_count = pending.count { |i| i[:type] == "Complaint" && self.class.overdue?(i) }
       # 累積花費工時不限「未完成」——已完成的議題一樣花了那些工時，此卡片算的是「投入成本」
-      # 不是「還剩多少要做」，跟前三個只算 pending 的卡片語意不同。
+      # 不是「還剩多少要做」，跟前面只算 pending 的卡片語意不同。
       total_hours_sum = issues.sum { |i| i[:total_hours].to_f }
 
       {
         pending: pending.size,
         urgent_complaints: urgent_count,
-        overdue_or_undated: overdue_or_undated_count,
         total_hours_sum: total_hours_sum.round(2)
       }
     end
 
-    # from／to 皆空時，預設當月區間（不是「最新已結算月份」）：每日趨勢與依專案分類統計是
-    # 即時算的，當月進行中也有資料可看，預設卻停在上個月會讓使用者以為要自己動手切換才看
-    # 得到「現在」的狀況。月度 KPI 卡片本來就有 selected_month_pending 處理「本月尚未結算」
-    # 的顯示（見 View 的「尚未結算」文案），不需要靠切換預設月份來迴避這個狀態。
-    # 只給一邊時，另一邊視為不限制。
+    # from／to 皆空時，預設當月區間（不是「最新已結算月份」）：月度 KPI 現在全部即時算（見
+    # compute_month_kpi），當月進行中一樣有真實數字可看，預設卻停在上個月會讓使用者以為要
+    # 自己動手切換才看得到「現在」的狀況。只給一邊時，另一邊視為不限制。
     def resolve_range(current_year_month)
       return [ from, to ] if from.present? || to.present?
 
@@ -339,55 +321,50 @@ module Sheets
       [ nil, nil ]
     end
 
-    def month_overlaps_range?(year_month, from_bound, to_bound)
-      month_start = Date.parse("#{year_month}-01")
-      month_end = month_start.end_of_month
-      (from_bound.blank? || month_end >= from_bound) && (to_bound.blank? || month_start <= to_bound)
-    rescue ArgumentError, TypeError
-      false
-    end
-
-    # 客訴／測試／總Bug／攔截率改由這裡即時算，不再讀 month_kpi 表的對應欄位：以真實資料
-    # 逐月比對過，month_kpi 表這幾欄與 issues 原始資料經常對不上（例如 2026-08 客訴，表上
-    # 25、issues 實際算出 27），研判是另一個外部流程（非本 app）產生的預先彙總快照，與
-    # issues 之間存在落差，原因不明。issues 才是單一事實來源，改為即時算後兩邊必定一致。
+    # 客訴／測試／總Bug／攔截率／完成數／未結案／平均天數／SLA達標率全部改由這裡即時算，
+    # 不再讀 month_kpi 表：以真實資料逐月比對過，month_kpi 表這幾欄與 issues 原始資料經常對
+    # 不上（例如 2026-08 客訴，表上 25、issues 實際算出 27）。使用者提供了產生 month_kpi 的
+    # n8n 腳本原始碼，這裡幾乎是照抄那份邏輯（資料來源換成這裡已解析過的 issues），拿正確
+    # 公式重算後，完全吻合的月份（例如 2026-02／04／06）證實公式無誤；仍有落差的月份
+    # （例如 2026-08：完成數表上 13、重算 16），研判是 month_kpi 本身是某次執行當下的快照，
+    # 那之後試算表上的個別列被回頭訂正過（狀態、work_days 等會隨時間變動的欄位），快照沒有
+    # 跟著更新——改成即時算，這類落差往後不會再發生。
     #
-    # 攔截率＝測試 ÷ (客訴＋測試) × 100，已用真實資料反推驗證公式（8 個月全部對上到小數點後
-    # 兩位）；總Bug 皆等於客訴＋測試（month_kpi 表本身也是如此，未獨立計算）。
-    def compute_live_month_kpi(issues_in_range)
-      complaint = issues_in_range.count { |i| i[:type] == "Complaint" }
-      testing = issues_in_range.count { |i| i[:type] == "TestingBug" }
-      total_bug = complaint + testing
+    # 公式（皆只以「客訴」為分母／分子主體，除了未結案）：
+    # - 攔截率＝測試 ÷ (客訴＋測試) × 100（已用真實資料反推驗證，8 個月全部對上到小數點後
+    #   兩位）；總Bug＝客訴＋測試。
+    # - 完成數：客訴且狀態「恰好」是「已解決」——注意這比全站其他地方用的
+    #   ISSUE_DONE_STATUS_PATTERN（完成│確認│關閉│解決│結束）窄很多，也不含客訴以外的類型；
+    #   照抄 n8n 腳本原始定義，不是本頁另外訂的規則。
+    # - 未結案：狀態「恰好」是「新建立」或「實作中」，不分類型（客訴／測試／其他都算）。
+    # - 平均天數：客訴（不分完成與否）的 work_days 總和 ÷ 客訴筆數。
+    # - SLA達標率：客訴裡 work_days 恰好等於 1（腳本裡 SLA_COMPLAINT 天數）的筆數 ÷ 客訴筆數
+    #   ×100——這個 1 天是 n8n 腳本自訂的回報用 SLA 目標，跟本頁「緊急客訴」判斷逾期用的
+    #   ISSUE_SLA_DAYS["Complaint"]＝2 天是兩回事，本來就是各自獨立維護的兩個數字，不要
+    #   誤以為要對齊。
+    #
+    # 分母為 0（區間內沒有客訴／沒有客訴＋測試）時，比率類欄位回傳 nil，View 顯示「－」，
+    # 不假裝算得出一個數字；完成數／未結案是計數，恆為整數，不會是 nil。
+    COMPLAINT_SLA_DAYS = 1
+    COMPLAINT_DONE_STATUS = "已解決"
+    UNRESOLVED_STATUSES = %w[新建立 實作中].freeze
+
+    def compute_month_kpi(issues_in_range)
+      complaints = issues_in_range.select { |i| i[:type] == "Complaint" }
+      testing_count = issues_in_range.count { |i| i[:type] == "TestingBug" }
+      total_bug = complaints.size + testing_count
+      total_days = complaints.sum { |i| i[:work_days].to_f }
+      sla_pass = complaints.count { |i| i[:work_days].to_f.positive? && i[:work_days].to_f <= COMPLAINT_SLA_DAYS }
 
       {
-        complaint: complaint,
-        testing: testing,
+        complaint: complaints.size,
+        testing: testing_count,
         total_bug: total_bug,
-        block_rate: total_bug.positive? ? (testing.to_f / total_bug * 100).round(2) : nil
-      }
-    end
-
-    # 完成數／未結案／平均天數／SLA達標率目前只能讀 month_kpi 表：試過幾種常見定義（依
-    # start_date 所在月份、依狀態關鍵字判斷完成、以 work_days 算平均天數）逐月比對真實資料，
-    # 差距達數十筆／數倍之譜，代表算法本身就猜錯，故不比照上面的客訴／測試改成即時算，避免
-    # 用一個沒有把握的公式取代另一個不確定來源。
-    #
-    # 判斷依據是「真的有幾個月已結算資料」（matched_rows.size），不是「區間橫跨幾個月」——
-    # 後者可能把尚無資料的進行中當月也算進去，讓「其實只有 1 個月有資料」的情況被誤判成彙總、
-    # 白白隱藏掉本來可以精確顯示的比率（code review 回報）。
-    # 剛好 1 個月有已結算列時，原樣回傳那一列這 4 個欄位（行為與改動前的單月選擇相同）；有
-    # 多個月時，計數欄位（completed／unresolved）加總、比率欄位（avg_days／sla_rate）不彙總、
-    # 設為 nil（不同月份的比率沒有能正確合併的算法，寧可不顯示也不要顯示誤導的近似值，見
-    # View 對 nil 值顯示「－」的處理）；一個月已結算資料都沒有時，四個欄位皆為 nil。
-    def build_sheet_month_kpi(matched_rows)
-      return { completed: nil, unresolved: nil, avg_days: nil, sla_rate: nil } if matched_rows.empty?
-      return matched_rows.first.slice(:completed, :unresolved, :avg_days, :sla_rate) if matched_rows.size == 1
-
-      {
-        completed: matched_rows.sum { |m| m[:completed].to_i },
-        unresolved: matched_rows.sum { |m| m[:unresolved].to_i },
-        avg_days: nil,
-        sla_rate: nil
+        block_rate: total_bug.positive? ? (testing_count.to_f / total_bug * 100).round(2) : nil,
+        completed: complaints.count { |i| i[:status] == COMPLAINT_DONE_STATUS },
+        unresolved: issues_in_range.count { |i| UNRESOLVED_STATUSES.include?(i[:status]) },
+        avg_days: complaints.any? ? (total_days / complaints.size).round(2) : nil,
+        sla_rate: complaints.any? ? (sla_pass.to_f / complaints.size * 100).round(2) : nil
       }
     end
 

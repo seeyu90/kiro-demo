@@ -46,11 +46,11 @@
 
         <section class="issue-section">
           <h2>月度 KPI</h2>
-          <%# 原本一句話塞了「即時／月結欄位怎麼分」＋「趨勢與分類跟著期間走」＋「議題明細
-              不受影響」三件事，太長不好讀（使用者回報）。前兩件事看畫面互動就懂（「－」本身
-              已經在暗示沒有數字；調整期間後趨勢圖跟著變也很直覺），只留下真正不會自己發現、
-              需要另外講清楚的一件事：議題明細不受這裡的期間篩選影響。 %>
-          <p class="section-note">「議題資料」分頁的議題明細不受此處日期區間篩選影響，顯示全部議題。<% if @matched_month_count > 1 %>目前彙總 <%= @matched_month_count %> 個月，平均天數／SLA達標率無法跨月合併，顯示「－」。<% end %></p>
+          <%# 8 個欄位現在全部即時算（見 Sheets::FetchIssueDashboard#compute_month_kpi），跟
+              下方每日趨勢／依專案分類算的是同一批資料，不再有「即時／月結」的分別，也不再有
+              「跨月彙總、平均天數／SLA達標率沒辦法合併」的狀況——每次都是重新算一次，不是
+              合併好幾個月的既有快照。 %>
+          <p class="section-note">「議題資料」分頁的議題明細不受此處日期區間篩選影響，顯示全部議題。</p>
           <div class="summary-bar">
             <div class="stat-item">
               <span class="stat-value"><%= @selected_month_record[:complaint] %></span>
@@ -69,11 +69,11 @@
               <span class="stat-label">攔截率</span>
             </div>
             <div class="stat-item">
-              <span class="stat-value"><%= @selected_month_record[:completed] || "－" %></span>
+              <span class="stat-value"><%= @selected_month_record[:completed] %></span>
               <span class="stat-label">完成數</span>
             </div>
             <div class="stat-item stat-overdue">
-              <span class="stat-value"><%= @selected_month_record[:unresolved] || "－" %></span>
+              <span class="stat-value"><%= @selected_month_record[:unresolved] %></span>
               <span class="stat-label">未結案</span>
             </div>
             <div class="stat-item">
@@ -113,10 +113,6 @@
           <div class="stat-item">
             <span class="stat-value"><%= number_with_precision(@issue_kpis[:total_hours_sum], precision: 2, strip_insignificant_zeros: true) %>h</span>
             <span class="stat-label">累積總花費工時</span>
-          </div>
-          <div class="stat-item stat-warning">
-            <span class="stat-value"><%= @issue_kpis[:overdue_or_undated] %></span>
-            <span class="stat-label">逾期／未定到期日</span>
           </div>
         </div>
 

@@ -344,131 +344,103 @@ RSpec.describe Sheets::FetchIssueDashboard do
       ])
     end
 
+    # 原本沒有排序，是掃描 raw_2023～raw_2027 分頁時每個專案第一次出現的巧合順序，跟字母／
+    # 注音都無關。改依字母排序（大小寫不分），使用者才看得出規則、找得到想找的專案。
+    context "projects ordering" do
+      let(:issue_rows) do
+        [
+          %w[issue_id subject type tracker status assigned_to start_date due_date work_days sheet_name project],
+          [ "9001", "s1", "Complaint", "臭蟲", "新建立", "A", "2026/1/1", "", "", "raw_2026", "zeta" ],
+          [ "9002", "s2", "Complaint", "臭蟲", "新建立", "A", "2026/1/2", "", "", "raw_2026", "Alpha" ],
+          [ "9003", "s3", "Complaint", "臭蟲", "新建立", "A", "2026/1/3", "", "", "raw_2026", "beta" ]
+        ]
+      end
+
+      it "sorts projects alphabetically, case-insensitive, not by first-appearance order" do
+        expect(result.projects).to eq(%w[Alpha beta zeta])
+      end
+    end
+
+    # 8 個欄位現在全部即時從 issues 算（見 Sheets::FetchIssueDashboard#compute_month_kpi），
+    # 不再讀 month_kpi 表，故這裡的 month_kpi_rows 刻意留著跟下面算出來的數字不同，藉此確認
+    # selected_month_record 真的是即時算出來的，不是抄 sheet。公式細節（完成數只認「已解決」、
+    # 未結案只認「新建立」「實作中」、平均天數與SLA達標率只以「客訴」為分母）照抄自實際產生
+    # month_kpi 表的 n8n 腳本（使用者提供原始碼）。
     describe "from/to date range filtering" do
       let(:month_kpi_rows) do
         [
           %w[year_month 客訴 測試 總Bug 攔截率 完成數 未結案 平均天數 SLA達標率 Top3],
-          [ "2026-07", "28", "7", "35", "20", "10", "7", "2.61", "10.71", "王贊勛:20" ],
-          [ "2026-08", "15", "9", "24", "37.5", "6", "3", "3.1", "25", "王贊勛:8" ]
+          [ "2026-07", "999", "999", "999", "99", "999", "999", "9.99", "99", "" ],
+          [ "2026-08", "999", "999", "999", "99", "999", "999", "9.99", "99", "" ]
         ]
       end
 
-      # 客訴／測試／總Bug／攔截率不再讀 month_kpi_rows（上面那份刻意留著跟真實數字不同，
-      # 用來確認 selected_month_record 真的是從這份 issue_rows 即時算出來的，不是抄 sheet）。
-      # 7 月：2 客訴＋1 測試；8 月：1 客訴＋3 測試。
+      # 7 月：C1（Complaint／已解決／work_days=1）、C2（Complaint／已結束／work_days=3）、
+      # T1（TestingBug／新建立）。
+      # 8 月：C3（Complaint／未完成／work_days=2）、C4（Complaint／已解決／work_days=1）、
+      # T2（TestingBug／實作中）、T3（TestingBug／已結束）。
       let(:issue_rows) do
         [
           %w[issue_id subject type tracker status assigned_to start_date due_date work_days sheet_name project total_hours],
-          [ "1001", "7月客訴1", "Complaint", "臭蟲", "已結束", "A", "2026/7/5", "", "", "raw_2026", "P" ],
-          [ "1002", "7月客訴2", "Complaint", "臭蟲", "已結束", "A", "2026/7/10", "", "", "raw_2026", "P" ],
-          [ "1003", "7月測試", "TestingBug", "臭蟲", "已結束", "A", "2026/7/15", "", "", "raw_2026", "P" ],
-          [ "1004", "8月客訴", "Complaint", "臭蟲", "未完成", "A", "2026/8/5", "", "", "raw_2026", "P" ],
-          [ "1005", "8月測試1", "TestingBug", "臭蟲", "未完成", "A", "2026/8/10", "", "", "raw_2026", "P" ],
-          [ "1006", "8月測試2", "TestingBug", "臭蟲", "未完成", "A", "2026/8/15", "", "", "raw_2026", "P" ],
-          [ "1007", "8月測試3", "TestingBug", "臭蟲", "未完成", "A", "2026/8/20", "", "", "raw_2026", "P" ]
+          [ "1001", "C1", "Complaint", "臭蟲", "已解決", "A", "2026/7/5", "", "1", "raw_2026", "P" ],
+          [ "1002", "C2", "Complaint", "臭蟲", "已結束", "A", "2026/7/10", "", "3", "raw_2026", "P" ],
+          [ "1003", "T1", "TestingBug", "臭蟲", "新建立", "A", "2026/7/15", "", "", "raw_2026", "P" ],
+          [ "1004", "C3", "Complaint", "臭蟲", "未完成", "A", "2026/8/5", "", "2", "raw_2026", "P" ],
+          [ "1005", "C4", "Complaint", "臭蟲", "已解決", "A", "2026/8/10", "", "1", "raw_2026", "P" ],
+          [ "1006", "T2", "TestingBug", "臭蟲", "實作中", "A", "2026/8/12", "", "", "raw_2026", "P" ],
+          [ "1007", "T3", "TestingBug", "臭蟲", "已結束", "A", "2026/8/20", "", "", "raw_2026", "P" ]
         ]
       end
 
       around { |example| travel_to(Date.new(2026, 8, 19)) { example.run } }
 
-      it "defaults from/to to the current month's bounds, computing complaint/testing/block_rate live from issues" do
+      it "defaults from/to to the current month's bounds, computing every field live from issues (not month_kpi_rows)" do
         expect(result.selected_from).to eq(Date.new(2026, 8, 1))
         expect(result.selected_to).to eq(Date.new(2026, 8, 31))
-        expect(result.matched_months).to eq([ "2026-08" ])
-        # 8 月即時算：1 客訴＋3 測試，跟 month_kpi_rows 寫的 15/9 不同——確認真的是即時算，不是讀 sheet。
-        expect(result.selected_month_record).to include(complaint: 1, testing: 3, total_bug: 4, block_rate: 75.0)
-      end
-
-      it "returns the exact settled row (completed/unresolved/avg_days/sla_rate) when exactly one month matches" do
-        result = described_class.result(from: Date.new(2026, 7, 1), to: Date.new(2026, 7, 31))
-
-        expect(result.matched_months).to eq([ "2026-07" ])
+        # 8 月：C3／C4 客訴、T2／T3 測試；完成數只有 C4（已解決，C3 未完成不算）；未結案只有
+        # T2（實作中；C3 未完成不在 新建立／實作中 之列，不算）；平均天數＝(2+1)/2；
+        # SLA達標率＝work_days<=1 的 C4 一筆 ÷ 2 客訴。
         expect(result.selected_month_record).to eq(
-          complaint: 2, testing: 1, total_bug: 3, block_rate: 33.33,
-          completed: 10, unresolved: 7, avg_days: 2.61, sla_rate: 10.71
+          complaint: 2, testing: 2, total_bug: 4, block_rate: 50.0,
+          completed: 1, unresolved: 1, avg_days: 1.5, sla_rate: 50.0
         )
       end
 
-      # 攔截率不再受「跨月無法合併」限制：即時從整個所選區間的 issues 算，橫跨月份也只是
-      # 換一批 issues 重算一次，不是彙總兩個月各自的比率。完成數／未結案（sheet 來源）維持
-      # 加總，平均天數／SLA達標率（sheet 來源）仍無法跨月合併、設為 nil。
-      it "sums sheet-sourced count fields, nils sheet-sourced rate fields, but still computes block_rate live across months" do
+      it "computes a different set of numbers for a different single month" do
+        result = described_class.result(from: Date.new(2026, 7, 1), to: Date.new(2026, 7, 31))
+
+        # 7 月：C1／C2 客訴、T1 測試；完成數只有 C1（已解決，C2 是已結束不算）；未結案只有
+        # T1（新建立）；平均天數＝(1+3)/2；SLA達標率＝work_days<=1 的 C1 一筆 ÷ 2 客訴。
+        expect(result.selected_month_record).to eq(
+          complaint: 2, testing: 1, total_bug: 3, block_rate: 33.33,
+          completed: 1, unresolved: 1, avg_days: 2.0, sla_rate: 50.0
+        )
+      end
+
+      it "recomputes over the full combined range when it spans multiple months (no month_kpi_rows aggregation)" do
         result = described_class.result(from: Date.new(2026, 7, 1), to: Date.new(2026, 8, 31))
 
-        expect(result.matched_months).to eq([ "2026-07", "2026-08" ])
+        # 7+8 月合計：4 客訴（C1～C4）、3 測試（T1～T3）；完成數 C1＋C4＝2；未結案 T1＋T2＝2；
+        # 平均天數＝(1+3+2+1)/4；SLA達標率＝ work_days<=1 的 C1／C4 兩筆 ÷ 4 客訴。
         expect(result.selected_month_record).to eq(
-          complaint: 3, testing: 4, total_bug: 7, block_rate: 57.14,
-          completed: 16, unresolved: 10, avg_days: nil, sla_rate: nil
+          complaint: 4, testing: 3, total_bug: 7, block_rate: 42.86,
+          completed: 2, unresolved: 2, avg_days: 1.75, sla_rate: 50.0
+        )
+      end
+
+      it "returns nil for the ratio fields (not 0) when the range has no complaints at all" do
+        result = described_class.result(from: Date.new(2025, 1, 1), to: Date.new(2025, 1, 31))
+
+        expect(result.selected_month_record).to eq(
+          complaint: 0, testing: 0, total_bug: 0, block_rate: nil,
+          completed: 0, unresolved: 0, avg_days: nil, sla_rate: nil
         )
       end
 
       it "only applies the given bound when the other is absent (open-ended range)" do
         result = described_class.result(from: Date.new(2026, 8, 1), to: nil)
 
-        expect(result.matched_months).to eq([ "2026-08" ])
-      end
-
-      it "still computes live complaint/testing (both zero) with sheet fields nil when the range matches no month at all" do
-        result = described_class.result(from: Date.new(2025, 1, 1), to: Date.new(2025, 1, 31))
-
-        expect(result.matched_months).to eq([])
-        expect(result.selected_month_record).to eq(
-          complaint: 0, testing: 0, total_bug: 0, block_rate: nil,
-          completed: nil, unresolved: nil, avg_days: nil, sla_rate: nil
-        )
-        expect(result.selected_month_pending).to be false
-      end
-
-      context "when the current month has no settled month_kpi row yet" do
-        let(:month_kpi_rows) do
-          [
-            %w[year_month 客訴 測試 總Bug 攔截率 完成數 未結案 平均天數 SLA達標率 Top3],
-            [ "2026-07", "28", "7", "35", "20", "10", "7", "2.61", "10.71", "王贊勛:20" ]
-          ]
-        end
-
-        it "flags selected_month_pending but still shows live complaint/testing for the in-progress current month" do
-          result = described_class.result(from: Date.new(2026, 8, 1), to: Date.new(2026, 8, 31))
-
-          expect(result.matched_months).to eq([ "2026-08" ])
-          expect(result.selected_month_record).to eq(
-            complaint: 1, testing: 3, total_bug: 4, block_rate: 75.0,
-            completed: nil, unresolved: nil, avg_days: nil, sla_rate: nil
-          )
-          expect(result.selected_month_pending).to be true
-        end
-
-        # 需求 9.1：預設當月，不是「最新已結算月份」。這裡月度 KPI 只結算到 7 月，若仍退回
-        # 最新已結算月份，未帶 from/to 時會預設落在 7 月而非當月的 8 月。
-        it "defaults to the current (unsettled) month rather than falling back to the latest settled one" do
-          expect(result.selected_from).to eq(Date.new(2026, 8, 1))
-          expect(result.selected_to).to eq(Date.new(2026, 8, 31))
-          expect(result.selected_month_record).to include(complaint: 1, testing: 3, completed: nil)
-          expect(result.selected_month_pending).to be true
-        end
-
-        # code review 回報的邊界案例：區間橫跨 2 個「日曆月份」（matched_months），但其中一個
-        # （進行中的當月）根本沒有已結算列，實際只有 1 個月真的貢獻資料。判斷單月／彙總的依據
-        # 應該是「有幾個月真的有資料」（settled_month_count），不是「區間橫跨幾個月」，否則會
-        # 白白把可以精確顯示的比率隱藏成「－」，且 UI 顯示的「彙總 2 個月」也會誤導。
-        # 客訴／測試／攔截率不受此限——即時算的是整個區間（7+8 月）的 issues，不是「settled
-        # 月份」的 issues，故跟上面「sums sheet-sourced...」測試算出同一組即時數字。
-        it "returns the exact settled sheet row (not an aggregate) alongside the live-computed range totals" do
-          result = described_class.result(from: Date.new(2026, 7, 1), to: Date.new(2026, 8, 31))
-
-          expect(result.matched_months).to eq([ "2026-07", "2026-08" ])
-          expect(result.settled_month_count).to eq(1)
-          expect(result.selected_month_record).to eq(
-            complaint: 3, testing: 4, total_bug: 7, block_rate: 57.14,
-            completed: 10, unresolved: 7, avg_days: 2.61, sla_rate: 10.71
-          )
-        end
-      end
-
-      it "exposes settled_month_count matching the number of month_kpi rows actually aggregated" do
-        result = described_class.result(from: Date.new(2026, 7, 1), to: Date.new(2026, 8, 31))
-
-        expect(result.settled_month_count).to eq(2)
+        expect(result.selected_month_record).to include(complaint: 2, testing: 2)
       end
     end
 
@@ -570,10 +542,10 @@ RSpec.describe Sheets::FetchIssueDashboard do
         result = described_class.result(status: nil)
 
         # 1001（處理中、客訴、已逾期）／1002（新建立、測試、無到期日）／1004／1005（新建立、
-        # 類型空白或 Other、無到期日）都算 pending；1003（已確認）已完成，前三個數字都不算它，
+        # 類型空白或 Other、無到期日）都算 pending；1003（已確認）已完成，數字都不算它，
         # 但 total_hours_sum 不分完成與否，五筆的花費工時（2 + 0.5 + 1.25 + 0 + 0）都要加總。
         expect(result.issue_kpis).to eq(
-          pending: 4, urgent_complaints: 1, overdue_or_undated: 4, total_hours_sum: 3.75
+          pending: 4, urgent_complaints: 1, total_hours_sum: 3.75
         )
       end
     end
@@ -590,18 +562,19 @@ RSpec.describe Sheets::FetchIssueDashboard do
           [ "2003", "今天開的測試", "TestingBug", "臭蟲", "新建立", "x", "2026/8/19", "", "", "raw_2026", "P", "3" ],
           # 測試（個人責任），開始於昨天，超過當天 SLA → 算逾期（但不是客訴，不算緊急客訴）
           [ "2004", "昨天開的測試", "TestingBug", "臭蟲", "新建立", "x", "2026/8/18", "", "", "raw_2026", "P", "4" ],
-          # Other 類型沒有對應 SLA，即使開很久也不算逾期，但仍算「未定到期日」
+          # Other 類型沒有對應 SLA，即使開很久也不算逾期
           [ "2005", "其他類型舊議題", "Other", "臭蟲", "新建立", "x", "2026/1/1", "", "", "raw_2026", "P", "5" ]
         ]
       end
 
       around { |example| travel_to(Date.new(2026, 8, 19)) { example.run } }
 
-      it "only counts issues past their type's implicit SLA deadline as overdue when due_date is blank" do
+      it "only counts a Complaint issue past its implicit SLA deadline as urgent when due_date is blank" do
         result = described_class.result(status: nil)
 
+        # 2002 客訴逾期 → urgent_complaints；2004 測試逾期但不是客訴，不算緊急客訴。
         expect(result.issue_kpis).to eq(
-          pending: 5, urgent_complaints: 1, overdue_or_undated: 3, total_hours_sum: 15.0
+          pending: 5, urgent_complaints: 1, total_hours_sum: 15.0
         )
       end
     end

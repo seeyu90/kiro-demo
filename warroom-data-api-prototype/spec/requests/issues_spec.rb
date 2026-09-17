@@ -70,15 +70,17 @@ RSpec.describe "Issues", type: :request do
       expect(response.body).to include(%(name="to" id="to" value="2026-08-31"))
     end
 
-    # 客訴／測試／總Bug／攔截率即時從 issues 算：8 月只有 issue 5165（TestingBug）與 5180
-    # （Complaint）落在範圍內（5170 tracker=測試被排除），block_rate＝1÷(1+1)×100＝50.0，
-    # 跟 month_kpi_rows 寫的 37.5 不同——確認真的是即時算，不是讀 sheet。SLA達標率仍讀
-    # month_kpi 表（8 月row 的 25），不受這次改動影響。
-    it "shows a live block_rate (not the sheet's) and the sheet-sourced sla_rate for the current month" do
+    # 8 個欄位全部即時從 issues 算：8 月只有 issue 5165（TestingBug／新建立）與 5180
+    # （Complaint／已解決／work_days=1）落在範圍內（5170 tracker=測試被排除）。
+    # block_rate＝1÷(1+1)×100＝50.0，跟 month_kpi_rows 寫的 37.5 不同；SLA達標率＝
+    # work_days<=1 的 5180 一筆 ÷ 1 客訴×100＝100.0，跟 month_kpi_rows 寫的 25 也不同——
+    # 確認兩者都真的是即時算，不是讀 sheet。
+    it "computes block_rate and sla_rate live for the current month, not from month_kpi_rows" do
       section = month_kpi_section(response.body)
       expect(section).to include("50.0%")
       expect(section).not_to include("37.5%")
-      expect(section).to include("25.0%")
+      expect(section).to include("100.0%")
+      expect(section).not_to include("25.0%")
     end
 
     it "shows exactly one section-note, explaining that the issue list ignores this date range" do
@@ -208,13 +210,15 @@ RSpec.describe "Issues", type: :request do
   describe "GET /issues?from=2026-07-01&to=2026-07-31" do
     before { get "/issues", params: { from: "2026-07-01", to: "2026-07-31", status: "" } }
 
-    # 這份 fixture 沒有任何 7 月的 Complaint／TestingBug，客訴／測試／攔截率即時算出來都是
-    # 0／0／－（見下一個測試），故這裡改用仍是 sheet 來源的 SLA達標率驗證「顯示的是所選的
-    # 7 月，不是預設的 8 月」——7 月 10.71%、8 月 25.0%，兩者不同。
-    it "shows sheet-sourced KPI values for the selected month, not the default month" do
+    # 這份 fixture 沒有任何 7 月的 Complaint／TestingBug（8 月才有），即時算出來全部歸零／
+    # 沒有比率可算，確認顯示的真的是所選的 7 月，不是預設的 8 月（8 月會是 50.0%／100.0%，
+    # 見「with default filters」那組測試）。
+    it "computes zeroed-out KPI values for the selected month, not the default month's real numbers" do
       section = month_kpi_section(response.body)
-      expect(section).to include("10.71%")
-      expect(section).not_to include("25.0%")
+      expect(section.scan('<span class="stat-value">0</span>').size).to eq(5) # 客訴／測試／總Bug／完成數／未結案
+      expect(section.scan('<span class="stat-value">－</span>').size).to eq(3) # 攔截率／平均天數／SLA達標率
+      expect(section).not_to include("50.0%")
+      expect(section).not_to include("100.0%")
     end
 
     it "filters the project breakdown to issues started in the selected month" do
@@ -249,9 +253,11 @@ RSpec.describe "Issues", type: :request do
 
     before { get "/issues", params: { from: "2026-07-01", to: "2026-08-31", status: "" } }
 
-    # 這個區間內（7+8 月）：Complaint 2 筆（9001、5180）、TestingBug 1 筆（5165），
-    # block_rate＝1÷(2+1)×100＝33.33。
-    it "computes complaint/testing/total_bug/block_rate live across the combined range" do
+    # 這個區間內（7+8 月）：Complaint 2 筆（9001 已結束、5180 已解決 work_days=1）、
+    # TestingBug 1 筆（5165 新建立）。跨兩個月的區間現在只是換一批 issues 重新算一次，不是
+    # 彙總兩個月各自的 month_kpi 快照列，8 個欄位都直接對整個區間重算，不再有「有些欄位能
+    # 加總、有些欄位不能跨月合併」的分別。
+    it "computes complaint/testing/total_bug/block_rate across the combined range" do
       section = month_kpi_section(response.body)
       expect(section).to include("<span class=\"stat-value\">2</span>")   # 客訴
       expect(section).to include("<span class=\"stat-value\">1</span>")   # 測試
@@ -259,21 +265,16 @@ RSpec.describe "Issues", type: :request do
       expect(section).to include("33.33%")
     end
 
-    it "sums the sheet-sourced completed/unresolved fields across matched months" do
+    # 完成數：只有 5180（已解決）算，9001 是「已結束」不是「已解決」不算；未結案：只有 5165
+    # （新建立）算；平均天數＝(0+1)÷2 客訴（9001 沒填 work_days 視為 0）；
+    # SLA達標率＝work_days<=1 的 5180 一筆 ÷ 2 客訴×100。
+    it "computes completed/unresolved/avg_days/sla_rate across the combined range, not from month_kpi_rows" do
       section = month_kpi_section(response.body)
-      expect(section).to include("<span class=\"stat-value\">16</span>") # completed 10+6
-      expect(section).to include("<span class=\"stat-value\">10</span>") # unresolved 7+3
-    end
-
-    it "shows a dash for the sheet-sourced avg_days/sla_rate (can't blend across months), but not for the live block_rate" do
-      section = month_kpi_section(response.body)
-      expect(section.scan('<span class="stat-value">－</span>').size).to eq(2) # 平均天數／SLA達標率
+      expect(section).to include("<span class=\"stat-value\">1</span>")   # 完成數／未結案皆為 1
+      expect(section).to include("0.5")                                   # 平均天數
+      expect(section).to include("50.0%")                                 # SLA達標率
       expect(section).not_to include("37.5%")
       expect(section).not_to include("20.0%")
-    end
-
-    it "notes how many months were aggregated" do
-      expect(response.body).to include("彙總 2 個月")
     end
   end
 
@@ -294,7 +295,9 @@ RSpec.describe "Issues", type: :request do
     around { |example| travel_to(Date.new(2026, 8, 19)) { example.run } }
 
     def breakdown_project_order(body)
-      project_breakdown_section(body).scan(%r{<td>([^<]+)</td>}).flatten.each_slice(5).map(&:first)
+      # <td> 現在有的帶 data-label="..."（窄螢幕卡片式版面用，見 _project_breakdown.html.erb），
+      # 屬性寫法不固定，用 [^>]* 涵蓋。
+      project_breakdown_section(body).scan(%r{<td[^>]*>([^<]+)</td>}).flatten.each_slice(5).map(&:first)
     end
 
     it "defaults to descending when a sort key is first applied" do
@@ -421,7 +424,7 @@ RSpec.describe "Issues", type: :request do
     end
   end
 
-  describe "GET /issues when the current month has no month_kpi row yet (not settled)" do
+  describe "GET /issues for the current in-progress month (no issues in this fixture yet)" do
     around { |example| travel_to(Time.zone.local(2026, 9, 15)) { example.run } }
 
     before { get "/issues" }
@@ -430,19 +433,19 @@ RSpec.describe "Issues", type: :request do
       expect(response.body).to include('max="2026-09-30"')
     end
 
-    # 需求 9.1：預設一律當月，不再退回「最新已結算月份」——即使當月的 month_kpi 還沒結算。
-    it "defaults the selection to the current month (2026-09), not the latest settled 2026-08" do
+    # 需求 9.1：預設一律當月。
+    it "defaults the selection to the current month (2026-09)" do
       expect(response.body).to include(%(name="from" id="from" value="2026-09-01"))
       expect(response.body).to include(%(name="to" id="to" value="2026-09-30"))
     end
 
-    # fixture 沒有任何 2026-09 的議題，客訴／測試／總Bug 即時算出來都是 0；攔截率（0÷0）與
-    # 完成數／未結案／平均天數／SLA達標率（月結，本月尚未結算）皆顯示「－」，不再用一段
-    # 「尚未結算」文字取代整個區塊。
-    it "shows zero live counts for the current month, with the unsettled sheet fields dashed out individually" do
+    # fixture 沒有任何 2026-09 的議題：客訴／測試／總Bug／完成數／未結案（計數類欄位）即時
+    # 算出來都是 0；攔截率／平均天數／SLA達標率（比率類欄位，分母是客訴筆數）沒有客訴可算，
+    # 顯示「－」，不是謊報成 0。
+    it "shows zero counts for the current month, with only the ratio fields dashed out" do
       section = month_kpi_section(response.body)
-      expect(section.scan('<span class="stat-value">0</span>').size).to eq(3) # 客訴／測試／總Bug
-      expect(section.scan('<span class="stat-value">－</span>').size).to eq(5) # 攔截率／完成數／未結案／平均天數／SLA達標率
+      expect(section.scan('<span class="stat-value">0</span>').size).to eq(5) # 客訴／測試／總Bug／完成數／未結案
+      expect(section.scan('<span class="stat-value">－</span>').size).to eq(3) # 攔截率／平均天數／SLA達標率
     end
 
     it "shows the empty state for the project breakdown (no issues started in 2026-09)" do

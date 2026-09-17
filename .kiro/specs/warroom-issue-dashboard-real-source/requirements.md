@@ -202,13 +202,20 @@ Webhook／排程更新、資料庫或本地快取層、OAuth 使用者登入、�
    性質議題（例如測試環境驗證、測試資料回填），非真實缺陷或客訴，不應計入品質相關統計；此排除規則
    於 Actor 解析階段套用，`GET /api/issue_dashboard` 與 `GET /issues` 皆不會看到，對齊
    [warroom-issue-dashboard-static-prototype/requirements.md](../warroom-issue-dashboard-static-prototype/requirements.md) 需求 4.6。
-6. THE **IssueDashboard_Endpoint** 及 **IssueDashboard_Page** SHALL 依 `type` 欄位標示每筆議題的
-   「歸屬類型」：`Complaint`（客訴）標示為「專案共同責任」，`TestingBug`（測試）標示為「個人責任」，
-   其餘標示為「其他」；此標示 SHALL 為顯示層依 `type` 動態計算，不作為 Actor 輸出的獨立資料欄位
-   （與 prototype 的 `attributionLabel(type)` 邏輯一致）。
-7. THE **IssueDashboard_Page** SHALL 將議題明細表格的欄位依序顯示為：議題編號、專案、主旨、歸屬類型、
-   狀態、負責人、開始日期、到期日期、工作天數，不顯示 `type`／`tracker` 原始欄位（分類意義已由
-   「歸屬類型」呈現，避免重複資訊），與 prototype 的 `ISSUE_COLUMNS` 順序一致。
+6. THE **IssueDashboard_Page** SHALL 依 `type` 欄位標示每筆議題的「類別」：`Complaint`（客訴）標示為
+   「客訴」，`TestingBug`（測試）標示為「測試」，其餘標示為「其他」；此標示 SHALL 為顯示層依
+   `type` 動態計算，不作為 Actor 輸出的獨立資料欄位。**IssueDashboard_Endpoint**（JSON API）不受
+   此標示影響，仍只回傳原始 `type` 值。
+
+   > 原本「類別」欄位與需求 8 的「類型」篩選下拉各用一套詞彙：前者沿用 prototype 的
+   > `attributionLabel(type)`（客訴＝「專案共同責任」、測試＝「個人責任」），後者一度改成
+   > 「客訴／測試」，兩邊對不起來，使用者反應選了篩選卻在欄位裡看到不同的字。改為兩處統一
+   > 用「客訴／測試／其他」。`attributionLabel` 這套「歸屬責任」用詞（`IssuesHelper#attribution_label`
+   > `#attribution_class`）仍保留給 PM 週報（`/pm_weekly_report`）使用，不受影響——那邊需要的是
+   > 「這個議題算誰的責任」而非「這是哪一種議題」，兩頁的呈現需求本來就不同。
+7. THE **IssueDashboard_Page** SHALL 將議題明細表格的欄位依序顯示為：議題／專案、類別、主旨、狀態、
+   負責人、時程與天數、花費時間，不顯示 `type`／`tracker` 原始欄位（分類意義已由「類別」呈現，
+   避免重複資訊）。
 8. THE **IssueDashboard_Page** SHALL 將「議題編號」欄位渲染為可點擊連結，導向對應的
    **Redmine_Issue_URL**（`https://redmine.amastek.com.tw/issues/{issue_id}`），並以新分頁開啟
    （`target="_blank"`，含 `rel="noopener noreferrer"`）。
@@ -311,28 +318,43 @@ Webhook／排程更新、資料庫或本地快取層、OAuth 使用者登入、�
 
 #### 驗收標準
 
-1. THE **IssueDashboard_Page** SHALL 提供月份選擇（`month` query param），未帶參數時預設當月
-   （`Date.current` 所在月份），不論該月是否已有 `month_kpi` 結算列。
-
-   > 原本預設「最新已結算月份」（`month_kpi` 資料中 `year_month` 最大值），當月進行中尚未
-   > 結算時會落回上個月。但每日趨勢與依專案分類統計是即時算的，當月進行中就有資料可看
-   > （見需求 9.3），預設停在上個月會讓使用者以為要自己動手切換才看得到「現在」的狀況，
-   > 被回報不合理。改為一律預設當月；月度 KPI 卡片本來就有 `selected_month_pending` 處理
-   > 「本月尚未結算」的顯示，不需要靠切換預設月份來迴避這個狀態。
-2. WHEN 使用者切換月份，THE **IssueDashboard_Page** SHALL 以 Turbo Frame 局部更新 KPI 卡片、每日
-   趨勢圖與依專案分類統計（見需求 3a.4、需求 4.5），三者一併隨月份切換重新渲染；議題明細清單
-   （「議題資料」分頁籤）不受月份篩選影響，維持顯示全部議題。
+1. THE **IssueDashboard_Page** SHALL 提供月份／日期區間選擇（`from`／`to` query params），未帶參數
+   時預設當月（`Date.current` 所在月份）。
+2. WHEN 使用者切換日期區間，THE **IssueDashboard_Page** SHALL 以 Turbo Frame 局部更新 KPI 卡片、每日
+   趨勢圖與依專案分類統計（見需求 3a.4、需求 4.5），三者一併隨區間切換重新渲染；議題明細清單
+   （「議題資料」分頁籤）不受此區間篩選影響，維持顯示全部議題。
 3. THE **IssueDashboard_Page** SHALL 在月度 KPI 區塊顯示說明文字，明確告知「議題資料」分頁的議題
-   明細不受此處月份／期間篩選影響（顯示全部議題）；選到的期間橫跨多個已結算月份時，額外告知
-   平均天數／SLA達標率無法跨月合併、顯示「－」。
-
-   > 原本這句說明文字一次交代三件事：KPI 卡片哪些欄位是即時算的、哪些是月結的、每日趨勢與
-   > 依專案分類統計跟著期間走、議題明細不受影響——一句話塞太多資訊，使用者反應太長不好讀。
-   > 前兩件事看畫面本身就看得出來（「－」已經在暗示沒有數字；調整期間後趨勢圖跟著變也很
-   > 直覺），拿掉了；只留下真正不會自己發現、需要另外講清楚的一件事：議題明細不受期間篩選
-   > 影響。跨月彙總時的「－」說明保留，因為那件事單看畫面不容易猜到「為什麼這次沒有數字」。
+   明細不受此處日期區間篩選影響（顯示全部議題）。
 4. THE **IssueDashboard_Page** SHALL 確保此說明文字僅出現在月度 KPI 區塊一處，不得重複出現在議題
    明細的專案／狀態篩選控制項附近，避免使用者誤解為「篩選功能未生效」。
+5. THE **IssueDashboard_Actor** SHALL 將月度 KPI 卡片的全部 8 個欄位（客訴、測試、總Bug、攔截率、
+   完成數、未結案、平均天數、SLA達標率）即時從 `issues`（依所選日期區間篩選、`tracker=臭蟲`）計算，
+   不讀取 `month_kpi` 分頁的對應欄位；`GET /api/issue_dashboard` 的 `month_kpi` 輸出不受影響，
+   仍原樣回傳該分頁的原始列。公式（與產生 `month_kpi` 分頁的外部 n8n 流程原始碼比對後採用一致
+   定義）：
+
+   | 欄位 | 定義 |
+   |---|---|
+   | 客訴／測試／總Bug | 區間內 `type` 為 `Complaint`／`TestingBug` 的筆數；總Bug＝兩者相加 |
+   | 攔截率 | 測試 ÷ 總Bug × 100；總Bug 為 0 時為 `nil` |
+   | 完成數 | 區間內 `type=Complaint` 且 `status` **恰好**等於「已解決」的筆數 |
+   | 未結案 | 區間內 `status` **恰好**等於「新建立」或「實作中」的筆數，不分 `type` |
+   | 平均天數 | 區間內 `type=Complaint` 的 `work_days` 總和 ÷ 客訴筆數；客訴為 0 筆時為 `nil` |
+   | SLA達標率 | 區間內 `type=Complaint` 且 `work_days` 恰好等於 1 的筆數 ÷ 客訴筆數 × 100；客訴為 0 筆時為 `nil` |
+
+   > 原本客訴／測試／總Bug／攔截率已改為即時算（見先前修訂），完成數／未結案／平均天數／
+   > SLA達標率仍讀 `month_kpi` 表，理由是試過幾種常見定義都對不上真實資料、找不到正確算法。
+   > 後來使用者提供了實際產生 `month_kpi` 分頁的 n8n 工作流程原始碼，比對後找到精確定義
+   > （完成數只認「已解決」且僅限客訴、未結案只認「新建立／實作中」不分類型、平均天數與
+   > SLA達標率的分母只看客訴筆數、SLA 天數為 1 天——與本頁「緊急客訴」判斷逾期用的
+   > `ISSUE_SLA_DAYS["Complaint"]＝2` 天是兩個獨立維護的數字，不必對齊），完全吻合的月份
+   > （例如 2026-02／04／06）證實公式無誤；仍有落差的月份研判是 `month_kpi` 為某次執行當下
+   > 的快照，之後試算表個別列被回頭訂正過（狀態、`work_days` 等欄位）、快照未跟著更新。
+   > 全部 8 個欄位改為即時算後，不再需要「這個月是否已結算」「橫跨多個月時哪些欄位能合併、
+   > 哪些不能」等中介判斷，故先前需求提到的 `matched_months`／`settled_month_count`／
+   > `selected_month_pending` 概念一併移除；月份選單的涵蓋範圍也不再受限於 `month_kpi`
+   > 分頁本身的月份（原本只到 2026 年幾個月），改依 `issues` 實際的 `start_date` 範圍
+   > （回溯至 2023 年）。
 
 ---
 

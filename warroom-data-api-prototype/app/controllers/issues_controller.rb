@@ -42,9 +42,7 @@ class IssuesController < ApplicationController
     @available_months = result.available_months
     @selected_from = result.selected_from
     @selected_to = result.selected_to
-    @matched_month_count = result.settled_month_count
     @selected_month_record = result.selected_month_record
-    @selected_month_pending = result.selected_month_pending
     @daily_kpi = DailyKpiBlueprint.render_as_hash(result.daily_kpi_for_range)
 
     @breakdown_sort = BREAKDOWN_SORT_KEYS.include?(params[:breakdown_sort]) ? params[:breakdown_sort] : nil
@@ -79,9 +77,7 @@ class IssuesController < ApplicationController
     @available_months = []
     @selected_from = nil
     @selected_to = nil
-    @matched_month_count = 0
     @selected_month_record = nil
-    @selected_month_pending = false
     @projects = []
     @statuses = []
     @types = []
@@ -89,7 +85,7 @@ class IssuesController < ApplicationController
     @selected_status = DEFAULT_STATUS
     @selected_q = nil
     @selected_type = nil
-    @issue_kpis = { pending: 0, urgent_complaints: 0, overdue_or_undated: 0, total_hours_sum: 0 }
+    @issue_kpis = { pending: 0, urgent_complaints: 0, total_hours_sum: 0 }
     @pagy = nil
     @issues = []
     @error = message

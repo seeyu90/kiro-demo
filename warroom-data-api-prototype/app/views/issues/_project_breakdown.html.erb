@@ -12,13 +12,16 @@
       </tr>
     </thead>
     <tbody>
+      <%# data-label 供窄螢幕的卡片式版面當欄位標籤用（見 application.css 的 @media 區塊）——
+          這張表原本沒加，768px 以下每一列會變成沒有標籤的裸數字，看不出哪個數字是客訴、
+          哪個是測試。 %>
       <% rows.each do |row| %>
         <tr>
           <td><%= row[:project] %></td>
-          <td><%= row[:complaint] %></td>
-          <td><%= row[:testing] %></td>
-          <td><%= row[:other] %></td>
-          <td><%= row[:total] %></td>
+          <td data-label="客訴"><%= row[:complaint] %></td>
+          <td data-label="測試"><%= row[:testing] %></td>
+          <td data-label="其他"><%= row[:other] %></td>
+          <td data-label="總計"><%= row[:total] %></td>
         </tr>
       <% end %>
     </tbody>

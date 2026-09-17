@@ -34,11 +34,9 @@ module IssuesHelper
     [ first_day, last_day ]
   end
 
-  # 月度 KPI 卡片的比率欄位。攔截率現在是即時從 issues 算的（見
-  # Sheets::FetchIssueDashboard#compute_live_month_kpi），只有選到的區間完全沒有客訴／測試
-  # 議題時才是 nil；平均天數／SLA 達標率仍讀 month_kpi 表（見 #build_sheet_month_kpi），選到
-  # 跨月彙總或該月尚未結算時是 nil（不同月份的比率沒有能正確合併的算法）。兩種情況都顯示
-  # 「－」而不是空白加一個孤零零的「%」。
+  # 月度 KPI 卡片的比率欄位（攔截率／平均天數／SLA達標率），全部即時從 issues 算（見
+  # Sheets::FetchIssueDashboard#compute_month_kpi），只有選到的區間裡分母為 0（沒有客訴，或
+  # 客訴＋測試皆為 0）時才是 nil，顯示「－」而不是空白加一個孤零零的「%」。
   def month_kpi_rate_display(value, unit: "%")
     value.nil? ? "－" : "#{value}#{unit}"
   end
