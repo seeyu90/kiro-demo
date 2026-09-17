@@ -1075,6 +1075,18 @@ turbo-frame[busy]::after {
   color: var(--color-text-strong);
 }
 
+/* 議題 KPI 的攔截率／SLA達標率兩張卡，圖示縮小到 11px（原本共用的 14px 在這裡使用者覺得
+   偏大）；縮小後圖示box本身變矮，vertical-align:middle 的落差量也要重新量，不能沿用
+   14px 版本校正好的 -1px（見上面 .chart-info 的說明）。 */
+.stat-label .chart-info-icon svg {
+  width: 11px;
+  height: 11px;
+}
+
+.stat-label .chart-info {
+  transform: translateY(-1.1px);
+}
+
 /* 圖示本身是 shared/_info_tooltip 裡的內嵌 SVG（線框圓圈＋i），不是文字字元：原本用純文字
    "i" 塞進這裡自己畫的圓形背景裡（更早之前是 Unicode 的 ⓘ，同樣問題），使用者反應不好看。
    SVG 用 currentColor 直接跟隨 .chart-info 的顏色（含 hover/focus 變色），不必額外處理
