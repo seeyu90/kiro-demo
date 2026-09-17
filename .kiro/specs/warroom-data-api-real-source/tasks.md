@@ -145,7 +145,7 @@
     - stub 回傳日期欄位為空值的資料 → 驗證輸出為 `nil`
     - stub 回傳 `delay_days` 為 `"-4"` → 驗證輸出為 Integer `-4`
     - stub 回傳 `delay_days` 為 `"TBD"` → 驗證保留原始字串
-    - stub 回傳 `project_name`、`task_name`、`status` 或 `owner` 任一欄為空白的資料 → 驗證該筆被跳過、不納入 `grouped_data`，其餘正常紀錄仍回傳成功結果（見需求 4.3；不再觸發 `:invalid_data_format`）
+    - stub 回傳 `project_name`、`task_name` 或 `owner` 任一欄為空白的資料 → 驗證該筆被跳過、不納入 `grouped_data`，其餘正常紀錄仍回傳成功結果（見需求 4.3；不再觸發 `:invalid_data_format`）；另 stub `status` 為空白的資料 → 驗證該筆被保留且 `status` 為 `"未完成"`（見需求 4.3a）
     - stub 拋出 `Google::Apis::ClientError`（status 404）→ 驗證 `failure_code: :sheet_not_found`
     - stub 拋出 `Google::Apis::ClientError`（status 403）→ 驗證 `failure_code: :access_denied`
     - stub 拋出 `StandardError`（模擬憑證錯誤）→ 驗證 `failure_code: :internal_error`
@@ -189,7 +189,7 @@
 
 - [x] 11. Dashboard 任務類型標記與篩選（需求 10，戰情室 UX 強化延伸）
   - [x] 11.1 `SheetsApiClient` 標記類型分頁（`tag_with_type`）
-    - 每個類型分頁的資料列附加第 8 欄：標題列附加固定文字「類型」，資料列附加該分頁名稱（`功能`／`PR`／`調整`／`遺漏`／`臭蟲`）
+    - 讀年度分頁（`PROJECT_PROGRESS_SHEET_NAME`，預設 `2026`）範圍 `A:J`，把來源欄位重新對應為對外列格式；第 8 欄「類型」直接取自來源的「類型」欄（含 `未分類`），不再依分頁名稱推導
     - _需求：10（見需求 2.7、2.8）_
 
   - [x] 11.2 `Sheets::FetchProjectProgress` Actor 解析 `task_type`

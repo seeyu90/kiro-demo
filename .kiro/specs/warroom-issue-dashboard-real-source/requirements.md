@@ -152,6 +152,10 @@ Webhook／排程更新、資料庫或本地快取層、OAuth 使用者登入、�
    IF `breakdown_sort` 帶入非 `complaint`／`testing`／`other`／`total` 之一的值，THEN THE
    **IssueDashboard_Page** SHALL 忽略該參數，維持原始（依專案分組）順序，不拋出錯誤；專案欄位不提供
    排序。對齊 [warroom-issue-dashboard-static-prototype/requirements.md](../warroom-issue-dashboard-static-prototype/requirements.md) 需求 2.4b。
+6. THE **IssueDashboard_Page** SHALL 在「依專案分類」表格最下方新增一列小計（`<tfoot>`），加總畫面上
+   顯示的所有專案列的客訴／測試／其他／總計欄位，不受目前排序（`breakdown_sort`）影響其加總結果。
+
+   > 使用者要求加小計，方便一眼看出所選期間的總數，不必自己把每一列加起來。
 
 ---
 
@@ -202,13 +206,20 @@ Webhook／排程更新、資料庫或本地快取層、OAuth 使用者登入、�
    性質議題（例如測試環境驗證、測試資料回填），非真實缺陷或客訴，不應計入品質相關統計；此排除規則
    於 Actor 解析階段套用，`GET /api/issue_dashboard` 與 `GET /issues` 皆不會看到，對齊
    [warroom-issue-dashboard-static-prototype/requirements.md](../warroom-issue-dashboard-static-prototype/requirements.md) 需求 4.6。
-6. THE **IssueDashboard_Endpoint** 及 **IssueDashboard_Page** SHALL 依 `type` 欄位標示每筆議題的
-   「歸屬類型」：`Complaint`（客訴）標示為「專案共同責任」，`TestingBug`（測試）標示為「個人責任」，
-   其餘標示為「其他」；此標示 SHALL 為顯示層依 `type` 動態計算，不作為 Actor 輸出的獨立資料欄位
-   （與 prototype 的 `attributionLabel(type)` 邏輯一致）。
-7. THE **IssueDashboard_Page** SHALL 將議題明細表格的欄位依序顯示為：議題編號、專案、主旨、歸屬類型、
-   狀態、負責人、開始日期、到期日期、工作天數，不顯示 `type`／`tracker` 原始欄位（分類意義已由
-   「歸屬類型」呈現，避免重複資訊），與 prototype 的 `ISSUE_COLUMNS` 順序一致。
+6. THE **IssueDashboard_Page** SHALL 依 `type` 欄位標示每筆議題的「類別」：`Complaint`（客訴）標示為
+   「客訴」，`TestingBug`（測試）標示為「測試」，其餘標示為「其他」；此標示 SHALL 為顯示層依
+   `type` 動態計算，不作為 Actor 輸出的獨立資料欄位。**IssueDashboard_Endpoint**（JSON API）不受
+   此標示影響，仍只回傳原始 `type` 值。
+
+   > 原本「類別」欄位與需求 8 的「類型」篩選下拉各用一套詞彙：前者沿用 prototype 的
+   > `attributionLabel(type)`（客訴＝「專案共同責任」、測試＝「個人責任」），後者一度改成
+   > 「客訴／測試」，兩邊對不起來，使用者反應選了篩選卻在欄位裡看到不同的字。改為兩處統一
+   > 用「客訴／測試／其他」。`attributionLabel` 這套「歸屬責任」用詞（`IssuesHelper#attribution_label`
+   > `#attribution_class`）仍保留給 PM 週報（`/pm_weekly_report`）使用，不受影響——那邊需要的是
+   > 「這個議題算誰的責任」而非「這是哪一種議題」，兩頁的呈現需求本來就不同。
+7. THE **IssueDashboard_Page** SHALL 將議題明細表格的欄位依序顯示為：議題／專案、類別、主旨、狀態、
+   負責人、時程與天數、花費時間，不顯示 `type`／`tracker` 原始欄位（分類意義已由「類別」呈現，
+   避免重複資訊）。
 8. THE **IssueDashboard_Page** SHALL 將「議題編號」欄位渲染為可點擊連結，導向對應的
    **Redmine_Issue_URL**（`https://redmine.amastek.com.tw/issues/{issue_id}`），並以新分頁開啟
    （`target="_blank"`，含 `rel="noopener noreferrer"`）。
@@ -284,32 +295,98 @@ Webhook／排程更新、資料庫或本地快取層、OAuth 使用者登入、�
 #### 驗收標準
 
 1. THE **IssueDashboard_Page** SHALL 提供依「專案」篩選（`project` query param），預設「全部專案」。
-2. THE **IssueDashboard_Page** SHALL 提供依「狀態」篩選（`status` query param），未帶參數時預設選中
-   「新建立」，聚焦最需要處理的新進議題，不預設顯示全部狀態，與 prototype 一致。
-3. WHEN 使用者變更專案或狀態篩選，THE **IssueDashboard_Page** SHALL 以 Turbo Frame 局部更新議題明細
-   清單，不觸發整頁重載，與既有 `warroom-data-api-prototype` Dashboard 頁面的互動模式一致。
+2. THE **IssueDashboard_Page** SHALL 提供依「狀態」多選篩選（`status[]` query param，checkbox 群組），
+   未帶此 query param 時（使用者尚未送出過本表單）預設勾選「新建立」，聚焦最需要處理的新進議題，
+   不預設顯示全部狀態，與 prototype 一致；WHEN 使用者主動送出表單且全部取消勾選，THE
+   **IssueDashboard_Page** SHALL 視為「不限狀態」，顯示全部狀態，不會落回預設勾選值。
+3. WHEN 使用者變更專案、狀態或類型篩選，THE **IssueDashboard_Page** SHALL 以 Turbo Frame 局部更新
+   議題明細清單，不觸發整頁重載，與既有 `warroom-data-api-prototype` Dashboard 頁面的互動模式一致。
 4. WHEN 篩選後無符合條件的議題，THE **IssueDashboard_Page** SHALL 顯示「目前無符合條件的議題」。
+5. THE **IssueDashboard_Page** SHALL 提供依「類型」多選篩選（`type[]` query param，checkbox 群組，
+   `Complaint`／`TestingBug`／`Other` 可複選或不篩選）；`Other` 須同時比對類型欄位為空白與寫著
+   `Other` 兩種原始值（對使用者而言是同一件事）。
+6. THE **IssueDashboard_Page** SHALL 將議題明細依議題編號降冪排序（最新建立的議題排最前面）。
+
+   > 需求 5.5（原始版本）中類型篩選是單一「只看客訴」快捷 Tag（
+   > `warroom-issue-dashboard-ux-refresh` 任務 3），只能二選一（看客訴或看全部）；先改為與
+   > 專案／狀態一致的下拉選單（單選其一），後續使用者要求狀態／類型都改成跟 305（`task_type`
+   > 篩選）一樣的多選 checkbox 群組，可同時選取多個狀態／多個類型。實作上完全比照 305 的
+   > `Sheets::FetchProjectProgress` 慣例：`status[]`／`type[]` 皆為陣列 query param，搭配一個
+   > 值為空字串的隱藏欄位，讓「使用者主動全部取消勾選」（陣列為空、視為不篩選）與「這個
+   > query param 根本沒被送出過」（`params.key?` 為否，套用預設勾選值）能被明確區分；「狀態」
+   > 的預設勾選值（`Sheets::FetchIssueDashboard::DEFAULT_STATUSES = ["新建立"]`）取代原本
+   > 單一字串的 `status` 預設值，「類型」則沒有內建預設子集合（原本「不篩選」就是全選）。
+   >
+   > 排序原本沒有明確規格，實際行為是 `raw_2023`〜`raw_2027` 分頁依序串接後的原始順序，
+   > 等於「最舊的議題排最前面」——清空篩選會先看到 2023 年的資料，447 筆要翻好幾頁才看得到
+   > 最近的議題，被使用者回報不合理。改為依議題編號降冪，最新的排最前面。
 
 ---
 
-### 需求 9：月度 KPI 月份切換（延續 prototype UX）
+### 需求 9：議題 KPI 日期區間篩選（延續 prototype UX，已脫離月份限制）
 
 **使用者故事：** 身為戰情室使用者，我希望能像 prototype 一樣切換月份查看不同月度 KPI，以便回顧歷史
 月份表現。
 
+> 本區塊原名「月度 KPI」，但實際上是依「範圍」表單計算任意日期區間（不限於整月），改稱
+> 「議題 KPI」，避免「月度」字樣讓使用者誤以為只能整月切換。
+
 #### 驗收標準
 
-1. THE **IssueDashboard_Page** SHALL 提供月份選擇（`month` query param），未帶參數時預設最新月份
-   （`month_kpi` 資料中 `year_month` 最大值）。
-2. WHEN 使用者切換月份，THE **IssueDashboard_Page** SHALL 以 Turbo Frame 局部更新 KPI 卡片、每日
-   趨勢圖與依專案分類統計（見需求 3a.4、需求 4.5），三者一併隨月份切換重新渲染；議題明細清單
-   （「議題資料」分頁籤）不受月份篩選影響，維持顯示全部議題。
-3. THE **IssueDashboard_Page** SHALL 在月度 KPI 區塊顯示說明文字，明確告知：KPI 卡片為月結數字
-   （當月進行中尚未結算），而每日趨勢與依專案分類統計則依此處所選月份即時呈現，「議題資料」分頁的
-   議題明細不受月份篩選影響（顯示全部議題），與 prototype 一致（見
-   [warroom-issue-dashboard-static-prototype/requirements.md](../warroom-issue-dashboard-static-prototype/requirements.md) 需求 2.5、2.6）。
-4. THE **IssueDashboard_Page** SHALL 確保此說明文字僅出現在月度 KPI 區塊一處，不得重複出現在議題
-   明細的專案／狀態篩選控制項附近，避免使用者誤解為「篩選功能未生效」。
+1. THE **IssueDashboard_Page** SHALL 提供月份／日期區間選擇（`from`／`to` query params），未帶參數
+   時預設當月（`Date.current` 所在月份）。
+2. WHEN 使用者切換日期區間，THE **IssueDashboard_Page** SHALL 以 Turbo Frame 局部更新 KPI 卡片、每日
+   趨勢圖與依專案分類統計（見需求 3a.4、需求 4.5），三者一併隨區間切換重新渲染；議題明細清單
+   （「議題資料」分頁籤）不受此區間篩選影響，維持顯示全部議題。
+
+   > 原本此區塊下方會顯示一段說明文字，明確告知「議題資料」分頁的議題明細不受此處日期區間
+   > 篩選影響。使用者反應這段說明放在「議題 KPI」標題底下，但內容講的其實是另一個分頁籤的
+   > 行為，跟本區塊的 KPI 計算本身無關，故直接移除；「議題資料」分頁不受此區間篩選影響這件
+   > 事本身（本criterion 描述的行為）維持不變，只是不再於 UI 上額外說明。
+3. THE **IssueDashboard_Actor** SHALL 將議題 KPI 卡片的全部欄位（客訴、測試、其他、攔截率、
+   客訴完成數、客訴未結數、遲期客訴、平均天數、SLA達標率、總花費工時）即時從 `issues`（依所選
+   日期區間篩選、`tracker=臭蟲`）計算，不讀取 `month_kpi` 分頁的對應欄位；`GET /api/issue_dashboard`
+   的 `month_kpi` 輸出不受影響，仍原樣回傳該分頁的原始列。公式（與產生 `month_kpi` 分頁的外部
+   n8n 流程原始碼比對後採用一致定義，「其他」「遲期客訴」「總花費工時」三個欄位為 n8n 腳本
+   沒有的新指標，見下方修訂記錄）：
+
+   | 欄位 | 定義 |
+   |---|---|
+   | 客訴／測試 | 區間內 `type` 為 `Complaint`／`TestingBug` 的筆數 |
+   | 其他 | 區間內 `type` 不屬於 `Complaint`／`TestingBug`（依需求 8 的類型分類規則歸為 `Other`）的筆數 |
+   | 攔截率 | 測試 ÷ (客訴＋測試) × 100；分母為 0 時為 `nil`（「其他」不計入分子分母） |
+   | 客訴完成數 | 區間內 `type=Complaint` 且 `status` **恰好**等於「已解決」的筆數；卡片只顯示此筆數本身，不加「／客訴總數」的分母（分母就是旁邊「客訴」卡的數字，重複顯示無意義） |
+   | 客訴未結數 | 客訴總數－客訴完成數；與「客訴完成數」互補，兩張卡加總恰為「客訴」卡的數字 |
+   | 遲期客訴 | 客訴中尚未完成（`done?` 廣義定義，見需求 3a）且已逾期（`overdue?` 廣義定義）的筆數，反映「現在還有什麼在燒」的即時風險，不受「所選期間」侷限於「這個月做得如何」的回顧視角 |
+   | 平均天數 | 區間內 `type=Complaint` 的 `work_days` 總和 ÷ 客訴筆數；客訴為 0 筆時為 `nil` |
+   | SLA達標率 | 區間內 `type=Complaint` 且 `work_days` 恰好等於 1 的筆數 ÷ 客訴筆數 × 100；客訴為 0 筆時為 `nil` |
+   | 總花費工時 | 區間內全部議題（不分類型）的 `total_hours` 總和，反映投入成本，跟「議題資料」分頁的「累積總花費工時」同一概念，差別只在限定所選期間 |
+
+   > 原本客訴／測試／總Bug／攔截率已改為即時算（見先前修訂），完成數／未結案／平均天數／
+   > SLA達標率仍讀 `month_kpi` 表，理由是試過幾種常見定義都對不上真實資料、找不到正確算法。
+   > 後來使用者提供了實際產生 `month_kpi` 分頁的 n8n 工作流程原始碼，比對後找到精確定義
+   > （完成數只認「已解決」且僅限客訴、未結案只認「新建立／實作中」不分類型、平均天數與
+   > SLA達標率的分母只看客訴筆數、SLA 天數為 1 天——與本頁「緊急客訴」判斷逾期用的
+   > `ISSUE_SLA_DAYS["Complaint"]＝2` 天是兩個獨立維護的數字，不必對齊），完全吻合的月份
+   > （例如 2026-02／04／06）證實公式無誤；仍有落差的月份研判是 `month_kpi` 為某次執行當下
+   > 的快照，之後試算表個別列被回頭訂正過（狀態、`work_days` 等欄位）、快照未跟著更新。
+   > 全部欄位改為即時算後，不再需要「這個月是否已結算」「橫跨多個月時哪些欄位能合併、
+   > 哪些不能」等中介判斷，故先前需求提到的 `matched_months`／`settled_month_count`／
+   > `selected_month_pending` 概念一併移除；月份選單的涵蓋範圍也不再受限於 `month_kpi`
+   > 分頁本身的月份（原本只到 2026 年幾個月），改依 `issues` 實際的 `start_date` 範圍
+   > （回溯至 2023 年）。
+
+   > 擺脫 `month_kpi` 固定 8 欄的形狀限制後，使用者要求重新設計整組卡片，讓使用者更容易
+   > 看出所選期間的狀況：（1）「總Bug」（客訴＋測試相加）拿掉，因為只是前兩張卡心算相加，
+   > 沒有獨立資訊量；（2）「完成數」改名「客訴完成數」，一度改成「已完成／客訴總數」的分數
+   > 顯示（例如「5/14」），後來使用者認為分母沒必要（分母就是旁邊「客訴」卡本身），改回只
+   > 顯示筆數；（3）「未結案」改名「客訴未結數」，定義也從 n8n 原始腳本的「狀態恰好是新建立
+   > 或實作中，不分類型」改成「客訴總數－客訴完成數」，因為跟「客訴完成數」配對、兩張卡互補
+   > 相加等於客訴總數，比對齊 n8n 原始定義更容易讓使用者看懂；（4）新增「其他」卡，補上客訴／
+   > 測試之外第三種類型的數量，與「依專案分類」表格的分類口徑一致；（5）新增「遲期客訴」卡
+   > （即時風險，現在還有什麼在燒），前面幾張卡都是回顧「所選期間做得如何」，這張補上「現在」
+   > 的視角；（6）新增「總花費工時」卡（不分類型的區間內工時總和），補上「花了多少成本」的
+   > 視角。最終定案為本 criterion 表格所列的 10 個欄位。
 
 ---
 

@@ -7,6 +7,13 @@ RSpec.describe "Issues", type: :request do
     body[%r{<h2>依專案分類</h2>.*?</section>}m]
   end
 
+  # 「議題資料」分頁也有一組 stat-value（待處理議題／緊急客訴／花費工時），
+  # 跟「議題 KPI」的卡片共用同一個 class，數字又常常重疊（0、1、2 這種小數字到處都是），
+  # 驗證議題 KPI 卡片數字時必須只擷取這個區塊，避免誤判到另一組卡片。
+  def month_kpi_section(body)
+    body[%r{<h2>議題 KPI</h2>.*?</section>}m]
+  end
+
   let(:month_kpi_rows) do
     [
       %w[year_month 客訴 測試 總Bug 攔截率 完成數 未結案 平均天數 SLA達標率 Top3],
@@ -47,31 +54,33 @@ RSpec.describe "Issues", type: :request do
   end
 
   describe "GET /issues with default filters" do
+    # 客訴／測試／總Bug／攔截率改由 issues 即時算後，預設區間（未帶 from/to）改成「當月」
+    # （需求 9.1），不再是「month_kpi 已結算的最新月份」，因此會依賴 Date.current。固定在一個
+    # fixture 涵蓋得到的日期，測試才不會因為實際執行日期落在哪個月份而改變結果。
+    around { |example| travel_to(Date.new(2026, 8, 19)) { example.run } }
+
     before { get "/issues" }
 
     it "returns HTTP 200" do
       expect(response).to have_http_status(200)
     end
 
-    it "defaults the date range to the latest settled month's bounds" do
+    it "defaults the date range to the current month's bounds" do
       expect(response.body).to include(%(name="from" id="from" value="2026-08-01"))
       expect(response.body).to include(%(name="to" id="to" value="2026-08-31"))
     end
 
-    it "shows KPI values for the latest month" do
-      expect(response.body).to include("37.5")
-      expect(response.body).to include("25.0")
-    end
-
-    it "shows exactly one section-note, explaining the settlement/live-data distinction near the KPI heading" do
-      notes = response.body.scan(%r{<p class="section-note">([^<]*)</p>})
-      expect(notes.size).to eq(1)
-      expect(notes.first.first).to include("月結").and include("即時")
-    end
-
-    it "does not repeat the note near the project/status filters (which do actively filter the list below)" do
-      # 確認「不受期間篩選影響」字樣只出現一次（在月度 KPI 區塊），不會出現在議題明細篩選附近造成混淆
-      expect(response.body.scan("不受期間篩選影響").size).to eq(1)
+    # 所有欄位全部即時從 issues 算：8 月只有 issue 5165（TestingBug／新建立）與 5180
+    # （Complaint／已解決／work_days=1）落在範圍內（5170 tracker=測試被排除）。
+    # block_rate＝1÷(1+1)×100＝50.0，跟 month_kpi_rows 寫的 37.5 不同；SLA達標率＝
+    # work_days<=1 的 5180 一筆 ÷ 1 客訴×100＝100.0，跟 month_kpi_rows 寫的 25 也不同——
+    # 確認兩者都真的是即時算，不是讀 sheet。
+    it "computes block_rate and sla_rate live for the current month, not from month_kpi_rows" do
+      section = month_kpi_section(response.body)
+      expect(section).to include("50.0%")
+      expect(section).not_to include("37.5%")
+      expect(section).to include("100.0%")
+      expect(section).not_to include("25.0%")
     end
 
     it "shows the project breakdown table filtered to issues started in the selected month" do
@@ -89,8 +98,11 @@ RSpec.describe "Issues", type: :request do
       expect(section).not_to include("▼")
     end
 
-    it "renders the trend chart SVG with one point per daily_kpi row" do
-      expect(response.body.scan("trend-point").size).to eq(2)
+    # X 軸現在逐日補齊到「今天」（travel_to 固定 2026-08-19），不是只畫 daily_kpi_rows 裡
+    # 剛好有資料的 2 天，才不會讓週末等空隙的間距在圖上跟平常的 1 天看起來一樣寬（見
+    # fill_daily_kpi_gaps 的說明）。8/1～8/19 共 19 天。
+    it "renders one trend point per calendar day from the 1st of the month through today" do
+      expect(response.body.scan("trend-point").size).to eq(19)
     end
 
     it "defaults the status filter to 新建立, showing only the matching issue" do
@@ -105,8 +117,8 @@ RSpec.describe "Issues", type: :request do
       expect(response.body).to include('rel="noopener noreferrer"')
     end
 
-    it "renders the attribution badge for the visible issue" do
-      expect(response.body).to include("個人責任") # TestingBug
+    it "renders the 類別 badge for the visible issue" do
+      expect(response.body).to match(%r{<span class="attribution-badge attribution-individual">\s*測試\s*</span>})
     end
   end
 
@@ -123,10 +135,10 @@ RSpec.describe "Issues", type: :request do
       expect(response.body).not_to include("測試環境資料回填驗證")
     end
 
-    it "shows all three attribution categories" do
-      expect(response.body).to include("專案共同責任") # Complaint
-      expect(response.body).to include("個人責任") # TestingBug
-      expect(response.body).to include("其他") # Other
+    it "shows all three 類別 categories" do
+      expect(response.body).to match(%r{<span class="attribution-badge attribution-shared">\s*客訴\s*</span>})
+      expect(response.body).to match(%r{<span class="attribution-badge attribution-individual">\s*測試\s*</span>})
+      expect(response.body).to match(%r{<span class="attribution-badge attribution-other">\s*其他\s*</span>})
     end
   end
 
@@ -144,11 +156,67 @@ RSpec.describe "Issues", type: :request do
     end
   end
 
+  # 類型篩選原本是「只看客訴」快捷 Tag（單一開關），先改成跟專案／狀態一致的下拉選單（單選
+  # 其一），後來使用者要求跟狀態一起改成 305 式的多選 checkbox 群組（type[]，可複選）。
+  # 選項文字（客訴／測試／其他）跟「類別」欄位 badge 的文字改成同一套，兩者共用
+  # issue_type_label——不是 attribution_label 那套歸屬責任框架（專案共同責任／個人責任），
+  # 那套只有 PM 週報還在用；原本篩選下拉跟欄位各用一套詞彙，使用者反應選了篩選卻在欄位裡
+  # 看到不同的字，混淆。
+  describe "GET /issues?type[]=... (類型篩選 checkbox 群組)" do
+    it "renders a 類型 checkbox group whose labels match the 類別 column's badge wording" do
+      get "/issues"
+
+      expect(response.body).to match(%r{<legend>類型</legend>})
+      expect(response.body).to match(/<input type="checkbox" name="type\[\]" value="Complaint"[^>]*>\s*客訴/)
+      expect(response.body).to match(/<input type="checkbox" name="type\[\]" value="TestingBug"[^>]*>\s*測試/)
+      expect(response.body).to match(/<input type="checkbox" name="type\[\]" value="Other"[^>]*>\s*其他/)
+    end
+
+    it "shows only Complaint-type issues when type[]=Complaint" do
+      get "/issues", params: { type: [ "Complaint" ], status: [] }
+
+      expect(response.body).to include("未匯入行事曆").and include("客訴：儀表板顯示異常")
+      expect(response.body).not_to include("白名單申請時間錯誤")
+      expect(response.body).not_to include("結案小工序DeadlockVictim")
+    end
+
+    it "matches the literal Other type value when type[]=Other" do
+      get "/issues", params: { type: [ "Other" ], status: [] }
+
+      expect(response.body).to include("結案小工序DeadlockVictim")
+      expect(response.body).not_to include("客訴：儀表板顯示異常")
+      expect(response.body).not_to include("白名單申請時間錯誤")
+    end
+
+    it "shows the union of issues when multiple types are selected" do
+      get "/issues", params: { type: [ "Complaint", "TestingBug" ], status: [] }
+
+      expect(response.body).to include("未匯入行事曆").and include("客訴：儀表板顯示異常")
+      expect(response.body).to include("白名單申請時間錯誤")
+      expect(response.body).not_to include("結案小工序DeadlockVictim")
+    end
+
+    it "keeps the selected type checked in the checkbox group" do
+      get "/issues", params: { type: [ "TestingBug" ], status: [] }
+
+      expect(response.body).to match(/<input type="checkbox" name="type\[\]" value="TestingBug"[^>]*checked="checked"/)
+      expect(response.body).not_to match(/<input type="checkbox" name="type\[\]" value="Complaint"[^>]*checked="checked"/)
+    end
+  end
+
   describe "GET /issues?from=2026-07-01&to=2026-07-31" do
     before { get "/issues", params: { from: "2026-07-01", to: "2026-07-31", status: "" } }
 
-    it "shows KPI values for the selected month, not the latest" do
-      expect(response.body).to include("20.0") # block_rate for 2026-07
+    # 這份 fixture 沒有任何 7 月的 Complaint／TestingBug（8 月才有），即時算出來全部歸零／
+    # 沒有比率可算，確認顯示的真的是所選的 7 月，不是預設的 8 月（8 月會是 50.0%／100.0%，
+    # 見「with default filters」那組測試）。
+    it "computes zeroed-out KPI values for the selected month, not the default month's real numbers" do
+      section = month_kpi_section(response.body)
+      # 客訴／測試／其他／客訴完成數／客訴未結數／客訴逾期數皆為 0
+      expect(section.scan('<span class="stat-value">0</span>').size).to eq(6)
+      expect(section.scan('<span class="stat-value">－</span>').size).to eq(3) # 攔截率／平均天數／SLA達標率
+      expect(section).not_to include("50.0%")
+      expect(section).not_to include("100.0%")
     end
 
     it "filters the project breakdown to issues started in the selected month" do
@@ -159,28 +227,53 @@ RSpec.describe "Issues", type: :request do
       expect(section).not_to include("AG 亞炬")
     end
 
-    it "filters the trend chart to daily_kpi rows in the selected month" do
-      expect(response.body.scan("trend-point").size).to eq(1)
+    # 7 月已經過完（不受 travel_to 影響，這個 describe 沒有固定「今天」），逐日補齊後是完整
+    # 31 天，不是只有 daily_kpi_rows 裡剛好有資料的那 1 天。
+    it "fills every calendar day in the selected month, not just the one with a daily_kpi row" do
+      expect(response.body.scan("trend-point").size).to eq(31)
     end
   end
 
   describe "GET /issues?from=2026-07-01&to=2026-08-31 (跨月彙總)" do
+    # 客訴／測試／總Bug／攔截率即時從這個區間內的 issues 算，不再靠 month_kpi 表彙總；
+    # 加 2 筆 7 月的資料，讓「跨月」這件事對即時計算也是有意義的（用共用 issue_rows 的話，
+    # 裡面完全沒有 7 月的 Complaint／TestingBug，即時算出來會跟只看 8 月一樣，測不出跨月效果）。
+    let(:issue_rows) do
+      [
+        %w[issue_id subject type tracker status assigned_to start_date due_date work_days sheet_name project],
+        [ "9001", "7月客訴", "Complaint", "臭蟲", "已結束", "王贊勛", "2026/7/5", "", "", "raw_2026", "P" ],
+        [ "9002", "7月其他類型議題", "Other", "臭蟲", "新建立", "王贊勛", "2026/7/20", "", "", "raw_2026", "P" ],
+        [ "5165", "白名單申請時間錯誤", "TestingBug", "臭蟲", "新建立", "蔡秉逸",
+         "2026/8/12", "", "", "raw_2026", "Virtuous HRM" ],
+        [ "5180", "客訴：儀表板顯示異常", "Complaint", "臭蟲", "已解決", "王贊勛",
+         "2026/8/5", "2026/8/6", "1", "raw_2026", "JZN 舊振南智慧工廠" ]
+      ]
+    end
+
     before { get "/issues", params: { from: "2026-07-01", to: "2026-08-31", status: "" } }
 
-    it "sums the count fields across matched months" do
-      expect(response.body).to include(">43<") # complaint 28+15
-      expect(response.body).to include(">16<") # testing 7+9, unresolved 7+3
-      expect(response.body).to include(">59<") # total_bug 35+24
+    # 這個區間內（7+8 月）：Complaint 2 筆（9001 已結束、5180 已解決 work_days=1）、
+    # TestingBug 1 筆（5165 新建立）、Other 1 筆（9002）。跨兩個月的區間現在只是換一批 issues
+    # 重新算一次，不是彙總兩個月各自的 month_kpi 快照列，每張卡都直接對整個區間重算，不再有
+    # 「有些欄位能加總、有些欄位不能跨月合併」的分別。其他（Other）不計入 total_bug／攔截率，
+    # 所以加了這筆之後攔截率仍是 33.33%，不受影響。
+    it "computes complaint/testing/other/block_rate across the combined range" do
+      section = month_kpi_section(response.body)
+      expect(section).to include("<span class=\"stat-value\">2</span>")   # 客訴
+      expect(section).to include("<span class=\"stat-value\">1</span>")   # 測試／其他皆為 1
+      expect(section).to include("33.33%")
     end
 
-    it "shows a dash instead of a blended rate for block_rate/avg_days/sla_rate" do
-      expect(response.body.scan("－").size).to be >= 3
-      expect(response.body).not_to include("37.5%")
-      expect(response.body).not_to include("20.0%")
-    end
-
-    it "notes how many months were aggregated" do
-      expect(response.body).to include("彙總 2 個月")
+    # 完成數＝客訴中狀態恰為「已解決」的筆數：只有 5180 算，9001 是「已結束」不算，故完成數＝1；
+    # 客訴未結數＝客訴總數－完成數＝2－1＝1；平均天數＝(0+1)÷2 客訴（9001 沒填 work_days 視為 0）；
+    # SLA達標率＝work_days<=1 的 5180 一筆 ÷ 2 客訴×100。
+    it "computes completed/unresolved/avg_days/sla_rate across the combined range, not from month_kpi_rows" do
+      section = month_kpi_section(response.body)
+      expect(section).to include("<span class=\"stat-value\">1</span>")   # 完成數／未結案皆為 1
+      expect(section).to include("0.5")                                   # 平均天數
+      expect(section).to include("50.0%")                                 # SLA達標率
+      expect(section).not_to include("37.5%")
+      expect(section).not_to include("20.0%")
     end
   end
 
@@ -196,8 +289,16 @@ RSpec.describe "Issues", type: :request do
   end
 
   describe "GET /issues?breakdown_sort=... (依專案分類排序)" do
+    # 大部分測試沒帶 from/to，依專案分類統計依賴預設區間（見「GET /issues with default
+    # filters」的說明）；固定「今天」讓預設區間落在這份 fixture 有資料的 2026-08。
+    around { |example| travel_to(Date.new(2026, 8, 19)) { example.run } }
+
     def breakdown_project_order(body)
-      project_breakdown_section(body).scan(%r{<td>([^<]+)</td>}).flatten.each_slice(5).map(&:first)
+      # <td> 現在有的帶 data-label="..."（窄螢幕卡片式版面用，見 _project_breakdown.html.erb），
+      # 屬性寫法不固定，用 [^>]* 涵蓋。只取 <tbody>，排除表格最下面的小計列（<tfoot>），
+      # 那一列不是專案、不該算進排序結果裡。
+      body[%r{<h2>依專案分類</h2>.*?<tbody>(.*?)</tbody>}m, 1]
+        .scan(%r{<td[^>]*>([^<]+)</td>}).flatten.each_slice(5).map(&:first)
     end
 
     it "defaults to descending when a sort key is first applied" do
@@ -249,12 +350,18 @@ RSpec.describe "Issues", type: :request do
   end
 
   describe "GET /issues 兩個分頁籤的表單各自送出時，不得覆蓋另一個分頁籤目前的篩選狀態" do
+    # 其中一個測試（breakdown sort links 那個）沒帶 from/to，依專案分類統計依賴預設區間；
+    # 固定「今天」讓預設區間落在這份 fixture 有資料的 2026-08，其餘測試都明確帶 from/to，
+    # 不受影響。
+    around { |example| travel_to(Date.new(2026, 8, 19)) { example.run } }
+
     it "keeps the 議題資料 tab's project/status filters when submitting the 統計摘要 tab's date range form" do
-      get "/issues", params: { tab: "detail", project: "AG 亞炬", status: "" }
-      get "/issues", params: { tab: "stats", from: "2026-07-01", to: "2026-07-31", project: "AG 亞炬", status: "" }
+      get "/issues", params: { tab: "detail", project: "AG 亞炬", status: [] }
+      get "/issues", params: { tab: "stats", from: "2026-07-01", to: "2026-07-31", project: "AG 亞炬", status: [] }
 
       expect(response.body).to match(/<option [^>]*selected="selected"[^>]*value="AG 亞炬"/)
-      expect(response.body).to match(/<option [^>]*selected="selected"[^>]*value=""[^>]*>全部狀態<\/option>/)
+      # status=[]（使用者主動清空狀態勾選）：所有狀態 checkbox 皆不勾選，不會落回預設的「新建立」
+      expect(response.body).not_to match(/name="status\[\]" value="[^"]*"[^>]*checked="checked"/)
     end
 
     it "keeps the 統計摘要 tab's date range/sort selections when submitting the 議題資料 tab's filter form" do
@@ -271,11 +378,11 @@ RSpec.describe "Issues", type: :request do
     end
 
     it "the 統計摘要 tab's form includes hidden project/status fields carrying the current filter" do
-      get "/issues", params: { project: "AG 亞炬", status: "已暫停" }
+      get "/issues", params: { project: "AG 亞炬", status: [ "已暫停" ] }
 
       stats_panel = response.body[/<div class="tab-panel" id="tab-panel-stats">.*?(?=<div class="tab-panel" id="tab-panel-detail">)/m]
       expect(stats_panel).to include('<input type="hidden" name="project" id="project" value="AG 亞炬"')
-      expect(stats_panel).to include('<input type="hidden" name="status" id="status" value="已暫停"')
+      expect(stats_panel).to include('<input type="hidden" name="status[]" value="已暫停"')
     end
 
     it "the 議題資料 tab's form includes hidden from/to/breakdown_sort/breakdown_dir fields carrying the current state" do
@@ -289,11 +396,11 @@ RSpec.describe "Issues", type: :request do
     end
 
     it "the breakdown sort links preserve the 議題資料 tab's current project/status filters" do
-      get "/issues", params: { project: "AG 亞炬", status: "已暫停" }
+      get "/issues", params: { project: "AG 亞炬", status: [ "已暫停" ] }
 
       section = project_breakdown_section(response.body)
       expect(section).to include("project=AG")
-      expect(section).to include("status=%E5%B7%B2%E6%9A%AB%E5%81%9C")
+      expect(section).to include("status%5B%5D=%E5%B7%B2%E6%9A%AB%E5%81%9C")
     end
   end
 
@@ -319,12 +426,8 @@ RSpec.describe "Issues", type: :request do
     end
   end
 
-  describe "GET /issues when the current month has no month_kpi row yet (not settled)" do
-    include ActiveSupport::Testing::TimeHelpers
-
-    around do |example|
-      travel_to(Time.zone.local(2026, 9, 15)) { example.run }
-    end
+  describe "GET /issues for the current in-progress month (no issues in this fixture yet)" do
+    around { |example| travel_to(Time.zone.local(2026, 9, 15)) { example.run } }
 
     before { get "/issues" }
 
@@ -332,25 +435,23 @@ RSpec.describe "Issues", type: :request do
       expect(response.body).to include('max="2026-09-30"')
     end
 
-    it "still defaults the selection to the latest settled month (2026-08), not 2026-09" do
-      expect(response.body).to include(%(name="from" id="from" value="2026-08-01"))
-      expect(response.body).to include(%(name="to" id="to" value="2026-08-31"))
+    # 需求 9.1：預設一律當月。
+    it "defaults the selection to the current month (2026-09)" do
+      expect(response.body).to include(%(name="from" id="from" value="2026-09-01"))
+      expect(response.body).to include(%(name="to" id="to" value="2026-09-30"))
     end
 
-    it "shows real KPI numbers by default (the settled month)" do
-      expect(response.body).to include("37.5")
+    # fixture 沒有任何 2026-09 的議題：客訴／測試／其他／客訴完成數／客訴未結數／客訴逾期數
+    # （計數類欄位）即時算出來都是 0；攔截率／平均天數／SLA達標率（比率類欄位，分母是客訴
+    # 筆數）沒有客訴可算，顯示「－」，不是謊報成 0。
+    it "shows zero counts for the current month, with only the ratio fields dashed out" do
+      section = month_kpi_section(response.body)
+      expect(section.scan('<span class="stat-value">0</span>').size).to eq(6) # 客訴／測試／其他／客訴完成數／客訴未結數／客訴逾期數
+      expect(section.scan('<span class="stat-value">－</span>').size).to eq(3) # 攔截率／平均天數／SLA達標率
     end
 
-    context "when the user explicitly selects the in-progress month" do
-      before { get "/issues", params: { from: "2026-09-01", to: "2026-09-30" } }
-
-      it "shows a 尚未結算 placeholder instead of numbers" do
-        expect(response.body).to include("尚未結算")
-      end
-
-      it "shows the empty state for the project breakdown (no issues started in 2026-09)" do
-        expect(response.body).to include("所選期間無議題資料")
-      end
+    it "shows the empty state for the project breakdown (no issues started in 2026-09)" do
+      expect(response.body).to include("所選期間無議題資料")
     end
   end
 
@@ -367,18 +468,18 @@ RSpec.describe "Issues", type: :request do
       expect(tab_checked?(response.body, "tab-detail")).to be false
     end
 
-    it "puts 月度 KPI／每日趨勢／依專案分類 inside the stats tab panel, and only 議題明細 inside the detail tab panel" do
+    it "puts 議題 KPI／每日趨勢／依專案分類 inside the stats tab panel, and only 議題明細 inside the detail tab panel" do
       get "/issues"
 
       stats_panel = response.body[/<div class="tab-panel" id="tab-panel-stats">.*?(?=<div class="tab-panel" id="tab-panel-detail">)/m]
       detail_panel = response.body[/<div class="tab-panel" id="tab-panel-detail">.*/m]
 
-      expect(stats_panel).to include("<h2>月度 KPI</h2>").and include("<h2>每日趨勢</h2>")
+      expect(stats_panel).to include("<h2>議題 KPI</h2>").and include("<h2>每日趨勢</h2>")
       expect(stats_panel).to include("<h2>依專案分類</h2>")
       expect(stats_panel).not_to include("<h2>議題明細</h2>")
 
       expect(detail_panel).to include("<h2>議題明細</h2>")
-      expect(detail_panel).not_to include("<h2>月度 KPI</h2>")
+      expect(detail_panel).not_to include("<h2>議題 KPI</h2>")
       expect(detail_panel).not_to include("<h2>每日趨勢</h2>")
       expect(detail_panel).not_to include("<h2>依專案分類</h2>")
     end

@@ -2,60 +2,10 @@
  * This is a manifest file that'll be compiled into application.css.
  */
 
-/* ── 主題變數：深色（預設） ── */
+/* ── 主題變數：淺色（預設） ── */
 :root {
-  /* 讓瀏覽器原生元件（目前只有 input[type=date] 的月曆圖示）跟著主題切換，避免深色主題下
-     圖示維持淺色配色、跟深色背景對比不足看不清楚。 */
-  color-scheme: dark;
-
-  --color-bg: #0f1117;
-  --color-surface: #1a202c;
-  --color-border: #2d3748;
-  --color-border-hover: #4a5568;
-  --color-text: #e2e8f0;
-  --color-text-strong: #f7fafc;
-  --color-text-muted: #a0aec0;
-  --color-text-faint: #718096;
-  --color-accent: #63b3ed;
-  --color-accent-strong: #4299e1;
-
-  --btn-text: #1a202c;
-
-  --badge-completed-bg: #1c4532;
-  --badge-completed-text: #68d391;
-  --badge-progress-bg: #1a365d;
-  --badge-progress-text: #63b3ed;
-  --badge-pending-bg: #2d3748;
-  --badge-pending-text: #a0aec0;
-  --overdue-bg: #4a1c1c;
-  --overdue-text: #fc8181;
-  --at-risk-bg: #4a3c1c;
-  --at-risk-text: #f6d365;
-
-  --delay-negative: #68d391;
-  --delay-positive: #fc8181;
-
-  --table-row-border: #1e2533;
-  --table-row-hover-bg: #232b3a;
-
-  --error-bg: #4a1c1c;
-  --error-border: #e53e3e;
-  --error-text: #feb2b2;
-
-  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23a0aec0' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
-
-  /* 專案階段追蹤甘特圖：5 個階段的分類色（跟完成狀態顏色是兩套獨立語意，不隨淺色／深色主題
-     切換——比照 Notion 分類標籤色塊的慣例，固定飽和度夠高的色塊，兩種主題背景下都讀得清楚，
-     不需要像 --color-text 那樣為了跟頁面背景對比而換色）。 */
-  --gantt-stage-requirement: #90cdf4;
-  --gantt-stage-kickoff: #fbb6ce;
-  --gantt-stage-development: #faf089;
-  --gantt-stage-testing: #d6bcfa;
-  --gantt-stage-release: #9decf9;
-}
-
-/* ── 主題變數：淺色 ── */
-html[data-theme="light"] {
+  /* 讓瀏覽器原生元件（目前只有 input[type=date] 的月曆圖示）跟著主題切換，避免主題與
+     原生元件配色不一致、對比不足看不清楚。 */
   color-scheme: light;
 
   --color-bg: #f7fafc;
@@ -65,7 +15,9 @@ html[data-theme="light"] {
   --color-text: #1a202c;
   --color-text-strong: #171923;
   --color-text-muted: #4a5568;
-  --color-text-faint: #64748b;
+  /* #64748b 對 --color-surface（白）只有 4.76:1，貼著 WCAG AA 的 4.5:1 門檻沒有餘裕；
+     加深到 #54627a（6.17:1）給表格表頭等 12px 小字留出安全邊際。 */
+  --color-text-faint: #54627a;
   --color-accent: #2b6cb0;
   --color-accent-strong: #2c5282;
 
@@ -93,6 +45,59 @@ html[data-theme="light"] {
   --error-text: #822727;
 
   --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%234a5568' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+
+  /* 專案階段追蹤甘特圖：5 個階段的分類色（跟完成狀態顏色是兩套獨立語意，不隨淺色／深色主題
+     切換——比照 Notion 分類標籤色塊的慣例，固定飽和度夠高的色塊，兩種主題背景下都讀得清楚，
+     不需要像 --color-text 那樣為了跟頁面背景對比而換色）。 */
+  --gantt-stage-requirement: #90cdf4;
+  --gantt-stage-kickoff: #fbb6ce;
+  --gantt-stage-development: #faf089;
+  --gantt-stage-testing: #d6bcfa;
+  --gantt-stage-release: #9decf9;
+}
+
+/* ── 主題變數：深色（由 data-theme="dark" 啟用；屬性選擇器權重高於 :root，
+   不論宣告先後都會覆蓋上面的預設值） ── */
+html[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-bg: #0f1117;
+  --color-surface: #1a202c;
+  --color-border: #2d3748;
+  --color-border-hover: #4a5568;
+  --color-text: #e2e8f0;
+  --color-text-strong: #f7fafc;
+  --color-text-muted: #a0aec0;
+  /* #718096 對 --color-surface（深色）只有 4.06:1，實測已經低於 4.5:1 門檻；
+     調亮到 #96a3ba（6.41:1）。 */
+  --color-text-faint: #96a3ba;
+  --color-accent: #63b3ed;
+  --color-accent-strong: #4299e1;
+
+  --btn-text: #1a202c;
+
+  --badge-completed-bg: #1c4532;
+  --badge-completed-text: #68d391;
+  --badge-progress-bg: #1a365d;
+  --badge-progress-text: #63b3ed;
+  --badge-pending-bg: #2d3748;
+  --badge-pending-text: #a0aec0;
+  --overdue-bg: #4a1c1c;
+  --overdue-text: #fc8181;
+  --at-risk-bg: #4a3c1c;
+  --at-risk-text: #f6d365;
+
+  --delay-negative: #68d391;
+  --delay-positive: #fc8181;
+
+  --table-row-border: #1e2533;
+  --table-row-hover-bg: #232b3a;
+
+  --error-bg: #4a1c1c;
+  --error-border: #e53e3e;
+  --error-text: #feb2b2;
+
+  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23a0aec0' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
 }
 
 /* ── Reset & Base ── */
@@ -181,6 +186,17 @@ body {
   margin-left: auto;
 }
 
+/* 篩選列分行：每一行各自佔滿一整列（flex-basis:100%），行內維持原本的 flex 排列。
+   用在 305 的兩行式篩選（第一行選資料範圍：年度／專案；第二行選任務條件：類型／範圍），
+   不動 .project-selector 本身的 flex-direction——那個 class 其他頁面也在用。 */
+.filter-row {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  flex-basis: 100%;
+}
+
 .control-group {
   display: flex;
   align-items: center;
@@ -199,6 +215,19 @@ body {
   margin: 0;
 }
 
+/* 日期區間不畫外框：這一列裡只有「任務類型」「範圍」那種多選項群組需要用框圈起來，
+   日期區間只有兩個輸入框，加框反而比鄰居重、也比鄰居高。維持跟 .control-group 一樣的
+   排列即可。 */
+.date-range-filter {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
 /* <legend> 即使 fieldset 設 display:flex，瀏覽器仍會把 legend 渲染成獨立一行、疊在
    checkbox／radio 那一列「上面」（撐高整個 fieldset），跟同一排的 .control-group／
    .apply-filters-btn 等純 div／button 元素比，會讓 fieldset 明顯變高，即使外層
@@ -208,7 +237,8 @@ body {
    給螢幕閱讀器用），另外用一個 <span> 當作看得到的標籤、跟 checkbox／radio 同一列排列，
    fieldset 才會跟其他控制項一樣只有單行高度。 */
 .type-filter legend,
-.scope-filter legend {
+.scope-filter legend,
+.date-range-filter legend {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -220,13 +250,25 @@ body {
   border: 0;
 }
 
+/* 不加 padding：群組標籤與第一個控制項之間的距離一律交給 flex gap 決定，各個篩選群組
+   （專案／預計完成日期／任務類型／範圍）才會是同一個間距。 */
 .filter-group-label {
   font-weight: 600;
-  padding: 0 0.25rem 0 0;
   color: var(--color-text-muted);
   font-size: 0.875rem;
 }
 
+/* 全站篩選標籤的慣例是「X：」（專案：、人員：、狀態：…共 9 處）。fieldset 的群組標籤是
+   後來才加的，當初漏了冒號，同一排看過去有的有、有的沒有。用 ::after 補在樣式層，
+   呼叫端（含 306／307 傳進來的 label）就不必各自記得加標點。 */
+.filter-group-label::after {
+  content: "：";
+}
+
+/* checkbox／radio 本身只有瀏覽器預設的 13×13px。它們包在 <label> 裡，所以文字本來就可點，
+   但 label 沒有 padding 時整個可點擊區只有一行文字的高度（約 20px），在觸控裝置上很難按中。
+   給 label 一點 padding 撐開可點擊區；真正的觸控裝置再用 pointer: coarse 補到 44px（見檔案
+   末尾的觸控區塊）——滑鼠使用者不需要那麼高的按鈕，一律 44px 會讓篩選列變得很笨重。 */
 .type-filter label,
 .scope-filter label {
   font-weight: 400;
@@ -234,14 +276,25 @@ body {
   align-items: center;
   gap: 0.3rem;
   font-size: 0.875rem;
+  /* 只在垂直方向撐開可點擊區。水平方向不加 padding／負 margin——那會讓這一組的間距比
+     其他篩選群組窄 5.6px，同一排看過去疏密不一。 */
+  padding: 0.25rem 0;
+  margin: -0.25rem 0;
+  cursor: pointer;
 }
 
-.incomplete-toggle {
-  display: flex;
+/* 「～」把起訖兩欄連成一個區間，而不是兩個各自獨立的欄位 */
+.date-range-sep {
+  color: var(--color-text-muted);
+}
+
+/* 「～」與結束日期輸入框包成同一個 inline-flex，讓它們在窄螢幕換行時當成一個整體一起換行
+   （見 _date_range_filter.html.erb 的說明），不會出現「～」單獨留在上一行行尾的情況。
+   gap 跟外層 .date-range-filter 一致，視覺間距不因為多包一層而改變。 */
+.date-range-to {
+  display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  font-weight: 600;
-  font-size: 0.875rem;
+  gap: 0.75rem;
 }
 
 /* ── Summary Bar ── */
@@ -250,6 +303,30 @@ body {
   flex-wrap: wrap;
   gap: 0.75rem;
   margin-bottom: 1.5rem;
+}
+
+/* 統計卡數字套用目前全部的篩選條件（專案／任務類型／範圍／預計完成日期），見
+   dashboard/index.html.erb 的說明文字；不點明的話容易被誤以為篩選沒套用成功。
+   （這裡原本寫「範圍／預計完成日期不影響統計卡」，是舊版行為的殘留說明，跟
+   Sheets::FetchProjectProgress#call 現在對 summary 套用 filter_tasks 的實際行為不符，
+   已更正。） */
+.filter-summary {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  margin: 1.25rem 0 0.75rem;
+}
+
+/* 統計卡緊接在篩選表單後面時，兩者之間原本完全沒有間距（篩選列底部與統計卡頂端同一個 y），
+   跟頁面其他區塊 20～24px 的節奏對不上，看起來像黏在一起。只針對「緊接在篩選表單之後」
+   這個位置補間距，不動其他頁面 .summary-bar 出現在別種脈絡下的排版。 */
+.project-selector + .summary-bar {
+  margin-top: 1.25rem;
+}
+
+/* .filter-summary 已經帶了自己的上邊距，緊接其後的統計卡不需要再疊加 .project-selector 那條
+   規則給的間距，否則兩段間距相加會比其他頁面明顯寬。 */
+.filter-summary + .summary-bar {
+  margin-top: 0;
 }
 
 .stat-item {
@@ -368,6 +445,14 @@ a.stat-item:focus {
   outline: none;
 }
 
+/* 原生 date input 的內容區比 select 高約 2px，同一排並列時高度對不齊；統一指定高度，
+   三種控制項（下拉、文字框、日期框）才會齊平。 */
+.project-selector select,
+.project-selector input[type="text"],
+.project-selector input[type="date"] {
+  height: 2.125rem;
+}
+
 /* 搜尋框／起訖日期輸入框跟 select 共用同一套外觀（背景／邊框／圓角／字級），避免瀏覽器
    預設的白底輸入框跟深色主題的 select 混在同一排時視覺不一致。 */
 .project-selector input[type="text"],
@@ -416,18 +501,47 @@ a.stat-item:focus {
   opacity: 0.6;
 }
 
-/* 「重新整理資料」為次要動作，用外框樣式與主要的「套用篩選」區隔 */
-.apply-filters-btn.refresh-btn {
+/* 「重新整理資料」為次要動作，用外框樣式與主要的「套用篩選」區隔。獨立成一組樣式（不依附
+   .apply-filters-btn）：這顆按鈕已收斂為全站唯一，位在入口頁 header，不在任何篩選表單內。 */
+.refresh-btn {
   background: transparent;
   color: var(--color-text);
   border: 1px solid var(--color-border-hover);
+  border-radius: 0.5rem;
+  padding: 0.5rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.2s;
 }
 
-.apply-filters-btn.refresh-btn:hover,
-.apply-filters-btn.refresh-btn:focus {
+.refresh-btn:hover,
+.refresh-btn:focus {
   background: var(--color-surface);
   border-color: var(--color-accent);
   outline: none;
+}
+
+/* button_to 會把按鈕包在 <form> 裡，預設的 block 排版會讓它在 flex 容器中自成一列。 */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.header-actions form {
+  margin: 0;
+}
+
+.flash-notice {
+  margin: 0 0 1rem;
+  padding: 0.625rem 1rem;
+  border: 1px solid var(--color-border-hover);
+  border-left: 3px solid var(--color-accent);
+  border-radius: 0.5rem;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.875rem;
 }
 
 .freshness-label {
@@ -481,6 +595,13 @@ turbo-frame[busy]::after {
   border-color: var(--color-border-hover);
 }
 
+/* 標題＋表頭是固定內容，任務筆數少時這些固定內容佔卡片高度的比例就偏高，看起來比任務多
+   的專案空一截（實測：1 筆任務的卡片 172px、6 筆的 414px，平均每列分別是 172px 與 69px）。
+   只收緊下緣內距，讓單筆卡片沒那麼多留白，不動上緣（標題與其他卡片的標題要對齊）。 */
+.project-block:has(tbody tr:only-child) {
+  padding-bottom: 0.75rem;
+}
+
 /* PM 週報的專案分組標題用 h4（該頁的 h1/h2/h3 已經分給頁標題、四大區塊、區塊內小標），
    標題階層不同但視覺角色相同，共用同一組樣式而不是再開一套。 */
 .project-block h2,
@@ -532,6 +653,81 @@ turbo-frame[busy]::after {
 
 .project-tasks tr:last-child td {
   border-bottom: none;
+}
+
+/* 「依專案分類」表格最下面的小計列（見 _project_breakdown.html.erb）：加粗＋跟資料列之間
+   加一條比一般列更明顯的分隔線，一眼看出這不是另一個專案，是加總列。 */
+.project-breakdown-subtotal td {
+  font-weight: 700;
+  border-top: 2px solid var(--color-border);
+}
+
+/* 每個專案各自是一個獨立的 <table>，若讓瀏覽器自動決定欄寬，每張表都會依「自己這批資料」
+   算出不同的欄寬，各專案區塊之間的「類型」「負責人」「日期」欄就對不到同一條垂直線上。
+   改用 table-layout: fixed 並明確指定每一欄的寬度，所有專案表格才會共用同一套欄位幾何；
+   任務名稱不指定寬度、吸收剩餘空間並在欄內換行（長度落差極大，短至「使用手冊」，長至
+   一整句 PR 標題）。 */
+.project-tasks {
+  table-layout: fixed;
+}
+
+.project-tasks td:first-child,
+.project-tasks th:first-child {
+  overflow-wrap: anywhere;
+}
+
+.project-tasks th:nth-child(2), .project-tasks td:nth-child(2) { width: 5rem; }    /* 類型 */
+.project-tasks th:nth-child(3), .project-tasks td:nth-child(3) { width: 6rem; }    /* 狀態 */
+.project-tasks th:nth-child(4), .project-tasks td:nth-child(4) { width: 9.5rem; }  /* 負責人 */
+.project-tasks th:nth-child(5), .project-tasks td:nth-child(5) { width: 8.5rem; }  /* 預計完成日期 */
+.project-tasks th:nth-child(6), .project-tasks td:nth-child(6) { width: 8.5rem; }  /* 實際完成日期 */
+.project-tasks th:nth-child(7), .project-tasks td:nth-child(7) { width: 6.5rem; }  /* 延誤天數 */
+
+.project-tasks td:not(:first-child),
+.project-tasks th:not(:first-child) {
+  white-space: nowrap;
+}
+
+/* 306 頁的兩張單一表格（_issue_list.html.erb 的議題明細、_project_breakdown.html.erb 的
+   依專案分類）跟上面的 .project-tasks 共用邊框／字級／hover 等基礎樣式，但 table-layout:
+   fixed 與依欄位「位置」訂的寬度是為了讓 305「每個專案各自一張表」的欄位對不齊問題（見上方
+   說明）而存在，這兩張都只有單一一張表，欄位語意也完全不同、欄數也不同（議題明細 7 欄、
+   依專案分類 5 欄）——例如議題明細 nth-child(3) 是「主旨」，套用到的卻是 305「狀態」該有的
+   6rem，主旨整段文字被壓到只剩兩三個字寬；依專案分類的「其他」「總計」則是誤套到「負責人」
+   「預計完成日期」該有的 9.5rem／8.5rem，數字兩側留白大小不一，視覺上像沒對齊。窄螢幕卡片式
+   版面下，.issue-subject-truncate 的 overflow: hidden 疊加這個塌陷的欄寬，甚至讓欄寬直接變成
+   0px、主旨完全看不見（CSS Grid／Flex 子項目 overflow 非 visible 時，自動最小寬度規格上是
+   0，不是內容實際寬度）。兩張表都改回瀏覽器依內容自動配欄寬，並允許換行。 */
+.issue-tasks {
+  table-layout: auto;
+}
+
+.issue-tasks th:nth-child(n),
+.issue-tasks td:nth-child(n) {
+  width: auto;
+}
+
+/* 上面把每一欄都設成 white-space: normal（可換行）時，瀏覽器的自動配寬演算法會平均看待
+   所有欄位，「負責人」「時程與天數」「花費時間」這些原本一行就放得下的短欄位反而被主旨
+   這種長文字欄擠壓到只剩兩三個字寬，短欄位標題「負責人」「花費時間」因此被迫斷成兩行
+   （見議題明細表格頭實測）。只有主旨（議題明細第 3 欄）真的需要換行，其餘欄位維持繼承自
+   .project-tasks 的 nowrap，瀏覽器才會依照「這欄實際上一行要多寬」正確分配空間。 */
+.issue-tasks th:nth-child(3),
+.issue-tasks td:nth-child(3) {
+  white-space: normal;
+}
+
+/* .issue-subject-truncate 的單行省略號截斷是給桌機固定欄寬設計的；這張表欄寬已經改回自動
+   配寬（見上），主旨欄位有實際空間，改成完整換行顯示，不再省略——使用者反應看不到完整主旨
+   時還要另外 hover 才看得到，不如直接排版時就顯示出來。只在這張表覆寫，PM 週報
+   （_issue_section.html.erb）用的是同一個 class，維持原本單行截斷（那邊要顧列表密度，
+   不在這次調整範圍內）。 */
+.issue-tasks .issue-subject-truncate {
+  display: block;
+  max-width: none;
+  overflow: visible;
+  white-space: normal;
+  text-overflow: clip;
 }
 
 .project-tasks tbody tr:hover td {
@@ -626,34 +822,6 @@ turbo-frame[busy]::after {
   margin-top: 0.75rem;
 }
 
-.quick-filters {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.quick-filter-tag {
-  display: inline-block;
-  padding: 0.3rem 0.85rem;
-  border-radius: 9999px;
-  border: 1px solid var(--color-border-hover);
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--color-text-muted);
-  text-decoration: none;
-  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
-}
-
-.quick-filter-tag:hover {
-  border-color: var(--color-accent);
-  color: var(--color-text-strong);
-}
-
-.quick-filter-tag.is-active {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
-  color: var(--btn-text);
-}
-
 .pagination {
   display: flex;
   align-items: center;
@@ -703,8 +871,12 @@ turbo-frame[busy]::after {
   font-weight: 700;
 }
 
+/* 目前頁的連結 Pagy 也會標 aria-disabled="true"（語意上「點了沒作用，你已經在這頁」），
+   跟下面這條「停用樣式」的屬性選擇器特異度打平，交由來源順序決定——這條排在
+   a[aria-current="page"] 那條後面，字色會蓋掉目前頁原本要的白字，變成深灰字疊在強調色
+   底色上，兩者色調接近、幾乎看不見數字。用 :not() 排除目前頁，兩條規則不再互相覆蓋。 */
 .pagy.series-nav a[role="separator"],
-.pagy.series-nav a[aria-disabled="true"] {
+.pagy.series-nav a[aria-disabled="true"]:not([aria-current="page"]) {
   border-color: transparent;
   color: var(--color-text-faint);
   cursor: default;
@@ -887,23 +1059,47 @@ turbo-frame[busy]::after {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.1rem;
-  height: 1.1rem;
-  border-radius: 50%;
-  background: var(--color-border-hover);
-  color: var(--color-text-strong);
+  /* inline-flex 預設 vertical-align:baseline，對齊到文字基線的「下緣」，圖示沒有像文字一樣
+     的下伸部分（descender），視覺上會比旁邊的中文字整體偏高。vertical-align:middle 是照
+     Latin 字母的 x-height 對齊（基線往上 0.5ex），中文字沒有 x-height 這種概念、實際視覺
+     中心比 0.5ex 的位置更高，改成 middle 後圖示反而比中文字的視覺中心低了約 1px（用
+     Range.getBoundingClientRect() 量測文字glyph框與圖示框得出）。用 translateY 手動校正
+     這個小落差，不能單靠 vertical-align 的關鍵字解決。 */
+  vertical-align: middle;
+  transform: translateY(-1px);
+  color: var(--color-text-muted);
   cursor: help;
   flex-shrink: 0;
 }
 
-/* 原本用 Unicode 的 ⓘ（已經內建一個圓圈），塞進 .chart-info 自己的圓形背景裡變成
-   圓中圓，不同字型繪製效果也不一致；改成純文字 "i"，樣式完全由 CSS 控制。 */
-.chart-info-icon {
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 0.75rem;
-  font-style: italic;
-  font-weight: 700;
-  line-height: 1;
+.chart-info:hover,
+.chart-info:focus,
+.chart-info:focus-visible {
+  color: var(--color-text-strong);
+}
+
+/* 圖示尺寸修飾（見 shared/_info_tooltip 的 size: "small"），不是靠呼叫端的祖先 class
+   （例如 .stat-label）覆寫樣式——那樣做的話，任何頁面只要重用同一個祖先 class 就會意外
+   繼承這個尺寸變化。議題 KPI 的攔截率／SLA達標率兩張卡覺得共用的 14px 偏大，改用這個
+   修飾 class 縮小到 11px；縮小後圖示 box 本身變矮，vertical-align:middle 的落差量也要
+   重新量，不能沿用 14px 版本校正好的 -1px（見上面 .chart-info 的說明）。 */
+.chart-info--small .chart-info-icon svg {
+  width: 11px;
+  height: 11px;
+}
+
+.chart-info--small {
+  transform: translateY(-1.1px);
+}
+
+/* 圖示本身是 shared/_info_tooltip 裡的內嵌 SVG（線框圓圈＋i），不是文字字元：原本用純文字
+   "i" 塞進這裡自己畫的圓形背景裡（更早之前是 Unicode 的 ⓘ，同樣問題），使用者反應不好看。
+   SVG 用 currentColor 直接跟隨 .chart-info 的顏色（含 hover/focus 變色），不必額外處理
+   亮／暗色主題或不同字型的渲染差異。 */
+.chart-info-icon svg {
+  display: block;
+  width: 14px;
+  height: 14px;
 }
 
 .chart-info-tooltip {
@@ -1123,15 +1319,117 @@ turbo-frame[busy]::after {
     flex: 1 1 45%;
   }
 
+  /* 窄螢幕改為卡片式：每一列直排，欄位標籤由 td::before 讀 data-label 印出。
+     原本是整表橫向捲動，但 7 欄在 375px 只看得到前 3 欄，「負責人」與「延誤天數」
+     （這頁最核心的兩個資訊）完全落在螢幕外，而且沒有捲軸或任何提示告訴使用者還有內容。
+     橫向捲動在這個欄數下體驗本來就差，直接改成不會藏東西的版面。 */
   .project-tasks {
     display: block;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+    table-layout: auto;
   }
 
-  .project-tasks th,
+  .project-tasks thead {
+    /* 欄位名稱改由每一格自己的 data-label 呈現，表頭不再需要 */
+    display: none;
+  }
+
+  .project-tasks tbody,
+  .project-tasks tr,
   .project-tasks td {
-    white-space: nowrap;
+    display: block;
+    width: auto;
+  }
+
+  .project-tasks tr {
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--table-row-border);
+  }
+
+  .project-tasks tr:last-child {
+    border-bottom: none;
+  }
+
+  /* 用兩欄格線而非 space-between：後者會把值推到最右邊，各列的值左緣參差不齊
+     （「王贊勛、楊采維」「2026-08-12」「+23 天」每一列都從不同位置開始），很難掃讀。
+     固定標籤欄寬後，同一張卡片裡所有值對齊在同一條左邊界上。 */
+  /* justify-items: start——CSS Grid 的預設是 stretch，帶背景色的值（狀態／類別 badge）
+     沒有明確寬度時會被撐滿整個值欄，變成一整條色塊而不是原本的小圓角標籤（在 306 議題資料
+     表格把欄寬從 305 沿用過來、意外被誤用的窄欄寬改回依內容自動配寬後才會明顯看到——欄夠寬
+     才有空間可撐）。純文字值不受影響（文字本身沒有背景色，撐滿與否肉眼看不出差異）。 */
+  .project-tasks td {
+    display: grid;
+    grid-template-columns: 6.5rem 1fr;
+    justify-items: start;
+    align-items: baseline;
+    gap: 0.5rem;
+    padding: 0.2rem 0;
+    border-bottom: none;
+    white-space: normal;
+  }
+
+  .project-tasks td::before {
+    content: attr(data-label);
+    color: var(--color-text-muted);
+    font-size: 0.8rem;
+  }
+
+  /* 任務名稱是每張卡片的標題：獨佔一行、不印欄位標籤、字體加重 */
+  .project-tasks td:first-child {
+    display: block;
+    font-weight: 600;
+    padding-bottom: 0.35rem;
+  }
+
+  .project-tasks td:first-child::before {
+    content: none;
+  }
+
+  /* 307 議題燃盡狀態表不是真正的 <table>（是 div/span 模擬的 CSS grid，見
+     .burndown-status-row），但一樣有「窄螢幕欄位被擠壓成好幾行文字」的問題（6 欄固定
+     grid-template-columns 在 390px 下每欄都窄到議題名稱／負責人被迫換行 3~4 行）——
+     比照 .project-tasks 的做法，改成卡片式：表頭整列隱藏，每個 span 自己變成
+     「標籤／值」兩欄的小 grid，標籤讀 data-label。 */
+  .burndown-status-row {
+    display: block;
+    width: 100%;
+  }
+
+  /* 表頭列（.burndown-status-row .burndown-status-header 兩個 class 都有）整列隱藏：
+     排在 .burndown-status-row 規則「之後」，兩者 specificity 相同時靠後者覆蓋前者的
+     display，順序顛倒的話 display:block 會贏過 display:none，表頭列會變成一張空卡片
+     （欄位名稱本身被誤當成值顯示，沒有對應的 data-label 可印出標籤）。 */
+  .burndown-status-header {
+    display: none;
+  }
+
+  .burndown-status-row > span {
+    display: grid;
+    grid-template-columns: 5rem 1fr;
+    justify-items: start;
+    align-items: baseline;
+    gap: 0.5rem;
+    padding: 0.2rem 0;
+  }
+
+  .burndown-status-row > span[data-label]::before {
+    content: attr(data-label);
+    color: var(--color-text-muted);
+    font-size: 0.8rem;
+  }
+
+  /* 議題名稱（沒有 data-label 的第一欄）是每張卡片的標題：獨佔一行、字體加重 */
+  .burndown-status-row > span:first-child {
+    display: block;
+    font-weight: 600;
+    padding-bottom: 0.35rem;
+  }
+
+  /* .burndown-status-row 在桌機版只有單行高度，align-items:center 讓展開箭頭跟那一行
+     文字垂直置中沒有問題；改成卡片式後 .burndown-status-row 變成 6 行堆疊的區塊，
+     center 對齊會讓箭頭飄到卡片中間某一行（視覺上像是隨機指到「已消耗」那一行），
+     改成 flex-start 讓箭頭對齊卡片最上面的標題列。 */
+  .burndown-status-details > summary {
+    align-items: flex-start;
   }
 }
 
@@ -1145,6 +1443,9 @@ turbo-frame[busy]::after {
   color: var(--color-accent);
   text-decoration: none;
   font-size: 0.875rem;
+  /* 純文字連結的可點擊區只有字高（約 16px），補 padding 撐開；負 margin 讓視覺位置不變。 */
+  padding: 0.35rem 0.5rem;
+  margin: -0.35rem -0.5rem;
 }
 
 .back-link:hover,
@@ -1651,4 +1952,26 @@ turbo-frame[busy]::after {
 
 .phase-history-row td {
   font-style: italic;
+}
+
+/* ── 觸控裝置的最小可點擊尺寸 ──
+   pointer: coarse 只命中以手指操作的裝置（手機、平板），滑鼠使用者維持原本精簡的排版。
+   44px 是一般觸控目標的建議下限。 */
+@media (pointer: coarse) {
+  .type-filter label,
+  .scope-filter label {
+    min-height: 44px;
+  }
+
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .theme-toggle,
+  .refresh-btn,
+  .apply-filters-btn {
+    min-height: 44px;
+  }
 }

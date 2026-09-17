@@ -1,0 +1,27 @@
+<%# 共用的 hover/focus 才顯示的說明圖示。
+    text: 為 tooltip 內容（純文字，例如公式、圖表說明）。
+    size: 選填，傳 "small" 時圖示縮小（見 306 議題 KPI 的攔截率／SLA達標率卡，比預設的 14px
+    small，故加一個修飾 class 讓元件自己提供尺寸變化，不是靠呼叫端的無關祖先 class
+    （例如 .stat-label）覆寫樣式——那樣做只要換一個地方重用同一個 class 就會意外被影響到。
+
+    圖示是內嵌 SVG（線框圓圈＋i），不是文字字元：原本用純文字 "i" 塞進 CSS 畫的圓形背景裡，
+    使用者反應不好看；改成向量圖示後線條乾淨、顏色用 currentColor 直接跟隨 .chart-info 的
+    文字顏色，亮／暗色主題不必另外處理。
+
+    無障礙：aria-label="說明" 只給圖示一個簡短、固定的可及名稱（accessible name），不是
+    tooltip 的完整內容——aria-label 一旦存在會直接蓋掉子節點內容，螢幕閱讀器使用者原本完全
+    聽不到 .chart-info-tooltip 裡的公式／說明文字。改用 aria-describedby 指向 tooltip 那個
+    span 的 id，讓輔助科技使用者除了聽到「說明」這個名稱，還能額外聽到完整內容；每次 render
+    用 SecureRandom.hex 產生一個獨立 id，避免同一頁多個 tooltip 時 id 重複。 %>
+<% tooltip_id = "info-tooltip-#{SecureRandom.hex(4)}" %>
+<span class="chart-info<%= " chart-info--small" if local_assigns[:size] == "small" %>"
+      tabindex="0" aria-label="說明" aria-describedby="<%= tooltip_id %>">
+  <span class="chart-info-icon" aria-hidden="true">
+    <svg viewBox="0 0 16 16" focusable="false">
+      <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.3"></circle>
+      <circle cx="8" cy="4.6" r="0.9" fill="currentColor"></circle>
+      <rect x="7.15" y="7" width="1.7" height="5" rx="0.6" fill="currentColor"></rect>
+    </svg>
+  </span>
+  <span class="chart-info-tooltip" id="<%= tooltip_id %>"><%= text %></span>
+</span>

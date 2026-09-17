@@ -3,7 +3,7 @@
 <header class="dashboard-header">
   <div class="header-top">
     <h1 class="dashboard-title">戰情室 <span>— 306 臭蟲議題</span></h1>
-    <button type="button" id="theme-toggle" class="theme-toggle" aria-label="切換至淺色模式">🌙 深色</button>
+    <button type="button" id="theme-toggle" class="theme-toggle" aria-label="切換至深色模式">☀️ 淺色</button>
   </div>
 </header>
 
@@ -34,59 +34,101 @@
           <%= hidden_field_tag :tab, "stats" %>
           <%# 兩個分頁籤的表單各自獨立送出，但 Controller 是無狀態的：若不帶入「議題資料」分頁目前
               的篩選值，送出本表單時 project／status／q／type 會被重設為預設值，等於覆蓋掉
-              使用者在另一個分頁的選擇。故補上這些 hidden fields，讓它們原樣跟著送出。 %>
+              使用者在另一個分頁的選擇。故補上這些 hidden fields，讓它們原樣跟著送出。
+              status／type 現在是陣列：先放一個值為空字串的 hidden field 當「這個 param 有
+              被送出」的保底（即使 @selected_status／@selected_type 剛好是空陣列，也要確保
+              params.key?(:status/:type) 為真，不然 Controller 會誤判成「使用者根本沒設定過
+              篩選」而套用預設值，等於把「議題資料」分頁使用者主動清空的篩選又蓋回去）， 再逐一
+              補上目前實際選取的值。 %>
           <%= hidden_field_tag :project, @selected_project %>
-          <%= hidden_field_tag :status, @selected_status %>
+          <%= hidden_field_tag "status[]", "", id: nil %>
+          <% @selected_status.each do |s| %>
+            <%= hidden_field_tag "status[]", s, id: nil %>
+          <% end %>
           <%= hidden_field_tag :q, @selected_q %>
-          <%= hidden_field_tag :type, @selected_type %>
+          <%= hidden_field_tag "type[]", "", id: nil %>
+          <% @selected_type.each do |t| %>
+            <%= hidden_field_tag "type[]", t, id: nil %>
+          <% end %>
           <% min_date, max_date = available_month_bounds %>
           <%= render "shared/date_range_filter", from: @selected_from, to: @selected_to, min: min_date, max: max_date %>
           <%= submit_tag "套用篩選", class: "apply-filters-btn" %>
         <% end %>
 
         <section class="issue-section">
-          <h2>月度 KPI</h2>
-          <p class="section-note">月度 KPI 為月結數字，當月進行中尚未結算；每日趨勢與依專案分類統計則依此處所選期間即時呈現；「議題資料」分頁的議題明細不受期間篩選影響（顯示全部議題）<% if @matched_month_count > 1 %>；目前彙總 <%= @matched_month_count %> 個月，攔截率／平均天數／SLA達標率無法跨月合併，顯示「－」<% end %></p>
-          <% if @selected_month_record %>
-            <div class="summary-bar">
-              <div class="stat-item">
-                <span class="stat-value"><%= @selected_month_record[:complaint] %></span>
-                <span class="stat-label">客訴</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-value"><%= @selected_month_record[:testing] %></span>
-                <span class="stat-label">測試</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-value"><%= @selected_month_record[:total_bug] %></span>
-                <span class="stat-label">總Bug</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-value"><%= month_kpi_rate_display(@selected_month_record[:block_rate]) %></span>
-                <span class="stat-label">攔截率</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-value"><%= @selected_month_record[:completed] %></span>
-                <span class="stat-label">完成數</span>
-              </div>
-              <div class="stat-item stat-overdue">
-                <span class="stat-value"><%= @selected_month_record[:unresolved] %></span>
-                <span class="stat-label">未結案</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-value"><%= month_kpi_rate_display(@selected_month_record[:avg_days], unit: "") %></span>
-                <span class="stat-label">平均天數</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-value"><%= month_kpi_rate_display(@selected_month_record[:sla_rate]) %></span>
-                <span class="stat-label">SLA達標率</span>
-              </div>
+          <h2>議題 KPI</h2>
+          <%# 原名「月度 KPI」，但這裡其實依「範圍」表單算任意日期區間，不一定是整月，改成
+              中性的「議題 KPI」。所有欄位皆即時算（見 Sheets::FetchIssueDashboard#compute_month_kpi），
+              跟下方每日趨勢／依專案分類算的是同一批資料，不再有「即時／月結」的分別，也不再
+              有「跨月彙總、平均天數／SLA達標率沒辦法合併」的狀況——每次都是重新算一次，不是
+              合併好幾個月的既有快照。
+              （原本這裡有一段說明「議題資料」分頁不受此日期區間篩選影響——那是在講另一個
+              分頁的行為，跟這組 KPI 計算本身無關，故拿掉，不放在此處。） %>
+          <%# 總Bug（客訴＋測試相加）拿掉了：使用者反應這張卡只是前兩張卡心算相加，沒有獨立
+              資訊量，騰出版面給更有用的指標。完成數＝客訴狀態已解決的筆數（不加分母，因為
+              分母就是旁邊「客訴」卡的數字，加了反而多餘）；未結案改成「客訴未結數」＝
+              客訴總數－完成數，兩張卡的數字互補、加起來等於客訴總數。新增「其他」卡，
+              跟「依專案分類」表格的分類口徑一致，補上客訴／測試之外的第三種類型數量。
+              新增「客訴逾期數」（即時風險：現在還有什麼在燒）與「總花費工時」（投入成本），
+              前面幾張都是回顧狀況「做得如何」，這兩張補上「現在」與「花了多少成本」的視角。
+              「遲期客訴」改名「客訴逾期數」，跟「客訴完成數」「客訴未結數」用同一種
+              「客訴＿＿數」命名，一致性較高。
+              兩排各自成一個 .summary-bar：第一排是「這個範圍內有多少、比例如何」的總覽
+              （客訴／測試／其他三種類型計數，攔截率／SLA達標率兩個比率指標，比率指標另外
+              補上 i 圖示的定義說明，避免只看數字不知道怎麼算出來的）；第二排收斂到「客訴」
+              本身的生命週期細節（完成／未結／逾期）與平均天數／總花費工時，兩排各自有明確
+              主題，不是單純因為版面塞不下而換行。 %>
+          <div class="summary-bar">
+            <div class="stat-item">
+              <span class="stat-value"><%= @selected_month_record[:complaint] %></span>
+              <span class="stat-label">客訴</span>
             </div>
-          <% elsif @selected_month_pending %>
-            <p class="empty-state">尚未結算（本月進行中，月底才會產生統計數字）</p>
-          <% else %>
-            <p class="empty-state">尚無月度 KPI 資料</p>
-          <% end %>
+            <div class="stat-item">
+              <span class="stat-value"><%= @selected_month_record[:testing] %></span>
+              <span class="stat-label">測試</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-value"><%= @selected_month_record[:other] %></span>
+              <span class="stat-label">其他</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-value"><%= month_kpi_rate_display(@selected_month_record[:block_rate]) %></span>
+              <span class="stat-label">
+                攔截率
+                <%= render "shared/info_tooltip", size: "small", text: "測試 ÷（客訴＋測試）× 100，其他類型不計入分子分母；反映問題在測試階段被攔下的比例" %>
+              </span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-value"><%= month_kpi_rate_display(@selected_month_record[:sla_rate]) %></span>
+              <span class="stat-label">
+                SLA達標率
+                <%= render "shared/info_tooltip", size: "small", text: "客訴中在 1 個工作天內完成的筆數 ÷ 客訴總數 × 100（SLA 天數＝1 天）" %>
+              </span>
+            </div>
+          </div>
+
+          <div class="summary-bar">
+            <div class="stat-item">
+              <span class="stat-value"><%= @selected_month_record[:completed] %></span>
+              <span class="stat-label">客訴完成數</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-value"><%= @selected_month_record[:unresolved] %></span>
+              <span class="stat-label">客訴未結數</span>
+            </div>
+            <div class="stat-item stat-overdue">
+              <span class="stat-value"><%= @selected_month_record[:overdue_complaints] %></span>
+              <span class="stat-label">客訴逾期數</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-value"><%= month_kpi_rate_display(@selected_month_record[:avg_days], unit: "") %></span>
+              <span class="stat-label">平均天數</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-value"><%= number_with_precision(@selected_month_record[:total_hours_sum], precision: 2, strip_insignificant_zeros: true) %>h</span>
+              <span class="stat-label">總花費工時</span>
+            </div>
+          </div>
         </section>
 
         <section class="issue-section">
@@ -116,10 +158,6 @@
             <span class="stat-value"><%= number_with_precision(@issue_kpis[:total_hours_sum], precision: 2, strip_insignificant_zeros: true) %>h</span>
             <span class="stat-label">累積總花費工時</span>
           </div>
-          <div class="stat-item stat-warning">
-            <span class="stat-value"><%= @issue_kpis[:overdue_or_undated] %></span>
-            <span class="stat-label">逾期／未定到期日</span>
-          </div>
         </div>
 
         <%= form_with url: "/issues", method: :get, class: "project-selector",
@@ -130,40 +168,61 @@
           <%= hidden_field_tag :to, @selected_to&.iso8601 %>
           <%= hidden_field_tag :breakdown_sort, @breakdown_sort %>
           <%= hidden_field_tag :breakdown_dir, @breakdown_dir %>
-          <%# 快捷篩選 Tag（見下方）是獨立連結、不經過這個表單送出，但點擊後仍會落在
-              「議題資料」分頁；type 本身不需要在這裡當隱藏欄位，因為它是靠連結參數帶入，
-              送出這個表單（套用篩選）時維持目前的 type 選擇，故仍要帶。 %>
-          <%= hidden_field_tag :type, @selected_type %>
+          <%# 兩行式篩選列（比照 305 的 .filter-row 慣例）：第一行是「看哪個專案、關鍵字搜哪個
+              議題」，第二行是「哪些狀態、哪些類型」——狀態／類型都是多選 checkbox 群組，兩個
+              放同一行比較看得出是同一組「篩什麼條件」，不會跟第一行的單一下拉選單／文字輸入
+              混在一起。 %>
+          <div class="filter-row">
+            <div class="control-group">
+              <label for="project">專案：</label>
+              <%= select_tag :project,
+                             options_for_select([["全部專案", ""]] + @projects.map { |p| [p, p] }, @selected_project) %>
+            </div>
 
-          <div class="control-group">
-            <label for="project">專案：</label>
-            <%= select_tag :project,
-                           options_for_select([["全部專案", ""]] + @projects.map { |p| [p, p] }, @selected_project) %>
+            <div class="control-group">
+              <label for="q">搜尋：</label>
+              <%= text_field_tag :q, @selected_q, placeholder: "主旨／編號／負責人" %>
+            </div>
           </div>
 
-          <div class="control-group">
-            <label for="status">狀態：</label>
-            <%= select_tag :status,
-                           options_for_select([["全部狀態", ""]] + @statuses.map { |s| [s, s] }, @selected_status) %>
-          </div>
+          <div class="filter-row">
+            <%# 狀態／類型改成多選 checkbox 群組，比照 305（app/views/dashboard/index.html.erb）
+                的 .type-filter 慣例：legend 視覺隱藏、用 .filter-group-label 當看得見的標籤；
+                隱藏欄位確保「全部取消勾選」時 params[:status/:type] 仍會被送出（值為 [""]），
+                跟「完全沒有這個 query param」（首次載入，套用預設值）明確區分開來（見
+                Sheets::FetchIssueDashboard#filter_issues 的說明）。 %>
+            <fieldset class="type-filter">
+              <legend>狀態</legend>
+              <span class="filter-group-label" aria-hidden="true">狀態</span>
+              <input type="hidden" name="status[]" value="">
+              <% @statuses.each do |s| %>
+                <label>
+                  <%= check_box_tag "status[]", s, @selected_status.include?(s), multiple: true, id: nil %>
+                  <%= s %>
+                </label>
+              <% end %>
+            </fieldset>
 
-          <div class="control-group">
-            <label for="q">搜尋：</label>
-            <%= text_field_tag :q, @selected_q, placeholder: "主旨／編號／負責人" %>
-          </div>
+            <fieldset class="type-filter">
+              <legend>類型</legend>
+              <span class="filter-group-label" aria-hidden="true">類型</span>
+              <input type="hidden" name="type[]" value="">
+              <% @types.each do |t| %>
+                <label>
+                  <%= check_box_tag "type[]", t, @selected_type.include?(t), multiple: true, id: nil %>
+                  <%= issue_type_label(t) %>
+                </label>
+              <% end %>
+            </fieldset>
 
-          <%# 快捷篩選只有「只看客訴」：這個 App 沒有登入／使用者身分機制，assigned_to 只是
-              試算表裡的姓名字串，沒有「目前使用者是誰」的資訊來源，無法做「只看我的議題」。
-              放在同一個 flex row 裡（跟專案／狀態／搜尋同一行），不需要另外獨立一行。 %>
-          <span class="quick-filters">
-            <%= link_to "只看客訴",
-                        issues_path(issue_filter_params(type: (@selected_type == "Complaint" ? nil : "Complaint"))),
-                        class: "quick-filter-tag #{'is-active' if @selected_type == 'Complaint'}",
-                        data: { turbo_frame: "issue-content" } %>
-          </span>
-
-          <div class="filter-actions">
-            <%= submit_tag "套用篩選", class: "apply-filters-btn" %>
+            <%# .filter-actions 要放在同一個 .filter-row 裡面（不是外面另一個 sibling）：
+                .filter-row 有 flex-basis:100%，若放在外面，這一整行的寬度已經被上一個
+                .filter-row 佔滿，按鈕就會被強制擠到下一行、自己獨立一整行，比照 305
+                （app/views/dashboard/index.html.erb）把按鈕跟同一行的篩選項目放一起，
+                靠 margin-left:auto 推到這一行最右側。 %>
+            <div class="filter-actions">
+              <%= submit_tag "套用篩選", class: "apply-filters-btn" %>
+            </div>
           </div>
         <% end %>
 

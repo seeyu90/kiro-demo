@@ -764,7 +764,8 @@
   var THEME_KEY = "warroom-theme";
 
   function getCurrentTheme() {
-    return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+    // 預設淺色：只有明確標上 data-theme="dark" 才是深色（見 css/style.css 主題變數）。
+    return document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
   }
 
   function applyThemeToggleLabel(theme) {
@@ -781,8 +782,8 @@
 
   function toggleTheme() {
     var next = getCurrentTheme() === "light" ? "dark" : "light";
-    if (next === "light") {
-      document.documentElement.setAttribute("data-theme", "light");
+    if (next === "dark") {
+      document.documentElement.setAttribute("data-theme", "dark");
     } else {
       document.documentElement.removeAttribute("data-theme");
     }

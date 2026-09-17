@@ -43,7 +43,7 @@ module Summary
     def call
       # 305 是本頁核心資料（同 Summary::BuildExecutiveSummary 的取捨）：沒有 305 就沒有
       # 「這週有哪些工作」的主體，讀取失敗即整頁失敗，不做部分渲染。
-      progress = Sheets::FetchProjectProgress.result(scope: "all", incomplete_only: false)
+      progress = Sheets::FetchProjectProgress.result(scope: "all")
       return fail!(failure_code: progress.failure_code, message: progress.message) unless progress.success?
 
       self.week_range = Sheets::FetchProjectProgress.week_range(Date.current)

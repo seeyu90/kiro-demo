@@ -30,6 +30,28 @@ RSpec.describe "Home", type: :request do
     it "renders the theme toggle button" do
       expect(response.body).to include('id="theme-toggle"')
     end
+
+    # 全站唯一的「重新整理資料」入口（各頁原本各自有一顆，只會重抓自己那一份試算表）。
+    it "renders the single global 重新整理資料 button posting to /refresh" do
+      expect(response.body).to include("重新整理資料")
+      expect(response.body).to match(%r{<form[^>]*action="/refresh"[^>]*>}).and match(%r{method="post"})
+    end
+  end
+
+  describe "POST /refresh" do
+    it "clears every Sheets cache so the next page load re-reads the spreadsheets" do
+      expect(Rails.cache).to receive(:clear)
+
+      post "/refresh"
+    end
+
+    it "redirects back to the entry page with a notice" do
+      post "/refresh"
+
+      expect(response).to redirect_to(root_path)
+      follow_redirect!
+      expect(response.body).to include("已重新整理")
+    end
   end
 
   describe "GET /dashboard is still directly reachable after root changed to home#index" do

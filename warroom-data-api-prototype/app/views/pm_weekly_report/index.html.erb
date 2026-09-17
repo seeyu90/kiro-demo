@@ -22,7 +22,7 @@
       篩選結果要能靠網址（?project=）重新整理後維持選取狀態（需求 5.4）。 %>
   <%= form_with url: "/pm_weekly_report", method: :get, class: "project-selector" do %>
     <div class="control-group">
-      <label for="project">選擇專案：</label>
+      <label for="project">專案：</label>
       <%= select_tag :project,
                      options_for_select([["全部專案", ""]] + @project_names.map { |name| [name, name] },
                                         @selected_project) %>

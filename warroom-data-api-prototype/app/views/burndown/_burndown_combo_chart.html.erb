@@ -2,10 +2,8 @@
   <% title = "#{issue[:project]}／#{issue[:issue_title]}（#{issue[:assignees].join('、')}）" %>
   <h3>
     <%= title %>
-    <span class="chart-info" tabindex="0" aria-label="說明">
-      <span class="chart-info-icon" aria-hidden="true">i</span>
-      <span class="chart-info-tooltip">長條＝當週實際｜虛線＝計畫、實線＝實際累積（實線低於虛線即落後）｜右軸顏色對應人員｜點圖例可篩選</span>
-    </span>
+    <%= render "shared/info_tooltip",
+               text: "長條＝當週實際｜虛線＝計畫、實線＝實際累積（實線低於虛線即落後）｜右軸顏色對應人員｜點圖例可篩選" %>
   </h3>
 
   <% dates = burndown_combo_dates(issue) %>

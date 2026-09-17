@@ -12,34 +12,42 @@ module IssuesHelper
     ATTRIBUTION_CLASSES[type] || "attribution-other"
   end
 
+  # 306「議題資料」頁的「類別」欄位文字與「類型」篩選下拉共用這套詞彙（客訴／測試／其他），
+  # 跟議題 KPI 卡片一致；不是上面的歸屬責任框架（專案共同責任／個人責任）——原本篩選下拉
+  # 用「客訴／測試」、欄位 badge 用「專案共同責任／個人責任」，兩邊各說各話，使用者反應選了
+  # 篩選卻在欄位裡看到不同的字，混淆。顏色／CSS class 仍沿用 attribution_class，只有文字
+  # 換一套。PM 週報（_issue_section.html.erb）維持用 attribution_label 的原本框架，不受影響。
+  ISSUE_TYPE_LABELS = { "Complaint" => "客訴", "TestingBug" => "測試" }.freeze
+
+  def issue_type_label(type)
+    ISSUE_TYPE_LABELS[type] || "其他"
+  end
+
   # 起訖日期輸入欄位的 min/max guardrail：用 @available_months（"YYYY-MM" 字串陣列，已排序）
   # 換算成第一個月的月初與最後一個月的月底，避免使用者選到明知沒有資料的日期。
   # @available_months 為空時（理論上不會發生，fetch_issue_dashboard 一定會納入當月）回傳 nil。
+  #
+  # Sheets::FetchIssueDashboard 已經先過濾掉無法解析成合法月份的字串（見該檔案
+  # valid_year_month? 的說明），這裡的 rescue 是第二層防線：即使未來上游的過濾邏輯有漏網
+  # 之魚，也不該讓整個 /issues 頁面因為一個月份選單的輸入而 500——沒有可靠的日期範圍，
+  # 回傳 [nil, nil]（不限制輸入欄位的 min/max）比讓頁面掛掉安全。
   def available_month_bounds
     return [ nil, nil ] if @available_months.blank?
 
     first_day = Date.parse("#{@available_months.first}-01")
     last_day = Date.parse("#{@available_months.last}-01").end_of_month
     [ first_day, last_day ]
+  rescue ArgumentError, TypeError
+    [ nil, nil ]
   end
 
-  # 月度 KPI 卡片的比率欄位（攔截率／平均天數／SLA 達標率）：選到跨月彙總時是 nil（不同月份
-  # 的比率沒有能正確合併的算法，見 Sheets::FetchIssueDashboard#build_month_record），顯示
-  # 「－」而不是空白加一個孤零零的「%」。
+  # 議題 KPI 卡片的比率欄位（攔截率／平均天數／SLA達標率），全部即時從 issues 算（見
+  # Sheets::FetchIssueDashboard#compute_month_kpi），只有選到的區間裡分母為 0（沒有客訴，或
+  # 客訴＋測試皆為 0）時才是 nil，顯示「－」而不是空白加一個孤零零的「%」。
   def month_kpi_rate_display(value, unit: "%")
     value.nil? ? "－" : "#{value}#{unit}"
   end
 
-  # 「議題資料」分頁目前的篩選狀態，供快捷篩選 Tag 這類需要手動組 issues_path(...) 的連結共用
-  # （分頁連結不需要這個——Pagy 直接沿用當前請求的 query params，見 index.html.erb），
-  # 避免同一組 project／status／q／type／from／to／breakdown_sort／breakdown_dir 在多處各自重複。
-  def issue_filter_params(overrides = {})
-    {
-      tab: "detail", project: @selected_project, status: @selected_status, q: @selected_q,
-      type: @selected_type, from: @selected_from&.iso8601, to: @selected_to&.iso8601,
-      breakdown_sort: @breakdown_sort, breakdown_dir: @breakdown_dir
-    }.merge(overrides)
-  end
 
   # 「是否已完成」直接引用 Actor 的 ISSUE_DONE_STATUS_PATTERN（而不是自己另外寫一份關鍵字），
   # 確保 badge 顏色、KPI 卡片、時程欄位的「是否已完成」判斷永遠是同一套規則，不會改一邊忘了
@@ -78,7 +86,12 @@ module IssuesHelper
 
     range =
       if issue[:due_date].present?
-        "#{short_date(start_text)} ~ #{short_date(issue[:due_date])}"
+        # 開始日＝到期日（當天開始、當天到期）時省略「～」，只顯示單一日期：「08-05 ~ 08-05」
+        # 這種寫法看起來像零天區間，卻又在後面標「工作 1 天」，兩者放在一起顯得矛盾又累贅。
+        # work_days 是含頭尾的工作日計數（同一天＝1 天，已用真實資料驗證：90 筆同日案例
+        # work_days 皆為 1，與跨日案例的工作日算法一致），數字本身沒有錯，只是這裡的日期
+        # 顯示格式該精簡。
+        issue[:due_date] == start_text ? short_date(start_text) : "#{short_date(start_text)} ~ #{short_date(issue[:due_date])}"
       else
         end_label = issue_done_status?(issue[:status]) ? "未指定" : "進行中"
         "#{short_date(start_text)} ~ #{end_label}"
@@ -110,9 +123,19 @@ module IssuesHelper
 
   # 依專案分類表格的可排序欄位標題連結：同一欄位再次點選時反轉方向，切換到不同欄位時預設降冪
   # （筆數統計通常最關心「最多」的專案）；連結保留目前所選起訖日期，並固定停留在「統計摘要」
-  # 分頁籤。同時帶入 project／status，因為這也是一個不含這兩個 query params 的 GET 請求，
+  # 分頁籤。同時帶入 project／status／type，因為這也是一個不含這些 query params 的 GET 請求，
   # 若不帶入，點擊排序連結會把「議題資料」分頁目前的篩選值重設為預設值（與兩個表單各自獨立的
   # 設計意圖牴觸）。
+  #
+  # status／type 帶入時要注意：這兩個是陣列參數，Rails 的路由序列化遇到「空陣列」會直接把整個
+  # query key 從網址拿掉（實測 `issues_path(status: [])` 產生的網址完全沒有 status 參數），
+  # 這樣一來跟「使用者根本沒送出過篩選表單」（也是沒有 status 參數）就無法區分——對應到
+  # Controller／Actor 端會被誤判成後者，套用 DEFAULT_STATUSES 預設值，等於使用者主動清空
+  # 勾選（=不篩選）的選擇被悄悄復原。用 `.presence || [""]` 讓「空陣列」改送出一個內容為空
+  # 字串的陣列（`status[]=`），保留這個 query key「有被送出」的事實，讓 Controller 端的
+  # `params.key?(:status)` 判斷維持為真，同時 `.reject(&:blank?)` 還是會把空字串濾掉、
+  # 還原成正確的空陣列。跟表單那邊用隱藏欄位（`value=""`）保底是同一個道理，只是換一種
+  # 送出方式。
   def breakdown_sort_link(key, label)
     active = @breakdown_sort == key.to_s
     next_dir = active && @breakdown_dir == "desc" ? "asc" : "desc"
@@ -121,7 +144,9 @@ module IssuesHelper
     link_to label + indicator,
              issues_path(from: @selected_from&.iso8601, to: @selected_to&.iso8601, tab: "stats",
                           breakdown_sort: key, breakdown_dir: next_dir,
-                          project: @selected_project, status: @selected_status),
+                          project: @selected_project,
+                          status: @selected_status.presence || [ "" ],
+                          type: @selected_type.presence || [ "" ]),
              class: "sort-button", "aria-label": "依「#{label}」排序"
   end
 

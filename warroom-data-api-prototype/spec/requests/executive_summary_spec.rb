@@ -29,14 +29,28 @@ RSpec.describe "ExecutiveSummary", type: :request do
   let(:burndown_header) { %w[剩餘人時 專案 議題 人員 議題ID 開案日期 完成日期 狀態 預估人時] }
   let(:burndown_rows) { [ burndown_header + [ "08/25" ] ] }
 
+  # 306 議題 KPI（含 SLA達標率／完成數）現在全部即時從 issue_rows 算（見
+  # Sheets::FetchIssueDashboard#compute_month_kpi），不再讀 month_kpi_rows；這裡刻意留一份
+  # 內容不同的 month_kpi_rows，確認 build_portfolio 讀到的 sla_rate 真的是即時算出來的
+  # 80.0%，不是這張表寫的 40。travel_to 固定在 2026-09-01，5 筆客訴（4 筆 work_days=1 達標、
+  # 1 筆 work_days=5 沒達標）start_date 都在當月，SLA達標率＝4÷5×100＝80.0%。
   let(:month_kpi_rows) do
     [
       %w[year_month 客訴 測試 總Bug 攔截率 完成數 未結案 平均天數 SLA達標率 Top3],
-      [ "2026-08", "3", "2", "5", "40", "4", "1", "2.0", "80", "" ]
+      [ "2026-09", "999", "999", "999", "99", "999", "999", "9.99", "40", "" ]
     ]
   end
   let(:daily_kpi_rows) { [ %w[日期 客訴 測試 其他 總計] ] }
-  let(:issue_rows) { [ %w[issue_id subject type tracker status assigned_to start_date due_date work_days sheet_name project] ] }
+  let(:issue_rows) do
+    [
+      %w[issue_id subject type tracker status assigned_to start_date due_date work_days sheet_name project],
+      [ "9101", "c1", "Complaint", "臭蟲", "已解決", "x", "2026/9/1", "", "1", "raw_2026", "P" ],
+      [ "9102", "c2", "Complaint", "臭蟲", "已解決", "x", "2026/9/2", "", "1", "raw_2026", "P" ],
+      [ "9103", "c3", "Complaint", "臭蟲", "已解決", "x", "2026/9/3", "", "1", "raw_2026", "P" ],
+      [ "9104", "c4", "Complaint", "臭蟲", "已解決", "x", "2026/9/4", "", "1", "raw_2026", "P" ],
+      [ "9105", "c5", "Complaint", "臭蟲", "未完成", "x", "2026/9/5", "", "5", "raw_2026", "P" ]
+    ]
+  end
 
   let(:profile_header) { %w[Github/Notion Redmine\ 專案 303\ 專案 客戶 PM 狀態] }
   let(:profile_rows) { [ profile_header, [ "HRM", "Virtuous HRM", "HRM", "AMAS", "楊欣翰", "維護" ] ] }

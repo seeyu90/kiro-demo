@@ -1,9 +1,9 @@
-<% content_for :title, "戰情室 — 專案進度" %>
+<% content_for :title, "戰情室 — 305 專案任務進度" %>
 
 <header class="dashboard-header">
   <div class="header-top">
-    <h1 class="dashboard-title">戰情室 <span>— 專案進度</span></h1>
-    <button type="button" id="theme-toggle" class="theme-toggle" aria-label="切換至淺色模式">🌙 深色</button>
+    <h1 class="dashboard-title">戰情室 <span>— 305 專案任務進度</span></h1>
+    <button type="button" id="theme-toggle" class="theme-toggle" aria-label="切換至深色模式">☀️ 淺色</button>
   </div>
 </header>
 
@@ -14,18 +14,32 @@
   <p class="breadcrumb">
     <%= link_to "入口頁", "/", class: "back-link", data: { turbo_frame: "_top" } %>
     <span class="breadcrumb-sep">›</span>
-    <span class="breadcrumb-current">專案進度</span>
+    <span class="breadcrumb-current">305 專案任務進度</span>
   </p>
 
   <%= form_with url: "/dashboard", method: :get, class: "project-selector",
                 data: { turbo_frame: "project-content" } do %>
+    <%# 兩行式篩選列：第一行是「看哪一段資料」（專案、預計完成日期區間），第二行是「看哪一類
+        任務」（類型、範圍）＋送出按鈕。.filter-row 的 flex-basis:100% 讓每一行各自佔滿一列，
+        不必改動 .project-selector 本身（那個 class 其他頁面也在用）。 %>
+  <div class="filter-row">
     <div class="control-group">
-      <label for="project">選擇專案：</label>
+      <label for="project">專案：</label>
       <%= select_tag :project,
                      options_for_select([["全部專案", ""]] + @project_names.map { |name| [name, name] },
                                         @selected_project) %>
     </div>
 
+    <%# 依預計完成日期篩選，跟第二行的「範圍」是兩個獨立篩選軸、同時套用（AND）——例如
+        「日期＝8 月」＋「範圍＝已逾期」＝ 8 月到期且目前逾期的任務。留白＝不限制。
+        原本這一行還有一個「年度」下拉，但 305 的資料源鎖在單一年度分頁，那個下拉永遠只有
+        「全部年度」與當年兩個選項；日期區間表達力涵蓋年度（整年＝1/1～12/31），故移除。 %>
+    <%= render "shared/date_range_filter",
+               from: @selected_from, to: @selected_to, min: nil, max: nil,
+               label: "預計完成日期" %>
+  </div>
+
+  <div class="filter-row">
     <fieldset class="type-filter">
       <%# legend 視覺上隱藏（見 application.css 的 .type-filter legend 註解），只留給螢幕
           閱讀器；看得到的標籤是下面的 .filter-group-label span，跟 checkbox 同一列排列，
@@ -47,32 +61,18 @@
       <legend>範圍</legend>
       <span class="filter-group-label" aria-hidden="true">範圍</span>
       <label><%= radio_button_tag :scope, "all", @scope == "all" %> 全部</label>
+      <label><%= radio_button_tag :scope, "incomplete", @scope == "incomplete" %> 未完成</label>
       <label><%= radio_button_tag :scope, "due_this_week", @scope == "due_this_week" %> 本週到期（含已逾期）</label>
       <label><%= radio_button_tag :scope, "overdue", @scope == "overdue" %> 已逾期</label>
     </fieldset>
 
-    <%# 依預計完成日期篩選，跟上面的「範圍」是兩個獨立篩選軸，同時套用；留白＝不限制。 %>
-    <%= render "shared/date_range_filter", from: @selected_from, to: @selected_to, min: nil, max: nil %>
-
-    <label class="incomplete-toggle">
-      <%# 隱藏欄位：確保取消勾選時仍會送出 incomplete_only=0，
-          Controller 用「是否等於 "0"」判斷，需仰賴此欄位才會被明確覆蓋為 false %>
-      <input type="hidden" name="incomplete_only" value="0">
-      <%= check_box_tag :incomplete_only, "1", @incomplete_only %>
-      只顯示未完成
-    </label>
-
-    <%# margin-left:auto 把兩個按鈕推到同一行的最右側（filter row 用 flex-wrap，這兩個按鈕
-        常常會自己獨立換到下一行，靠左黏在篩選項目下面不好看，置右比較符合一般慣例）。 %>
+    <%# margin-left:auto 把按鈕推到同一行的最右側（filter row 用 flex-wrap，按鈕常常會自己
+        獨立換到下一行，靠左黏在篩選項目下面不好看，置右比較符合一般慣例）。
+        「重新整理資料」已收斂為全站唯一入口，改放在入口頁（見 home/index.html.erb）。 %>
     <div class="filter-actions">
       <%= submit_tag "套用篩選", class: "apply-filters-btn" %>
-      <%# name="refresh" 讓瀏覽器只在這個按鈕被點擊時才送出 refresh 參數（一般表單只送出被點擊的
-          submit 按鈕的 name/value），藉此重用同一個表單、同一套 Turbo Frame／載入狀態行為，
-          不需要另外一個獨立表單。注意：submit_tag 的第一個參數同時是按鈕顯示文字「和」送出的
-          value，所以這裡不能額外傳 value: 選項覆蓋顯示文字，Controller 改用「有沒有這個參數」
-          判斷，不比對特定字串值。 %>
-      <%= submit_tag "重新整理資料", name: "refresh", class: "apply-filters-btn refresh-btn" %>
     </div>
+  </div>
   <% end %>
 
   <% if @error.present? %>
@@ -80,10 +80,16 @@
       <strong>錯誤：</strong><%= @error %>
     </div>
   <% else %>
-    <% if @freshness_label.present? %>
-      <p class="freshness-label"><%= @freshness_label %></p>
-    <% end %>
-
+    <%# 統計卡數字套用目前全部的篩選條件（專案／任務類型／範圍／預計完成日期，見
+        Actor#call 的 compute_summary(filtered)），跟下方任務列表算的是同一批任務。原本
+        統計卡只套用專案／任務類型、不受範圍與日期區間影響，使用者選「範圍＝本週到期」
+        預期看到「這週的統計」，卻仍是全部任務的總數，被回報不合理後改為現在這樣。
+        「逾期」在這裡跟畫面上任務名稱旁的「逾期」標籤共用同一個較寬定義（見
+        overdue_or_completed_late?），一併說明，避免使用者以為完成的任務不該被算進逾期。 %>
+    <p class="filter-summary">
+      以上統計反映目前的篩選結果（專案、任務類型、範圍、預計完成日期）；
+      「逾期」計入目前仍逾期，或已完成但當初遲交的任務。
+    </p>
     <div class="summary-bar">
       <div class="stat-item">
         <span class="stat-value"><%= @summary[:total] %></span>

@@ -3,9 +3,17 @@
 <header class="dashboard-header">
   <div class="header-top">
     <h1 class="dashboard-title">戰情室 <span>— 入口頁</span></h1>
-    <button type="button" id="theme-toggle" class="theme-toggle" aria-label="切換至淺色模式">🌙 深色</button>
+    <div class="header-actions">
+      <%# 全站唯一的重新整理入口：一次清掉所有試算表快取（見 HomeController#refresh）。 %>
+      <%= button_to "重新整理資料", refresh_cache_path, class: "refresh-btn" %>
+      <button type="button" id="theme-toggle" class="theme-toggle" aria-label="切換至深色模式">☀️ 淺色</button>
+    </div>
   </div>
 </header>
+
+<% if flash[:notice].present? %>
+  <p class="flash-notice"><%= flash[:notice] %></p>
+<% end %>
 
 <div class="entry-grid">
   <%= link_to "/executive_summary", class: "entry-card" do %>
@@ -17,8 +25,8 @@
     <p>本週與下週工作明細：逾期未完成、本週待完成／已完成、下週工作與階段追蹤，彙整 305／306／階段追蹤三個資料源，供 PM 每週五撰寫週報直接參照。</p>
   <% end %>
   <%= link_to "/dashboard", class: "entry-card" do %>
-    <h2>305 專案進度</h2>
-    <p>依專案分組檢視任務進度、逾期與本週到期任務。</p>
+    <h2>305 專案任務進度</h2>
+    <p>彙整各專案 Slack 頻道的任務紀錄（功能／PR／調整／遺漏／臭蟲），依專案分組檢視每項任務的進度、逾期與本週到期狀況。</p>
   <% end %>
   <%= link_to "/issues", class: "entry-card" do %>
     <h2>306 臭蟲議題</h2>

@@ -1,7 +1,7 @@
 class IssuesController < ApplicationController
   include DateRangeFilterable
 
-  DEFAULT_STATUS = "新建立".freeze
+  DEFAULT_STATUSES = Sheets::FetchIssueDashboard::DEFAULT_STATUSES
   TABS = %w[stats detail].freeze
   DEFAULT_TAB = "stats".freeze
   BREAKDOWN_SORT_KEYS = Sheets::FetchIssueDashboard::BREAKDOWN_SORT_KEYS
@@ -18,11 +18,14 @@ class IssuesController < ApplicationController
       from: from,
       to: to,
       project: params[:project].presence,
-      status: params.key?(:status) ? params[:status] : DEFAULT_STATUS,
+      # 狀態／類型改成多選（比照 305 的 task_type[] 慣例）：multi_param 判斷「這次請求有沒有
+      # 帶這個 query param」，沒帶（使用者還沒送出過篩選表單）傳 nil 讓 Actor 套預設值；有帶
+      # （即使全部取消勾選、值是空陣列）就照實傳陣列，交給 Actor 判斷是否要套用預設值。
+      status: multi_param(:status, nil),
       breakdown_sort: BREAKDOWN_SORT_KEYS.include?(params[:breakdown_sort]) ? params[:breakdown_sort] : nil,
       breakdown_dir: BREAKDOWN_SORT_DIRS.include?(params[:breakdown_dir]) ? params[:breakdown_dir] : DEFAULT_BREAKDOWN_SORT_DIR,
       q: params[:q].presence,
-      type: params[:type].presence
+      type: multi_param(:type, nil)
     )
     if result.success?
       build_success(result)
@@ -34,17 +37,14 @@ class IssuesController < ApplicationController
   private
 
   def build_success(result)
-    # 「統計摘要」（月度 KPI＋每日趨勢）與「議題資料」（依專案分類＋議題明細）各自獨立的表單，
+    # 「統計摘要」（議題 KPI＋每日趨勢）與「議題資料」（依專案分類＋議題明細）各自獨立的表單，
     # 各自帶一個隱藏欄位 tab= 標明來源，送出後仍停留在原本的分頁，而非固定跳回第一個分頁。
     @active_tab = TABS.include?(params[:tab]) ? params[:tab] : DEFAULT_TAB
 
-    @month_kpi = MonthKpiBlueprint.render_as_hash(result.month_kpi)
     @available_months = result.available_months
     @selected_from = result.selected_from
     @selected_to = result.selected_to
-    @matched_month_count = result.settled_month_count
     @selected_month_record = result.selected_month_record
-    @selected_month_pending = result.selected_month_pending
     @daily_kpi = DailyKpiBlueprint.render_as_hash(result.daily_kpi_for_range)
 
     @breakdown_sort = BREAKDOWN_SORT_KEYS.include?(params[:breakdown_sort]) ? params[:breakdown_sort] : nil
@@ -54,10 +54,11 @@ class IssuesController < ApplicationController
 
     @projects = result.projects
     @statuses = result.statuses
+    @types = result.types
     @selected_project = params[:project].presence
-    @selected_status = params.key?(:status) ? params[:status] : DEFAULT_STATUS
+    @selected_status = multi_param(:status, DEFAULT_STATUSES.dup)
     @selected_q = params[:q].presence
-    @selected_type = params[:type].presence
+    @selected_type = multi_param(:type, [])
     @issue_kpis = result.issue_kpis
 
     # 分頁交給 Pagy 處理（Countable 直接支援 Array，不需要額外的 gem extra）：先對 Actor 回傳
@@ -70,7 +71,6 @@ class IssuesController < ApplicationController
 
   def build_failure(message)
     @active_tab = DEFAULT_TAB
-    @month_kpi = []
     @daily_kpi = []
     @project_breakdown = []
     @breakdown_sort = nil
@@ -78,18 +78,25 @@ class IssuesController < ApplicationController
     @available_months = []
     @selected_from = nil
     @selected_to = nil
-    @matched_month_count = 0
     @selected_month_record = nil
-    @selected_month_pending = false
     @projects = []
     @statuses = []
+    @types = []
     @selected_project = nil
-    @selected_status = DEFAULT_STATUS
+    @selected_status = DEFAULT_STATUSES.dup
     @selected_q = nil
-    @selected_type = nil
-    @issue_kpis = { pending: 0, urgent_complaints: 0, overdue_or_undated: 0, total_hours_sum: 0 }
+    @selected_type = []
+    @issue_kpis = { pending: 0, urgent_complaints: 0, total_hours_sum: 0 }
     @pagy = nil
     @issues = []
     @error = message
+  end
+
+  # status／type 皆為多選 query params（status[]／type[]）：params.key? 判斷「這次請求有沒有
+  # 帶這個 query param」，沒帶（使用者還沒送出過篩選表單）回傳 default；有帶（即使全部取消
+  # 勾選、值是空陣列）就照實回傳陣列。同一組判斷邏輯原本在 #index 與 #build_success 各寫兩次
+  # （status／type），抽成這個方法只差呼叫端各自要的 default。
+  def multi_param(key, default)
+    params.key?(key) ? Array(params[key]).reject(&:blank?) : default
   end
 end

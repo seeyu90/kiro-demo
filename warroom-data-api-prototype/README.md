@@ -31,7 +31,7 @@ Things you may want to cover:
 
 | 路由 | 說明 |
 | --- | --- |
-| `/dashboard` | 305 專案進度：依專案分組檢視任務進度、逾期與本週到期任務 |
+| `/dashboard` | 305 專案任務進度：彙整各專案 Slack 頻道的任務紀錄，依專案分組檢視進度、逾期與本週到期任務 |
 | `/issues` | 306 臭蟲議題：月度／每日 KPI、依專案分類統計、議題明細 |
 | `/burndown` | 307 人時燃盡追蹤：依議題呈現理想／實際剩餘人時燃盡圖，支援專案／人員／狀態篩選（見下方「307 人時燃盡追蹤」段落） |
 
@@ -58,6 +58,8 @@ Things you may want to cover:
 | 環境變數 | 對應設定 | 目前預設值 |
 | --- | --- | --- |
 | `PROJECT_PROGRESS_SPREADSHEET_ID` | 305 專案進度試算表 ID（每年換一份新試算表） | `11gwDnOqEiGqj_VF2XF7AzxiJTiOW_k2knF6-4yQCej8` |
+| `PROJECT_PROGRESS_SHEET_NAME` | 305 的年度分頁名稱（n8n 從各專案 Slack 頻道同步的唯一資料來源，每年新建一個以年度命名的分頁） | `2026` |
+| `PROJECT_PROGRESS_GRACE_SHEET_NAME` | 305 的「類型 → 寬限天數」對照分頁，供延誤天數計算扣除 | `類型設定` |
 | `BURNDOWN_SHEET_NAME` | 307 人時燃盡追蹤試算表的分頁名稱（同一份試算表，每年新建一個以年度命名的分頁） | `2026` |
 
 306 臭蟲議題共用同一份試算表，不受年度影響，無對應環境變數。

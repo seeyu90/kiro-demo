@@ -1,7 +1,7 @@
 <% if issues.empty? %>
   <p class="empty-state">目前無符合條件的議題</p>
 <% else %>
-  <table class="project-tasks">
+  <table class="project-tasks issue-tasks">
     <thead>
       <tr>
         <th>議題／專案</th>
@@ -14,6 +14,9 @@
       </tr>
     </thead>
     <tbody>
+      <%# data-label 供窄螢幕的卡片式版面當欄位標籤用（見 application.css 的 @media 區塊，
+          與 305 的 _project_block.html.erb 同一套機制）——這裡原本漏加，768px 以下每一列
+          都變成沒有標籤的裸值，看不出哪個數字是哪個欄位。 %>
       <% issues.each do |issue| %>
         <tr>
           <td>
@@ -22,20 +25,20 @@
             <br>
             <span class="issue-project-sub"><%= issue[:project] %></span>
           </td>
-          <td>
+          <td data-label="類別">
             <span class="attribution-badge <%= attribution_class(issue[:type]) %>">
-              <%= attribution_label(issue[:type]) %>
+              <%= issue_type_label(issue[:type]) %>
             </span>
           </td>
-          <td>
+          <td data-label="主旨">
             <span class="issue-subject-truncate" title="<%= issue[:subject] %>"><%= issue[:subject] %></span>
           </td>
-          <td>
+          <td data-label="狀態">
             <span class="status-badge <%= issue_status_badge_class(issue[:status]) %>"><%= issue[:status] %></span>
           </td>
-          <td><%= issue[:assigned_to].presence || "—" %></td>
-          <td><%= issue_timeline_label(issue) %></td>
-          <td>
+          <td data-label="負責人"><%= issue[:assigned_to].presence || "—" %></td>
+          <td data-label="時程與天數"><%= issue_timeline_label(issue) %></td>
+          <td data-label="花費時間">
             <% if issue[:total_hours].to_f.zero? %>
               <span class="total-hours-empty">0h</span>
             <% else %>
