@@ -13,7 +13,7 @@ module IssuesHelper
   end
 
   # 306「議題資料」頁的「類別」欄位文字與「類型」篩選下拉共用這套詞彙（客訴／測試／其他），
-  # 跟月度 KPI 卡片一致；不是上面的歸屬責任框架（專案共同責任／個人責任）——原本篩選下拉
+  # 跟議題 KPI 卡片一致；不是上面的歸屬責任框架（專案共同責任／個人責任）——原本篩選下拉
   # 用「客訴／測試」、欄位 badge 用「專案共同責任／個人責任」，兩邊各說各話，使用者反應選了
   # 篩選卻在欄位裡看到不同的字，混淆。顏色／CSS class 仍沿用 attribution_class，只有文字
   # 換一套。PM 週報（_issue_section.html.erb）維持用 attribution_label 的原本框架，不受影響。
@@ -34,7 +34,7 @@ module IssuesHelper
     [ first_day, last_day ]
   end
 
-  # 月度 KPI 卡片的比率欄位（攔截率／平均天數／SLA達標率），全部即時從 issues 算（見
+  # 議題 KPI 卡片的比率欄位（攔截率／平均天數／SLA達標率），全部即時從 issues 算（見
   # Sheets::FetchIssueDashboard#compute_month_kpi），只有選到的區間裡分母為 0（沒有客訴，或
   # 客訴＋測試皆為 0）時才是 nil，顯示「－」而不是空白加一個孤零零的「%」。
   def month_kpi_rate_display(value, unit: "%")

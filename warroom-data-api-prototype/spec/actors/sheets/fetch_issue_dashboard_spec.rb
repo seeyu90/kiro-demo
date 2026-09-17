@@ -361,11 +361,14 @@ RSpec.describe Sheets::FetchIssueDashboard do
       end
     end
 
-    # 8 個欄位現在全部即時從 issues 算（見 Sheets::FetchIssueDashboard#compute_month_kpi），
+    # 所有欄位現在全部即時從 issues 算（見 Sheets::FetchIssueDashboard#compute_month_kpi），
     # 不再讀 month_kpi 表，故這裡的 month_kpi_rows 刻意留著跟下面算出來的數字不同，藉此確認
     # selected_month_record 真的是即時算出來的，不是抄 sheet。公式細節（完成數只認「已解決」、
-    # 未結案只認「新建立」「實作中」、平均天數與SLA達標率只以「客訴」為分母）照抄自實際產生
-    # month_kpi 表的 n8n 腳本（使用者提供原始碼）。
+    # 未結案＝客訴總數－完成數、平均天數與SLA達標率只以「客訴」為分母）照抄／改編自實際產生
+    # month_kpi 表的 n8n 腳本（使用者提供原始碼）。狀態刻意不用「未完成」這種字面上包含
+    # 「完成」二字的值——ISSUE_DONE_STATUS_PATTERN 是子字串比對，「未完成」會被誤判為已完成
+    # 狀態，而這不是真實試算表會出現的值（實測過的真實狀態只有已結束／已解決／已測試／
+    # 新建立／已暫停／已拒絕／待測試），用它當測試資料反而測不出真正的行為。
     describe "from/to date range filtering" do
       let(:month_kpi_rows) do
         [
@@ -377,18 +380,18 @@ RSpec.describe Sheets::FetchIssueDashboard do
 
       # 7 月：C1（Complaint／已解決／work_days=1）、C2（Complaint／已結束／work_days=3）、
       # T1（TestingBug／新建立）。
-      # 8 月：C3（Complaint／未完成／work_days=2）、C4（Complaint／已解決／work_days=1）、
-      # T2（TestingBug／實作中）、T3（TestingBug／已結束）。
+      # 8 月：C3（Complaint／新建立，尚未結案且無到期日／work_days=2）、C4（Complaint／
+      # 已解決／work_days=1）、T2（TestingBug／實作中）、T3（TestingBug／已結束）。
       let(:issue_rows) do
         [
           %w[issue_id subject type tracker status assigned_to start_date due_date work_days sheet_name project total_hours],
-          [ "1001", "C1", "Complaint", "臭蟲", "已解決", "A", "2026/7/5", "", "1", "raw_2026", "P" ],
-          [ "1002", "C2", "Complaint", "臭蟲", "已結束", "A", "2026/7/10", "", "3", "raw_2026", "P" ],
-          [ "1003", "T1", "TestingBug", "臭蟲", "新建立", "A", "2026/7/15", "", "", "raw_2026", "P" ],
-          [ "1004", "C3", "Complaint", "臭蟲", "未完成", "A", "2026/8/5", "", "2", "raw_2026", "P" ],
-          [ "1005", "C4", "Complaint", "臭蟲", "已解決", "A", "2026/8/10", "", "1", "raw_2026", "P" ],
-          [ "1006", "T2", "TestingBug", "臭蟲", "實作中", "A", "2026/8/12", "", "", "raw_2026", "P" ],
-          [ "1007", "T3", "TestingBug", "臭蟲", "已結束", "A", "2026/8/20", "", "", "raw_2026", "P" ]
+          [ "1001", "C1", "Complaint", "臭蟲", "已解決", "A", "2026/7/5", "", "1", "raw_2026", "P", "2" ],
+          [ "1002", "C2", "Complaint", "臭蟲", "已結束", "A", "2026/7/10", "", "3", "raw_2026", "P", "1.5" ],
+          [ "1003", "T1", "TestingBug", "臭蟲", "新建立", "A", "2026/7/15", "", "", "raw_2026", "P", "0.5" ],
+          [ "1004", "C3", "Complaint", "臭蟲", "新建立", "A", "2026/8/5", "", "2", "raw_2026", "P", "1" ],
+          [ "1005", "C4", "Complaint", "臭蟲", "已解決", "A", "2026/8/10", "", "1", "raw_2026", "P", "0.75" ],
+          [ "1006", "T2", "TestingBug", "臭蟲", "實作中", "A", "2026/8/12", "", "", "raw_2026", "P", "0" ],
+          [ "1007", "T3", "TestingBug", "臭蟲", "已結束", "A", "2026/8/20", "", "", "raw_2026", "P", "3" ]
         ]
       end
 
@@ -397,34 +400,41 @@ RSpec.describe Sheets::FetchIssueDashboard do
       it "defaults from/to to the current month's bounds, computing every field live from issues (not month_kpi_rows)" do
         expect(result.selected_from).to eq(Date.new(2026, 8, 1))
         expect(result.selected_to).to eq(Date.new(2026, 8, 31))
-        # 8 月：C3／C4 客訴、T2／T3 測試；完成數只有 C4（已解決，C3 未完成不算）；未結案只有
-        # T2（實作中；C3 未完成不在 新建立／實作中 之列，不算）；平均天數＝(2+1)/2；
-        # SLA達標率＝work_days<=1 的 C4 一筆 ÷ 2 客訴。
+        # 8 月：C3／C4 客訴、T2／T3 測試；完成數只有 C4（已解決）；未結案＝2－1＝1（C3）；
+        # 平均天數＝(2+1)/2；SLA達標率＝work_days<=1 的 C4 一筆 ÷ 2 客訴；遲期客訴：C3
+        # 尚未結案（新建立）且無到期日，客訴 SLA 為 2 天，8/5+2=8/7 早於「今天」8/19 → 逾期，
+        # C4 已解決不算；總花費工時（不分類型）＝1(C3)+0.75(C4)+0(T2)+3(T3)。
         expect(result.selected_month_record).to eq(
-          complaint: 2, testing: 2, total_bug: 4, block_rate: 50.0,
-          completed: 1, unresolved: 1, avg_days: 1.5, sla_rate: 50.0
+          complaint: 2, testing: 2, other: 0, block_rate: 50.0,
+          completed: 1, unresolved: 1, avg_days: 1.5, sla_rate: 50.0,
+          overdue_complaints: 1, total_hours_sum: 4.75
         )
       end
 
       it "computes a different set of numbers for a different single month" do
         result = described_class.result(from: Date.new(2026, 7, 1), to: Date.new(2026, 7, 31))
 
-        # 7 月：C1／C2 客訴、T1 測試；完成數只有 C1（已解決，C2 是已結束不算）；未結案只有
-        # T1（新建立）；平均天數＝(1+3)/2；SLA達標率＝work_days<=1 的 C1 一筆 ÷ 2 客訴。
+        # 7 月：C1／C2 客訴、T1 測試；完成數只有 C1（已解決，C2 是已結束不算）；未結案＝
+        # 2－1＝1；平均天數＝(1+3)/2；SLA達標率＝work_days<=1 的 C1 一筆 ÷ 2 客訴；本月遲期
+        # 客訴：C1／C2 皆已完成（廣義 done? 判斷含「已解決」「已結束」），沒有尚未結案的客訴
+        # 可能逾期，故為 0；總花費工時＝2(C1)+1.5(C2)+0.5(T1)。
         expect(result.selected_month_record).to eq(
-          complaint: 2, testing: 1, total_bug: 3, block_rate: 33.33,
-          completed: 1, unresolved: 1, avg_days: 2.0, sla_rate: 50.0
+          complaint: 2, testing: 1, other: 0, block_rate: 33.33,
+          completed: 1, unresolved: 1, avg_days: 2.0, sla_rate: 50.0,
+          overdue_complaints: 0, total_hours_sum: 4.0
         )
       end
 
       it "recomputes over the full combined range when it spans multiple months (no month_kpi_rows aggregation)" do
         result = described_class.result(from: Date.new(2026, 7, 1), to: Date.new(2026, 8, 31))
 
-        # 7+8 月合計：4 客訴（C1～C4）、3 測試（T1～T3）；完成數 C1＋C4＝2；未結案 T1＋T2＝2；
-        # 平均天數＝(1+3+2+1)/4；SLA達標率＝ work_days<=1 的 C1／C4 兩筆 ÷ 4 客訴。
+        # 7+8 月合計：4 客訴（C1～C4）、3 測試（T1～T3）；完成數 C1＋C4＝2；未結案＝4－2＝2；
+        # 平均天數＝(1+3+2+1)/4；SLA達標率＝ work_days<=1 的 C1／C4 兩筆 ÷ 4 客訴；本月遲期
+        # 客訴＝1（仍只有 C3）；總花費工時＝4.0（7月）+4.75（8月）。
         expect(result.selected_month_record).to eq(
-          complaint: 4, testing: 3, total_bug: 7, block_rate: 42.86,
-          completed: 2, unresolved: 2, avg_days: 1.75, sla_rate: 50.0
+          complaint: 4, testing: 3, other: 0, block_rate: 42.86,
+          completed: 2, unresolved: 2, avg_days: 1.75, sla_rate: 50.0,
+          overdue_complaints: 1, total_hours_sum: 8.75
         )
       end
 
@@ -432,8 +442,9 @@ RSpec.describe Sheets::FetchIssueDashboard do
         result = described_class.result(from: Date.new(2025, 1, 1), to: Date.new(2025, 1, 31))
 
         expect(result.selected_month_record).to eq(
-          complaint: 0, testing: 0, total_bug: 0, block_rate: nil,
-          completed: 0, unresolved: 0, avg_days: nil, sla_rate: nil
+          complaint: 0, testing: 0, other: 0, block_rate: nil,
+          completed: 0, unresolved: 0, avg_days: nil, sla_rate: nil,
+          overdue_complaints: 0, total_hours_sum: 0
         )
       end
 
@@ -484,6 +495,10 @@ RSpec.describe Sheets::FetchIssueDashboard do
       end
     end
 
+    # status 傳空陣列（不是 nil）：nil 代表「controller 完全沒收到 status query param」，
+    # 會套用 DEFAULT_STATUSES（只顯示「新建立」），空陣列則代表「使用者主動送出表單、
+    # 全部取消勾選」，視為不篩選狀態——這裡的 fixture 混雜「處理中」「新建立」「已確認」
+    # 三種狀態，要用空陣列才測得出「不篩選」的效果，傳 nil 會被誤篩成只剩「新建立」兩筆。
     describe "q/type filters and issue_kpis" do
       let(:issue_rows) do
         [
@@ -504,13 +519,13 @@ RSpec.describe Sheets::FetchIssueDashboard do
       around { |example| travel_to(Date.new(2026, 8, 19)) { example.run } }
 
       it "filters filtered_issues by q, case-insensitive, matching subject/issue_id/assigned_to" do
-        result = described_class.result(status: nil, q: "王贊勛")
+        result = described_class.result(status: [], q: "王贊勛")
 
         expect(result.filtered_issues.map { |i| i[:issue_id] }).to eq([ "1001" ])
       end
 
       it "filters filtered_issues by exact type match" do
-        result = described_class.result(status: nil, type: "Complaint")
+        result = described_class.result(status: [], type: "Complaint")
 
         # 依議題編號降冪排序（見下面的排序測試），1003 排在 1001 前面。
         expect(result.filtered_issues.map { |i| i[:issue_id] }).to eq([ "1003", "1001" ])
@@ -519,7 +534,7 @@ RSpec.describe Sheets::FetchIssueDashboard do
       # 原始順序是 raw_2023～raw_2027 分頁依序串接，等於「最舊的排最前面」；改為依議題編號
       # 降冪，數字比較（不是字串比較，字串排序會把 "999" 排在 "1002" 後面）。
       it "sorts filtered_issues by issue_id descending (newest first), not sheet-concatenation order" do
-        result = described_class.result(status: nil)
+        result = described_class.result(status: [])
 
         expect(result.filtered_issues.map { |i| i[:issue_id] }).to eq(%w[1005 1004 1003 1002 1001])
       end
@@ -527,19 +542,19 @@ RSpec.describe Sheets::FetchIssueDashboard do
       # 類型篩選下拉的「其他」選項要同時比對到「類型欄位真的空白」跟「類型欄位寫著 Other」
       # 這兩種原始值——對使用者來說兩者是同一件事，篩選時不該分開（見 issue_type_category）。
       it "matches both a blank type and a literal Other value when filtering by the Other category" do
-        result = described_class.result(status: nil, type: "Other")
+        result = described_class.result(status: [], type: "Other")
 
         expect(result.filtered_issues.map { |i| i[:issue_id] }).to eq([ "1005", "1004" ])
       end
 
       it "exposes the fixed 3-category list as types, not whatever raw values happen to be in the data" do
-        result = described_class.result(status: nil)
+        result = described_class.result(status: [])
 
         expect(result.types).to eq(%w[Complaint TestingBug Other])
       end
 
       it "computes issue_kpis from the filtered (not paginated) issue set, excluding done issues" do
-        result = described_class.result(status: nil)
+        result = described_class.result(status: [])
 
         # 1001（處理中、客訴、已逾期）／1002（新建立、測試、無到期日）／1004／1005（新建立、
         # 類型空白或 Other、無到期日）都算 pending；1003（已確認）已完成，數字都不算它，
@@ -570,7 +585,7 @@ RSpec.describe Sheets::FetchIssueDashboard do
       around { |example| travel_to(Date.new(2026, 8, 19)) { example.run } }
 
       it "only counts a Complaint issue past its implicit SLA deadline as urgent when due_date is blank" do
-        result = described_class.result(status: nil)
+        result = described_class.result(status: [])
 
         # 2002 客訴逾期 → urgent_complaints；2004 測試逾期但不是客訴，不算緊急客訴。
         expect(result.issue_kpis).to eq(

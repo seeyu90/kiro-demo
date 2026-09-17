@@ -29,7 +29,7 @@ RSpec.describe "ExecutiveSummary", type: :request do
   let(:burndown_header) { %w[剩餘人時 專案 議題 人員 議題ID 開案日期 完成日期 狀態 預估人時] }
   let(:burndown_rows) { [ burndown_header + [ "08/25" ] ] }
 
-  # 306 月度 KPI（含 SLA達標率／完成數）現在全部即時從 issue_rows 算（見
+  # 306 議題 KPI（含 SLA達標率／完成數）現在全部即時從 issue_rows 算（見
   # Sheets::FetchIssueDashboard#compute_month_kpi），不再讀 month_kpi_rows；這裡刻意留一份
   # 內容不同的 month_kpi_rows，確認 build_portfolio 讀到的 sla_rate 真的是即時算出來的
   # 80.0%，不是這張表寫的 40。travel_to 固定在 2026-09-01，5 筆客訴（4 筆 work_days=1 達標、

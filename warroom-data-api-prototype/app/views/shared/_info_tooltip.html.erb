@@ -1,0 +1,14 @@
+<%# 共用的 hover/focus 才顯示的說明圖示；text: 為 tooltip 內容（純文字，例如公式、圖表說明）。
+    圖示是內嵌 SVG（線框圓圈＋i），不是文字字元：原本用純文字 "i" 塞進 CSS 畫的圓形背景裡，
+    使用者反應不好看；改成向量圖示後線條乾淨、顏色用 currentColor 直接跟隨 .chart-info 的
+    文字顏色，亮／暗色主題不必另外處理。 %>
+<span class="chart-info" tabindex="0" aria-label="說明">
+  <span class="chart-info-icon" aria-hidden="true">
+    <svg viewBox="0 0 16 16" focusable="false">
+      <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.3"></circle>
+      <circle cx="8" cy="4.6" r="0.9" fill="currentColor"></circle>
+      <rect x="7.15" y="7" width="1.7" height="5" rx="0.6" fill="currentColor"></rect>
+    </svg>
+  </span>
+  <span class="chart-info-tooltip"><%= text %></span>
+</span>

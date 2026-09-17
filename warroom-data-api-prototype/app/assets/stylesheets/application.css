@@ -652,6 +652,13 @@ turbo-frame[busy]::after {
   border-bottom: none;
 }
 
+/* 「依專案分類」表格最下面的小計列（見 _project_breakdown.html.erb）：加粗＋跟資料列之間
+   加一條比一般列更明顯的分隔線，一眼看出這不是另一個專案，是加總列。 */
+.project-breakdown-subtotal td {
+  font-weight: 700;
+  border-top: 2px solid var(--color-border);
+}
+
 /* 每個專案各自是一個獨立的 <table>，若讓瀏覽器自動決定欄寬，每張表都會依「自己這批資料」
    算出不同的欄寬，各專案區塊之間的「類型」「負責人」「日期」欄就對不到同一條垂直線上。
    改用 table-layout: fixed 並明確指定每一欄的寬度，所有專案表格才會共用同一套欄位幾何；
@@ -1049,23 +1056,33 @@ turbo-frame[busy]::after {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.1rem;
-  height: 1.1rem;
-  border-radius: 50%;
-  background: var(--color-border-hover);
-  color: var(--color-text-strong);
+  /* inline-flex 預設 vertical-align:baseline，對齊到文字基線的「下緣」，圖示沒有像文字一樣
+     的下伸部分（descender），視覺上會比旁邊的中文字整體偏高。vertical-align:middle 是照
+     Latin 字母的 x-height 對齊（基線往上 0.5ex），中文字沒有 x-height 這種概念、實際視覺
+     中心比 0.5ex 的位置更高，改成 middle 後圖示反而比中文字的視覺中心低了約 1px（用
+     Range.getBoundingClientRect() 量測文字glyph框與圖示框得出）。用 translateY 手動校正
+     這個小落差，不能單靠 vertical-align 的關鍵字解決。 */
+  vertical-align: middle;
+  transform: translateY(-1px);
+  color: var(--color-text-muted);
   cursor: help;
   flex-shrink: 0;
 }
 
-/* 原本用 Unicode 的 ⓘ（已經內建一個圓圈），塞進 .chart-info 自己的圓形背景裡變成
-   圓中圓，不同字型繪製效果也不一致；改成純文字 "i"，樣式完全由 CSS 控制。 */
-.chart-info-icon {
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 0.75rem;
-  font-style: italic;
-  font-weight: 700;
-  line-height: 1;
+.chart-info:hover,
+.chart-info:focus,
+.chart-info:focus-visible {
+  color: var(--color-text-strong);
+}
+
+/* 圖示本身是 shared/_info_tooltip 裡的內嵌 SVG（線框圓圈＋i），不是文字字元：原本用純文字
+   "i" 塞進這裡自己畫的圓形背景裡（更早之前是 Unicode 的 ⓘ，同樣問題），使用者反應不好看。
+   SVG 用 currentColor 直接跟隨 .chart-info 的顏色（含 hover/focus 變色），不必額外處理
+   亮／暗色主題或不同字型的渲染差異。 */
+.chart-info-icon svg {
+  display: block;
+  width: 14px;
+  height: 14px;
 }
 
 .chart-info-tooltip {

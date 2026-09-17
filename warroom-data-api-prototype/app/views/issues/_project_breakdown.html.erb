@@ -25,5 +25,17 @@
         </tr>
       <% end %>
     </tbody>
+    <%# 小計列：純加總 rows 已經算好的每一欄，不是另外呼叫 Actor 重算——這裡只有純顯示層的
+        加總，沒有新的業務邏輯，不需要為此另開一個 Actor 輸出。排序點擊只作用在 tbody 的列，
+        小計不隨排序移動，故獨立放在 tfoot。 %>
+    <tfoot>
+      <tr class="project-breakdown-subtotal">
+        <td>小計</td>
+        <td data-label="客訴"><%= rows.sum { |row| row[:complaint] } %></td>
+        <td data-label="測試"><%= rows.sum { |row| row[:testing] } %></td>
+        <td data-label="其他"><%= rows.sum { |row| row[:other] } %></td>
+        <td data-label="總計"><%= rows.sum { |row| row[:total] } %></td>
+      </tr>
+    </tfoot>
   </table>
 <% end %>
