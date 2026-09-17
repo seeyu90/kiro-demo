@@ -157,6 +157,20 @@ RSpec.describe Sheets::FetchProjectBurndown do
       expect(result.first[:hours]).to eq(21.0)
     end
 
+    # 真實資料稽核抓到的 bug：開案日與完成日剛好落在同一週（例如週一開案、週四結案）時，
+    # 兩個錨點正規化到週一後撞成同一個 date key，Array#uniq 只留下「第一次出現」的元素。
+    # 修正前 anchors 陣列固定是 [開案錨點, 完成錨點]，導致這種同週內開完案的短天期議題，
+    # 唯一一個資料點顯示滿額（看起來像還沒開始），而不是歸零（看起來像準時完成）——這條線
+    # 存在的目的就是要看出「有沒有準時歸零」，同週内的議題更需要看到歸零，故完成錨點改排
+    # 在開案錨點前面，撞期時完成錨點勝出。
+    it "lets the due-date anchor (zero) win over the start-date anchor (full hours) when both fall in the same Monday-normalized week" do
+      # start_date=2026-07-20（週一），due_date=2026-07-23（週四）：兩者正規化到週一皆為
+      # 2026-07-20，同一個 date key。
+      result = actor.send(:compute_ideal_series, [], "2026-07-20", "2026-07-23", 10.0)
+
+      expect(result).to eq([ { date: "2026-07-20", hours: 0.0 } ])
+    end
+
     it "lets the due_date anchor win over the ratio-computed value when a week column falls on the same Monday-normalized date but due_date itself isn't a Monday" do
       # start_date=2026-07-06（週一），due_date=2026-08-19（週三，正規化到週一是 2026-08-17）。
       # 週欄位剛好也有 2026-08-17：若沒有優先保留錨點，該點會被算成 estimated_hours*(2/44)
@@ -316,6 +330,32 @@ RSpec.describe Sheets::FetchProjectBurndown do
           { date: "2026-08-03", hours: 148.25 },
           { date: "2026-08-10", hours: 128.25 }
         ])
+      end
+
+      # 真實資料稽核抓到的案例（issue_id=4637，舊振南 PMS）：同 issue_id、同專案、同起訖日、
+      # 同狀態，但兩列標題不同（"調整(202601)" vs "調整(v5.7)"），像是來源資料誤用重複 ID。
+      # 原本只取第一列標題，會讓另一列的標題悄悄消失，使用者完全看不出資料有異常；改成列出
+      # 所有不同的標題，不代為判斷哪個才是對的（這需要跟 PM 確認來源資料，不是程式能決定的）。
+      it "joins distinct issue_titles with ／ instead of silently keeping only the first row's title, when rows sharing an issue_id disagree" do
+        rows = [
+          [ "-16", "舊振南 PMS", "調整(202601)", "邱珮玲", "4637", "2026/01/20", "2026/02/03", "已完成", "23" ],
+          [ "-1.5", "舊振南 PMS", "調整(v5.7)", "黃紹鈞", "4637", "2026/01/20", "2026/02/03", "已完成", "33" ]
+        ]
+
+        result = actor.send(:parse_issues, rows, week_dates)
+
+        expect(result.first[:issue_title]).to eq("調整(202601)／調整(v5.7)")
+      end
+
+      it "keeps a single issue_title unchanged when all rows for the same issue_id agree" do
+        rows = [
+          [ "-31.5", "立翔 PMS", "v2.0 調整", "黃紹鈞", "5005", "2026/07/09", "2026/08/06", "執行中", "121" ],
+          [ "-22.25", "立翔 PMS", "v2.0 調整", "沈舫竹", "5005", "2026/07/09", "2026/08/06", "執行中", "31" ]
+        ]
+
+        result = actor.send(:parse_issues, rows, week_dates)
+
+        expect(result.first[:issue_title]).to eq("v2.0 調整")
       end
 
       it "keeps each assignee's own cumulative consumed hours (running total from 0, not remaining hours)" do

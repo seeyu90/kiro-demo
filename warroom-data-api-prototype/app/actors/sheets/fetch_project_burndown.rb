@@ -216,7 +216,13 @@ module Sheets
         {
           issue_id: issue_id,
           project: first[:project],
-          issue_title: first[:issue_title],
+          # 同一 issue_id 底下各列的標題理應一致（同一議題被拆給不同人員填寫），但真實資料
+          # 稽核發現至少一組例外（同專案／同起訖日／同狀態，議題 ID 相同，標題卻不同，像是
+          # 來源資料誤用重複 ID）。原本只取第一列標題，會讓其他列的標題悄悄消失、使用者
+          # 完全看不出資料有異常；改成列出所有不同的標題（用「／」連接），只有一種標題時
+          # 顯示結果不變。這是否代表來源資料需要訂正，需要 PM 確認，程式這裡只負責不隱藏
+          # 這個落差，不代為決定哪個標題才是對的。
+          issue_title: group.map { |r| r[:issue_title] }.uniq.join("／"),
           assignees: by_assignee.keys,
           start_date: start_date,
           due_date: due_date,
@@ -298,14 +304,20 @@ module Sheets
         { date: w[:date].iso8601, hours: (estimated_hours * (1 - ratio)).round(2) }
       end
 
+      # 完成錨點排在開案錨點「前面」：Array#uniq 保留「第一次出現」的元素。開案日與完成日
+      # 若剛好落在同一週（正規化到週一後同一天，真實資料常見於當週內就結案的短天期任務），
+      # 兩個錨點會撞成同一個 date key，此時完成錨點（歸零）必須贏過開案錨點（滿額）——這條線
+      # 存在的目的就是要能看出「有沒有準時歸零」，同一週內開案又結案的議題，歸零這件事更重要，
+      # 顯示滿額反而讓人以為這週還沒開始、看不出任何進度（曾經是反過來的順序，導致這種短天期
+      # 議題的理想線在唯一一個資料點上顯示滿額而非歸零，被使用者拿真實資料驗算抓到）。
       anchors = [
-        { date: start_d.beginning_of_week(:monday).iso8601, hours: estimated_hours.round(2) },
-        { date: due_d.beginning_of_week(:monday).iso8601, hours: 0.0 }
+        { date: due_d.beginning_of_week(:monday).iso8601, hours: 0.0 },
+        { date: start_d.beginning_of_week(:monday).iso8601, hours: estimated_hours.round(2) }
       ]
-      # 錨點排在前面：Array#uniq 保留「第一次出現」的元素，若某週欄位剛好落在錨點同一天
-      # （例如 due_date 本身不是週一、但正規化後跟某週欄位同一週），錨點的保證值（滿額／歸零）
-      # 必須贏過該週依比例算出的值，理想線才能真的準時歸零／從滿額開始。錨點超出 from／to
-      # 顯示範圍的部分，交給呼叫端的 trim_to_display_range 統一裁掉，這裡不重複處理。
+      # 錨點整體排在 points 前面：若某週欄位剛好落在錨點同一天（例如 due_date 本身不是週一、
+      # 但正規化後跟某週欄位同一週），錨點的保證值（滿額／歸零）必須贏過該週依比例算出的值，
+      # 理想線才能真的準時歸零／從滿額開始。錨點超出 from／to 顯示範圍的部分，交給呼叫端的
+      # trim_to_display_range 統一裁掉，這裡不重複處理。
       (anchors + points).uniq { |p| p[:date] }.sort_by { |p| p[:date] }
     end
 

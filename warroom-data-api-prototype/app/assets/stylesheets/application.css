@@ -1383,6 +1383,54 @@ turbo-frame[busy]::after {
   .project-tasks td:first-child::before {
     content: none;
   }
+
+  /* 307 議題燃盡狀態表不是真正的 <table>（是 div/span 模擬的 CSS grid，見
+     .burndown-status-row），但一樣有「窄螢幕欄位被擠壓成好幾行文字」的問題（6 欄固定
+     grid-template-columns 在 390px 下每欄都窄到議題名稱／負責人被迫換行 3~4 行）——
+     比照 .project-tasks 的做法，改成卡片式：表頭整列隱藏，每個 span 自己變成
+     「標籤／值」兩欄的小 grid，標籤讀 data-label。 */
+  .burndown-status-row {
+    display: block;
+    width: 100%;
+  }
+
+  /* 表頭列（.burndown-status-row .burndown-status-header 兩個 class 都有）整列隱藏：
+     排在 .burndown-status-row 規則「之後」，兩者 specificity 相同時靠後者覆蓋前者的
+     display，順序顛倒的話 display:block 會贏過 display:none，表頭列會變成一張空卡片
+     （欄位名稱本身被誤當成值顯示，沒有對應的 data-label 可印出標籤）。 */
+  .burndown-status-header {
+    display: none;
+  }
+
+  .burndown-status-row > span {
+    display: grid;
+    grid-template-columns: 5rem 1fr;
+    justify-items: start;
+    align-items: baseline;
+    gap: 0.5rem;
+    padding: 0.2rem 0;
+  }
+
+  .burndown-status-row > span[data-label]::before {
+    content: attr(data-label);
+    color: var(--color-text-muted);
+    font-size: 0.8rem;
+  }
+
+  /* 議題名稱（沒有 data-label 的第一欄）是每張卡片的標題：獨佔一行、字體加重 */
+  .burndown-status-row > span:first-child {
+    display: block;
+    font-weight: 600;
+    padding-bottom: 0.35rem;
+  }
+
+  /* .burndown-status-row 在桌機版只有單行高度，align-items:center 讓展開箭頭跟那一行
+     文字垂直置中沒有問題；改成卡片式後 .burndown-status-row 變成 6 行堆疊的區塊，
+     center 對齊會讓箭頭飄到卡片中間某一行（視覺上像是隨機指到「已消耗」那一行），
+     改成 flex-start 讓箭頭對齊卡片最上面的標題列。 */
+  .burndown-status-details > summary {
+    align-items: flex-start;
+  }
 }
 
 @media (max-width: 480px) {

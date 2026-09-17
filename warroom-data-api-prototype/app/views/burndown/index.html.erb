@@ -56,27 +56,35 @@
       <% if @filtered_issues.empty? %>
         <p class="empty-state">目前無符合條件的議題</p>
       <% else %>
-        <div class="burndown-status-table">
+        <%# 這裡是 div/span 模擬的表格（不是真正的 <table>），因為每一列都要能展開一個完整的
+            燃盡圖（<details>/<summary>），標準 <table> 的 <tr>/<td> 不容易讓一整列原生地
+            展開／收合次要內容；改用真正 <table> 需要把 <details> 整個包進單一 <td colspan>
+            裡、header 也要跟著改用真正的 <th>，是比這次要修的無障礙落差更大的重構，故先只
+            補上 ARIA role（table／columnheader／row／cell），不動整體標記結構。 %>
+        <div class="burndown-status-table" role="table" aria-label="議題燃盡狀態">
           <div class="burndown-status-row burndown-status-header" role="row">
-            <span>議題</span>
-            <span>負責人</span>
-            <span>預估人時</span>
-            <span>已消耗</span>
-            <span>剩餘</span>
-            <span>狀態</span>
+            <span role="columnheader">議題</span>
+            <span role="columnheader">負責人</span>
+            <span role="columnheader">預估人時</span>
+            <span role="columnheader">已消耗</span>
+            <span role="columnheader">剩餘</span>
+            <span role="columnheader">狀態</span>
           </div>
 
           <% @filtered_issues.each do |issue| %>
             <% status = burndown_status(issue) %>
             <details class="burndown-status-details">
               <summary class="burndown-status-summary">
-                <span class="burndown-status-row">
-                  <span><%= "#{issue[:project]}／#{issue[:issue_title]}" %></span>
-                  <span><%= issue[:assignees].join("、") %></span>
-                  <span><%= issue[:estimated_hours] %></span>
-                  <span><%= burndown_consumed_hours(issue) || "—" %></span>
-                  <span><%= burndown_remaining_hours(issue) || "—" %></span>
-                  <span><span class="status-badge status-<%= status[:key] %>"><%= status[:label] %></span></span>
+                <%# data-label 供窄螢幕卡片式版面用（見 application.css 的
+                    @media (max-width: 768px) 區塊），比照 305/306 既有表格的做法：欄位標籤
+                    改由 CSS ::before 讀 data-label 印出，不需要每張卡片各自重複寫死標籤文字。 %>
+                <span class="burndown-status-row" role="row">
+                  <span role="cell"><%= "#{issue[:project]}／#{issue[:issue_title]}" %></span>
+                  <span role="cell" data-label="負責人"><%= issue[:assignees].join("、") %></span>
+                  <span role="cell" data-label="預估人時"><%= issue[:estimated_hours] %></span>
+                  <span role="cell" data-label="已消耗"><%= burndown_consumed_hours(issue) || "—" %></span>
+                  <span role="cell" data-label="剩餘"><%= burndown_remaining_hours(issue) || "—" %></span>
+                  <span role="cell" data-label="狀態"><span class="status-badge status-<%= status[:key] %>"><%= status[:label] %></span></span>
                 </span>
               </summary>
               <div class="burndown-status-detail">
