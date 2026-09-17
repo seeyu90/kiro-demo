@@ -678,14 +678,16 @@ turbo-frame[busy]::after {
   white-space: nowrap;
 }
 
-/* 「議題資料」單一表格（_issue_list.html.erb）跟上面的 .project-tasks 共用邊框／字級／
-   hover 等基礎樣式，但 table-layout: fixed 與依欄位「位置」訂的寬度是為了讓 305「每個專案
-   各自一張表」在欄位對不齊的問題（見上方說明）而存在，這裡只有單一一張表，欄位語意也完全
-   不同——例如這裡 nth-child(3) 是「主旨」，套用到 305 那組規則卻是「狀態」該有的 6rem，
-   主旨整段文字被壓到只剩兩三個字寬；窄螢幕卡片式版面下，.issue-subject-truncate 的
-   overflow: hidden 疊加這個塌陷的欄寬，甚至讓欄寬直接變成 0px、主旨完全看不見（CSS Grid／
-   Flex 子項目 overflow 非 visible 時，自動最小寬度規格上是 0，不是內容實際寬度）。改回瀏覽器
-   依內容自動配欄寬，並允許換行。 */
+/* 306 頁的兩張單一表格（_issue_list.html.erb 的議題明細、_project_breakdown.html.erb 的
+   依專案分類）跟上面的 .project-tasks 共用邊框／字級／hover 等基礎樣式，但 table-layout:
+   fixed 與依欄位「位置」訂的寬度是為了讓 305「每個專案各自一張表」的欄位對不齊問題（見上方
+   說明）而存在，這兩張都只有單一一張表，欄位語意也完全不同、欄數也不同（議題明細 7 欄、
+   依專案分類 5 欄）——例如議題明細 nth-child(3) 是「主旨」，套用到的卻是 305「狀態」該有的
+   6rem，主旨整段文字被壓到只剩兩三個字寬；依專案分類的「其他」「總計」則是誤套到「負責人」
+   「預計完成日期」該有的 9.5rem／8.5rem，數字兩側留白大小不一，視覺上像沒對齊。窄螢幕卡片式
+   版面下，.issue-subject-truncate 的 overflow: hidden 疊加這個塌陷的欄寬，甚至讓欄寬直接變成
+   0px、主旨完全看不見（CSS Grid／Flex 子項目 overflow 非 visible 時，自動最小寬度規格上是
+   0，不是內容實際寬度）。兩張表都改回瀏覽器依內容自動配欄寬，並允許換行。 */
 .issue-tasks {
   table-layout: auto;
 }
@@ -693,6 +695,15 @@ turbo-frame[busy]::after {
 .issue-tasks th:nth-child(n),
 .issue-tasks td:nth-child(n) {
   width: auto;
+}
+
+/* 上面把每一欄都設成 white-space: normal（可換行）時，瀏覽器的自動配寬演算法會平均看待
+   所有欄位，「負責人」「時程與天數」「花費時間」這些原本一行就放得下的短欄位反而被主旨
+   這種長文字欄擠壓到只剩兩三個字寬，短欄位標題「負責人」「花費時間」因此被迫斷成兩行
+   （見議題明細表格頭實測）。只有主旨（議題明細第 3 欄）真的需要換行，其餘欄位維持繼承自
+   .project-tasks 的 nowrap，瀏覽器才會依照「這欄實際上一行要多寬」正確分配空間。 */
+.issue-tasks th:nth-child(3),
+.issue-tasks td:nth-child(3) {
   white-space: normal;
 }
 

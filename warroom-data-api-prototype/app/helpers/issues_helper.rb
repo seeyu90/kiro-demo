@@ -12,13 +12,15 @@ module IssuesHelper
     ATTRIBUTION_CLASSES[type] || "attribution-other"
   end
 
-  # 「類型」篩選下拉的選項文字：跟月度 KPI 卡片（客訴／測試／總Bug）用同一套詞彙，不是上面
-  # 「歸屬責任」的框架（專案共同責任／個人責任）——同一份資料改用哪套詞彙看情境，這裡篩選
-  # 的是「哪一種議題」，用「歸屬責任」的說法反而讓人一時看不出跟「只看客訴」是同一件事。
-  ISSUE_TYPE_LABELS = { "Complaint" => "客訴", "TestingBug" => "測試", "Other" => "其他" }.freeze
+  # 306「議題資料」頁的「類別」欄位文字與「類型」篩選下拉共用這套詞彙（客訴／測試／其他），
+  # 跟月度 KPI 卡片一致；不是上面的歸屬責任框架（專案共同責任／個人責任）——原本篩選下拉
+  # 用「客訴／測試」、欄位 badge 用「專案共同責任／個人責任」，兩邊各說各話，使用者反應選了
+  # 篩選卻在欄位裡看到不同的字，混淆。顏色／CSS class 仍沿用 attribution_class，只有文字
+  # 換一套。PM 週報（_issue_section.html.erb）維持用 attribution_label 的原本框架，不受影響。
+  ISSUE_TYPE_LABELS = { "Complaint" => "客訴", "TestingBug" => "測試" }.freeze
 
   def issue_type_label(type)
-    ISSUE_TYPE_LABELS.fetch(type, type)
+    ISSUE_TYPE_LABELS[type] || "其他"
   end
 
   # 起訖日期輸入欄位的 min/max guardrail：用 @available_months（"YYYY-MM" 字串陣列，已排序）

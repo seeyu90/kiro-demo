@@ -81,15 +81,16 @@ RSpec.describe "Issues", type: :request do
       expect(section).to include("25.0%")
     end
 
-    it "shows exactly one section-note, explaining the settlement/live-data distinction near the KPI heading" do
+    it "shows exactly one section-note, explaining that the issue list ignores this date range" do
       notes = response.body.scan(%r{<p class="section-note">([^<]*)</p>})
       expect(notes.size).to eq(1)
-      expect(notes.first.first).to include("月結").and include("即時")
+      expect(notes.first.first).to include("議題資料").and include("不受此處日期區間篩選影響")
     end
 
     it "does not repeat the note near the project/status filters (which do actively filter the list below)" do
-      # 確認「不受期間篩選影響」字樣只出現一次（在月度 KPI 區塊），不會出現在議題明細篩選附近造成混淆
-      expect(response.body.scan("不受期間篩選影響").size).to eq(1)
+      # 確認「不受此處日期區間篩選影響」字樣只出現一次（在月度 KPI 區塊），不會出現在議題明細
+      # 篩選附近造成混淆
+      expect(response.body.scan("不受此處日期區間篩選影響").size).to eq(1)
     end
 
     it "shows the project breakdown table filtered to issues started in the selected month" do
@@ -126,8 +127,8 @@ RSpec.describe "Issues", type: :request do
       expect(response.body).to include('rel="noopener noreferrer"')
     end
 
-    it "renders the attribution badge for the visible issue" do
-      expect(response.body).to include("個人責任") # TestingBug
+    it "renders the 類別 badge for the visible issue" do
+      expect(response.body).to match(%r{<span class="attribution-badge attribution-individual">\s*測試\s*</span>})
     end
   end
 
@@ -144,10 +145,10 @@ RSpec.describe "Issues", type: :request do
       expect(response.body).not_to include("測試環境資料回填驗證")
     end
 
-    it "shows all three attribution categories" do
-      expect(response.body).to include("專案共同責任") # Complaint
-      expect(response.body).to include("個人責任") # TestingBug
-      expect(response.body).to include("其他") # Other
+    it "shows all three 類別 categories" do
+      expect(response.body).to match(%r{<span class="attribution-badge attribution-shared">\s*客訴\s*</span>})
+      expect(response.body).to match(%r{<span class="attribution-badge attribution-individual">\s*測試\s*</span>})
+      expect(response.body).to match(%r{<span class="attribution-badge attribution-other">\s*其他\s*</span>})
     end
   end
 
@@ -166,9 +167,12 @@ RSpec.describe "Issues", type: :request do
   end
 
   # 類型篩選原本是「只看客訴」快捷 Tag（單一開關），改成跟專案／狀態一致的下拉選單，可以選
-  # 客訴／測試／其他三種之一，不再只能二選一（看客訴 or 看全部）。
+  # 客訴／測試／其他三種之一，不再只能二選一（看客訴 or 看全部）。選項文字（客訴／測試／
+  # 其他）跟「類別」欄位 badge 的文字改成同一套，兩者共用 issue_type_label——不是
+  # attribution_label 那套歸屬責任框架（專案共同責任／個人責任），那套只有 PM 週報還在用；
+  # 原本篩選下拉跟欄位各用一套詞彙，使用者反應選了篩選卻在欄位裡看到不同的字，混淆。
   describe "GET /issues?type=... (類型篩選下拉)" do
-    it "renders a 類型 dropdown with 全部類型／客訴／測試／其他 as options" do
+    it "renders a 類型 dropdown whose option labels match the 類別 column's badge wording" do
       get "/issues"
 
       expect(response.body).to match(/<label for="type">類型：<\/label>/)

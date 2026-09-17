@@ -16,6 +16,23 @@ RSpec.describe IssuesHelper, type: :helper do
     end
   end
 
+  # 306「議題資料」頁的「類別」欄位與「類型」篩選下拉共用這套詞彙（客訴／測試／其他），跟
+  # attribution_label 的歸屬責任框架（專案共同責任／個人責任）是分開的兩套，只有這個方法用。
+  describe "#issue_type_label" do
+    it "maps Complaint to 客訴" do
+      expect(helper.issue_type_label("Complaint")).to eq("客訴")
+    end
+
+    it "maps TestingBug to 測試" do
+      expect(helper.issue_type_label("TestingBug")).to eq("測試")
+    end
+
+    it "maps anything else to 其他" do
+      expect(helper.issue_type_label("Other")).to eq("其他")
+      expect(helper.issue_type_label(nil)).to eq("其他")
+    end
+  end
+
   describe "#attribution_class" do
     it "maps Complaint to attribution-shared" do
       expect(helper.attribution_class("Complaint")).to eq("attribution-shared")

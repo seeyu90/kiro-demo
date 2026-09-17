@@ -46,12 +46,11 @@
 
         <section class="issue-section">
           <h2>月度 KPI</h2>
-          <%# 客訴／測試／總Bug／攔截率即時從 issues 算，一律有值，不受 month_kpi 是否已結算
-              影響；完成數／未結案／平均天數／SLA達標率仍讀 month_kpi 表，該月尚未結算或選到
-              跨月彙總時個別欄位顯示「－」（見 Sheets::FetchIssueDashboard#build_sheet_month_kpi）。
-              不再用「整排都是尚未結算」的訊息取代整個區塊——當月進行中一樣有客訴／測試等
-              即時數字可看，只有還沒結算出來的那 4 項需要顯示「－」。 %>
-          <p class="section-note">客訴／測試／總Bug／攔截率為即時統計，完成數／未結案／平均天數／SLA達標率為月結數字（當月進行中尚未結算，顯示「－」）；每日趨勢與依專案分類統計則依此處所選期間即時呈現；「議題資料」分頁的議題明細不受期間篩選影響（顯示全部議題）<% if @matched_month_count > 1 %>；目前彙總 <%= @matched_month_count %> 個月，平均天數／SLA達標率無法跨月合併，顯示「－」<% end %></p>
+          <%# 原本一句話塞了「即時／月結欄位怎麼分」＋「趨勢與分類跟著期間走」＋「議題明細
+              不受影響」三件事，太長不好讀（使用者回報）。前兩件事看畫面互動就懂（「－」本身
+              已經在暗示沒有數字；調整期間後趨勢圖跟著變也很直覺），只留下真正不會自己發現、
+              需要另外講清楚的一件事：議題明細不受這裡的期間篩選影響。 %>
+          <p class="section-note">「議題資料」分頁的議題明細不受此處日期區間篩選影響，顯示全部議題。<% if @matched_month_count > 1 %>目前彙總 <%= @matched_month_count %> 個月，平均天數／SLA達標率無法跨月合併，顯示「－」。<% end %></p>
           <div class="summary-bar">
             <div class="stat-item">
               <span class="stat-value"><%= @selected_month_record[:complaint] %></span>
