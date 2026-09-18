@@ -1,7 +1,7 @@
 <%# 單一專案的 306 議題表（欄位見需求 3.5）。到期日可能是 SLA 推算值，由
     pm_weekly_due_date_label 標示「（推算）」，不讓 PM 誤以為試算表有填。
     類型／狀態沿用 306 議題頁既有的 IssuesHelper 標籤，不另立一套配色。 %>
-<table class="project-tasks">
+<table class="project-tasks auto-width-tasks">
   <thead>
     <tr>
       <th scope="col">議題編號</th>
@@ -16,17 +16,17 @@
     <% items.each do |issue| %>
       <%= tag.tr(class: ("row-overdue" if variant == :overdue)) do %>
         <td><%= issue[:issue_id] %></td>
-        <td>
+        <td data-label="主旨">
           <span class="issue-subject-truncate" title="<%= issue[:subject] %>"><%= issue[:subject] %></span>
         </td>
-        <td>
+        <td data-label="類型">
           <span class="attribution-badge <%= attribution_class(issue[:type]) %>"><%= attribution_label(issue[:type]) %></span>
         </td>
-        <td>
+        <td data-label="狀態">
           <span class="status-badge <%= issue_status_badge_class(issue[:status]) %>"><%= issue[:status].presence || "—" %></span>
         </td>
-        <td><%= issue[:assigned_to].presence || "—" %></td>
-        <td><%= pm_weekly_due_date_label(issue) %></td>
+        <td data-label="負責人"><%= issue[:assigned_to].presence || "—" %></td>
+        <td data-label="到期日"><%= pm_weekly_due_date_label(issue) %></td>
       <% end %>
     <% end %>
   </tbody>

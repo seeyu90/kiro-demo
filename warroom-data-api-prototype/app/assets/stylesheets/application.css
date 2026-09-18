@@ -721,19 +721,21 @@ turbo-frame[busy]::after {
   text-overflow: clip;
 }
 
-/* 306 頁的議題明細／依專案分類，以及專案歷程頁的任務表格，欄位順序都跟 305 儀表板不同，
-   卻共用了 .project-tasks 依欄位「位置」寫死的欄寬（例如 nth-child(2) 是給 305「類型」用的
-   5rem），套到別的欄位順序上就會對錯欄——.issue-tasks 先踩過一次，.project-history-tasks
-   （議題／負責人／開案日期／預計完成日期／狀態／進度／工時，「負責人」欄多人 join 出來的
-   字串常超過 80px，稽核截圖為證）又踩了第二次。共同的修法（改回瀏覽器自動配寬）抽成
-   .auto-width-tasks，兩張表都額外疊加這個 class（見 _issue_list.html.erb／
-   _project_breakdown.html.erb／_overview_list.html.erb 的 table class 屬性），只各自保留
-   「哪一欄該允許換行」這條差異規則。
-   注意：.auto-width-tasks／.issue-tasks／.project-history-tasks 的 nth-child 規則要能覆寫
-   上面 .project-tasks 的 nth-child 規則，兩者 specificity 完全相同，只靠寫在檔案「後面」
-   贏過前面（比照 .burndown-status-header／.burndown-status-row 那組的既有慣例）——這三個
-   區塊都不能搬到 .project-tasks 的 nth-child 規則前面，否則覆寫會失效、欄寬對錯欄的 bug
-   會原封不動地重新出現。 */
+/* 306 頁的議題明細／依專案分類、專案歷程頁的任務表格、專案階段追蹤／PM 週報／跨來源週報的
+   表格，欄位順序都跟 305 儀表板不同，卻共用了 .project-tasks 依欄位「位置」寫死的欄寬（例如
+   nth-child(2) 是給 305「類型」用的 5rem），套到別的欄位順序上就會對錯欄——.issue-tasks 先
+   踩過一次，.project-history-tasks（議題／負責人／開案日期／預計完成日期／狀態／進度／工時，
+   「負責人」欄多人 join 出來的字串常超過 80px，稽核截圖為證）又踩了第二次，稽核時發現同一個
+   坑其實還沒被回報地存在於另外 3 個頁面的表格裡，一併修正。共同的修法（改回瀏覽器自動配寬）
+   抽成 .auto-width-tasks，各表格額外疊加這個 class；各表格欄數與欄位語意彼此不同，「哪一欄
+   該允許換行」不共用單一 nth-child 位置，各自用專屬 class（.project-history-tasks／
+   .pm-weekly-phase-tasks／.phase-exceptions-tasks）精準覆寫，避免像 .issue-tasks 當初直接
+   放開全部欄位換行、反而把短欄位擠壓斷行的教訓重演。
+   注意：.auto-width-tasks 與各專屬 class 的 nth-child 規則要能覆寫上面 .project-tasks 的
+   nth-child 規則，兩者 specificity 完全相同，只靠寫在檔案「後面」贏過前面（比照
+   .burndown-status-header／.burndown-status-row 那組的既有慣例）——這些區塊都不能搬到
+   .project-tasks 的 nth-child 規則前面，否則覆寫會失效、欄寬對錯欄的 bug 會原封不動地
+   重新出現。 */
 .auto-width-tasks {
   table-layout: auto;
 }
@@ -745,6 +747,24 @@ turbo-frame[busy]::after {
 
 .project-history-tasks th:nth-child(2),
 .project-history-tasks td:nth-child(2) {
+  white-space: normal;
+}
+
+/* PM 週報階段追蹤表（_phase_section.html.erb，8 欄）：第 2 欄「議題」換行時第二行是議題
+   全名、第 8 欄「原因」是延誤說明全文，長度都不固定，繼承 .project-tasks 的 nowrap 會被
+   固定寬度擠出表格；其餘欄位（專案代碼／客戶／PM／目前階段／狀態／日期）維持 nowrap 即可，
+   一起放開換行反而會把這些短欄位擠壓變形（同前面 .issue-tasks 的教訓）。 */
+.pm-weekly-phase-tasks th:nth-child(2),
+.pm-weekly-phase-tasks td:nth-child(2),
+.pm-weekly-phase-tasks th:nth-child(8),
+.pm-weekly-phase-tasks td:nth-child(8) {
+  white-space: normal;
+}
+
+/* 跨來源週報階段追蹤例外表（_phase_exceptions.html.erb，5 欄）：第 2 欄「議題」是
+   issue_name 全文（沒有 issue_name 時才退回 issue_id），長度不定，允許換行。 */
+.phase-exceptions-tasks th:nth-child(2),
+.phase-exceptions-tasks td:nth-child(2) {
   white-space: normal;
 }
 
