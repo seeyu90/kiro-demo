@@ -140,6 +140,17 @@ Controller／View／`docs/` 靜態頁；資料庫或任何持久化；`300_員�
 
 **使用者故事：** 身為戰情室使用者，我希望選定一個專案後，看到花費工時趨勢與人時燃盡圖。
 
+（**設計變更紀錄**：本需求描述的「選定專案後另開頁面顯示花費工時趨勢圖＋理想／實際剩餘人時燃盡圖」
+功能已於 af05e11（2026/08/18，「專案歷程甘特圖改用307真實開發區間，總覽改卡片式並支援年度篩選」）
+整個移除。原因：橫向總覽改為卡片式後，展開卡片（`_overview_list.html.erb` 的 `<details>`）已能
+直接看到該專案底下每個 307 議題的負責人／日期／狀態／進度／工時，加上卡片摘要列本身就有進度%、
+工時（消耗／預估）KPI，足以取代原本要另開頁才能看到的花費工時趨勢圖與燃盡圖，不需要再維護一個
+獨立的縱向歷程頁。現況：`ProjectHistory_Page`／`Sheets::FetchProjectHistory` 已不接受 `project`
+參數（`input` 只剩 `year`），`build_detail`、`issue_weekly_spent`、`aggregate_work_hours`、
+`ideal_hours_at`、`aggregate_ideal_series`、`aggregate_actual_series` 等方法與
+`_detail.html.erb`、`_simple_trend_chart.html.erb` 皆已刪除；以下驗收標準保留作為歷史紀錄，
+目前程式碼中沒有對應行為。）
+
 #### 驗收標準
 
 1. WHEN **ProjectHistory_Page** 帶 `project` 參數，THE **ProjectHistory_Page** SHALL 呼叫
@@ -171,6 +182,14 @@ Controller／View／`docs/` 靜態頁；資料庫或任何持久化；`300_員�
 
 **使用者故事：** 身為戰情室使用者，我希望看到所選專案的測試問題趨勢，以及客訴議題目前解決了幾個、
 還有哪些未解決。
+
+（**設計變更紀錄**：本需求描述的「選定專案後顯示 306 測試問題趨勢圖＋客訴議題解決狀態」功能已於
+af05e11（2026/08/18，同需求 4 附註）與需求 4 一併整個移除。原因：除了需求 4 附註提到的「卡片展開
+已能檢視議題明細」外，306 資料（`Sheets::FetchIssueDashboard`）在橫向總覽改版後從未被這頁實際
+使用過——目前 `Sheets::FetchProjectHistory` 完全沒有呼叫 `Sheets::FetchIssueDashboard`，卡片展開後
+看到的議題明細（`_overview_list.html.erb`）只來自 307 燃盡議題，不含 306 的測試問題／客訴分類。
+現況：無 `project` 參數路徑，`weekly_testing_counts`／`complaint_status` 方法與相關 view 皆已
+刪除；以下驗收標準保留作為歷史紀錄，目前程式碼中沒有對應行為。）
 
 #### 驗收標準
 
