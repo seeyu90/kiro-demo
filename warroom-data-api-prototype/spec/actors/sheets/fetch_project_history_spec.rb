@@ -242,6 +242,37 @@ RSpec.describe Sheets::FetchProjectHistory do
 
       actor.send(:build_overview_rows, roster, grouped, burndown_issues, nil, true)
     end
+
+    # 迴歸測試：修正前 matched_by_project 記錄的是年度篩選前的 matched（不是 matched_in_year），
+    # 且在「這個專案因年度篩選被排除、不會產生任何一列」的 next 判斷之前就先記錄了——導致選了
+    # 年度篩選時，一個因為篩選而完全不會顯示在畫面上的專案，仍可能因為它「篩選前」比對到的議題
+    # 跟另一個真的有顯示的專案重疊，觸發一則不該出現的告警，跟上面「只看真的會顯示在畫面上的
+    # 專案」的說明字面不一致。
+    it "does not count a year-excluded project's out-of-year matched issue toward the ambiguity check" do
+      roster = [
+        { project_name: "現行專案", burndown_names_raw: "Foo Bar" },
+        { project_name: "另一個專案", burndown_names_raw: "Bar" }
+      ]
+      grouped = {
+        "現行專案" => [ { planned_completion_date: "2026-07-01", actual_completion_date: "2026-07-02", status: "完成" } ],
+        "另一個專案" => [ { planned_completion_date: "2025-07-01", actual_completion_date: "2025-07-02", status: "完成" } ]
+      }
+      # issue_a（project: Foo）只有「現行專案」比對到，開案於 2026；issue_b（project: Bar）
+      # 兩個專案都比對到（現行專案的 burndown_names_raw 含 "Bar"），但開案於 2025——選 2026 年度
+      # 篩選時，「另一個專案」唯一比對到的議題就是這筆 2025 年的 issue_b，整個專案會被年度篩選
+      # 排除、不會產生任何一列；「現行專案」則因為還比對到 2026 年的 issue_a 而留著，但顯示的
+      # 議題清單（matched_in_year）只有 issue_a，不含 issue_b。
+      burndown_issues = [
+        { project: "Foo", issue_id: "a", issue_title: "x", status: "in_progress", start_date: "2026-05-01", actual_series: [] },
+        { project: "Bar", issue_id: "b", issue_title: "y", status: "in_progress", start_date: "2025-05-01", actual_series: [] }
+      ]
+
+      expect(Rails.logger).not_to receive(:warn)
+
+      rows = actor.send(:build_overview_rows, roster, grouped, burndown_issues, "2026", true)
+
+      expect(rows.map { |r| r[:project_name] }).to eq([ "現行專案" ])
+    end
   end
 
   describe "#call" do

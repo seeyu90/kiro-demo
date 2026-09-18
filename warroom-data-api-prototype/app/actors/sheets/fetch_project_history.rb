@@ -118,11 +118,14 @@ module Sheets
       rows = progress_grouped.filter_map do |project_name, _progress_tasks|
         roster_row = resolve_roster_row(roster, project_name)
         matched = matched_burndown_issues(roster_row, project_name, burndown_issues)
-        matched_by_project[project_name] = matched
         matched_in_year = filter_issues_by_year(matched, year)
 
         next if duration_data_available && year.present? && matched_in_year.empty?
 
+        # 用 matched_in_year（不是 matched）記錄，且只在確定會產生一列（不被上面的年度篩選排除）
+        # 之後才記錄：跟上面「只看真的會顯示在畫面上的專案」的說明保持字面一致——選了年度篩選時，
+        # 不因為某個議題落在畫面看不到的其他年度，就把它算進本次的重複比對告警。
+        matched_by_project[project_name] = matched_in_year
         tasks = duration_tasks_from_burndown(matched_in_year)
 
         {
