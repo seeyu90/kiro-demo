@@ -101,9 +101,10 @@ module ProjectHistoryHelper
   # min_date 通常不是當月 1 號（例如某議題 3/15 開案，min_date 就是 3/15），但這裡刻意從
   # 「min_date 所在月份的 1 號」開始畫格線，讓月份標籤對齊完整月份、不是從資料剛好開始的那天
   # 算起的畸零日期。這代表第一個刻度（該月 1 號）本身可能早於 min_date，算出來的 x 座標會
-  # 小於 GANTT_PADDING_LEFT（畫布上專案列標籤欄的右邊界），沒有 clamp 的話格線與標籤會畫到
-  # 標籤欄裡面、蓋住專案名稱。故 clamp 在 [GANTT_PADDING_LEFT, 右邊界] 之間，格線視覺上對齊
-  # 繪圖區左緣，標籤文字內容仍是正確的月份，只是不會畫出繪圖區以外。
+  # 小於 GANTT_PADDING_LEFT（SVG 繪圖區的左邊界），沒有 clamp 的話格線／標籤會畫到繪圖區
+  # 左邊界以外去。故 clamp 在 [GANTT_PADDING_LEFT, 右邊界] 之間，格線視覺上對齊繪圖區左緣，
+  # 標籤文字內容仍是正確的月份，只是不會畫出繪圖區以外（專案名稱標籤是獨立於 SVG 之外的
+  # HTML 側欄，不會被這裡的格線／月份標籤蓋到，見 GANTT_LABEL_WIDTH 的說明）。
   def gantt_chart_month_ticks(min_date, max_date)
     left = GANTT_PADDING_LEFT
     right = gantt_chart_svg_width(min_date, max_date) - GANTT_PADDING_RIGHT

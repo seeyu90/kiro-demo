@@ -171,45 +171,76 @@ RSpec.describe Sheets::FetchProjectHistory do
   # 稽核記錄：EW P2E／AMAS AIoT Platform 兩個 Roster 列的「307對應專案」欄曾經填成完全相同的
   # 字串，導致同一筆 307 議題被兩個專案同時比對到、工時被重複計入多張卡片。程式不代為判斷哪個
   # 專案才該擁有這筆議題（同 issue_id=4637 標題不一致的處理原則），只記錄警告讓問題可被發現。
+  #
+  # 直接吃 build_overview_rows 迴圈裡已經跑過的 matched_burndown_issues 結果（{project_name =>
+  # [issue, ...]}），不重新用 burndown_names_raw 字串各自獨立推導一次子字串比對——這樣「重複」
+  # 的定義是「同一個 issue_id 真的同時出現在兩個專案各自的比對結果裡」，不會因為兩個 Roster 列
+  # 的 burndown_names_raw 字串本身有子字串重疊（例如 "AG" 剛好是 "AGENCY 帳務" 的子字串）就
+  # 誤報兩個完全無關的專案「疑似重複」，也不會把「Roster 有這個對應但根本沒有 305 進度資料、
+  # 從未顯示成卡片」的專案算進來。
   describe "#warn_on_ambiguous_burndown_mappings" do
-    it "logs a warning when a 307 issue's project matches more than one roster row's burndown_names_raw" do
-      roster = [
-        { project_name: "EW P2E", burndown_names_raw: "AMAS Cloud" },
-        { project_name: "AMAS AIoT Platform", burndown_names_raw: "AMAS Cloud" }
-      ]
-      burndown_issues = [ { project: "AMAS Cloud", issue_id: "5054", issue_title: "專案優化" } ]
+    it "logs one aggregated warning when a 307 issue is matched into more than one project's task list" do
+      matched_by_project = {
+        "EW P2E" => [ { issue_id: "5054", issue_title: "專案優化" } ],
+        "AMAS AIoT Platform" => [ { issue_id: "5054", issue_title: "專案優化" } ]
+      }
 
       expect(Rails.logger).to receive(:warn)
-        .with(a_string_including("AMAS Cloud", "EW P2E", "AMAS AIoT Platform", "5054"))
+        .with(a_string_including("EW P2E", "AMAS AIoT Platform", "5054"))
 
-      actor.send(:warn_on_ambiguous_burndown_mappings, roster, burndown_issues)
+      actor.send(:warn_on_ambiguous_burndown_mappings, matched_by_project)
     end
 
-    it "does not warn when two roster rows have non-blank mappings but match different issues" do
-      roster = [
-        { project_name: "亞炬 Platform", burndown_names_raw: "亞炬 PMS" },
-        { project_name: "RAG", burndown_names_raw: "RAG" }
-      ]
-      burndown_issues = [
-        { project: "亞炬 PMS", issue_id: "1", issue_title: "x" },
-        { project: "RAG", issue_id: "2", issue_title: "y" }
-      ]
+    # 同一組專案若同時有好幾筆議題重複，彙整成一行警告，不逐筆各噴一行 log。
+    it "collapses multiple ambiguous issues shared by the same pair of projects into a single warning" do
+      matched_by_project = {
+        "EW P2E" => [ { issue_id: "1", issue_title: "a" }, { issue_id: "2", issue_title: "b" } ],
+        "AMAS AIoT Platform" => [ { issue_id: "1", issue_title: "a" }, { issue_id: "2", issue_title: "b" } ]
+      }
+
+      expect(Rails.logger).to receive(:warn).once.with(a_string_including("2 筆", "1", "2"))
+
+      actor.send(:warn_on_ambiguous_burndown_mappings, matched_by_project)
+    end
+
+    it "does not warn when each project's matched issues are disjoint" do
+      matched_by_project = {
+        "亞炬 Platform" => [ { issue_id: "1", issue_title: "x" } ],
+        "RAG" => [ { issue_id: "2", issue_title: "y" } ]
+      }
 
       expect(Rails.logger).not_to receive(:warn)
 
-      actor.send(:warn_on_ambiguous_burndown_mappings, roster, burndown_issues)
+      actor.send(:warn_on_ambiguous_burndown_mappings, matched_by_project)
     end
 
-    it "does not warn when only one roster row has a non-blank mapping" do
-      roster = [
-        { project_name: "亞炬 Platform", burndown_names_raw: "亞炬 PMS" },
-        { project_name: "HRM", burndown_names_raw: "" }
-      ]
-      burndown_issues = [ { project: "亞炬 PMS", issue_id: "1", issue_title: "x" } ]
+    it "does not warn when only one project has any matched issues" do
+      matched_by_project = {
+        "亞炬 Platform" => [ { issue_id: "1", issue_title: "x" } ],
+        "HRM" => []
+      }
 
       expect(Rails.logger).not_to receive(:warn)
 
-      actor.send(:warn_on_ambiguous_burndown_mappings, roster, burndown_issues)
+      actor.send(:warn_on_ambiguous_burndown_mappings, matched_by_project)
+    end
+  end
+
+  describe "#build_overview_rows ambiguous-mapping detection" do
+    # 修正前的版本會拿全部 Roster 列（不管有沒有 305 進度資料、會不會顯示成卡片）去互相比對，
+    # 導致一個從未顯示在畫面上的專案，也可能因為 burndown_names_raw 字串重疊而觸發「疑似重複」
+    # 警告。現在只用真的會建成卡片（存在於 progress_grouped 裡）的專案去比對。
+    it "does not warn about a roster row that never becomes a displayed card" do
+      roster = [
+        { project_name: "現行專案", burndown_names_raw: "RAG" },
+        { project_name: "已下架專案（無305資料）", burndown_names_raw: "RAG" }
+      ]
+      grouped = { "現行專案" => [ { planned_completion_date: "2026-07-01", actual_completion_date: "2026-07-02", status: "完成" } ] }
+      burndown_issues = [ { project: "RAG", issue_id: "1", issue_title: "x", status: "in_progress", actual_series: [] } ]
+
+      expect(Rails.logger).not_to receive(:warn)
+
+      actor.send(:build_overview_rows, roster, grouped, burndown_issues, nil, true)
     end
   end
 

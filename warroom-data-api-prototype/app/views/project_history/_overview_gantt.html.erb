@@ -33,7 +33,7 @@
 
       <% rows.each_with_index do |row, index| %>
         <% row_y = gantt_chart_row_y(index) %>
-        <line x1="0" x2="<%= gantt_width - ProjectHistoryHelper::GANTT_PADDING_RIGHT %>"
+        <line x1="<%= ProjectHistoryHelper::GANTT_PADDING_LEFT %>" x2="<%= gantt_width - ProjectHistoryHelper::GANTT_PADDING_RIGHT %>"
               y1="<%= row_y + ProjectHistoryHelper::GANTT_ROW_HEIGHT / 2 %>" y2="<%= row_y + ProjectHistoryHelper::GANTT_ROW_HEIGHT / 2 %>" class="gantt-row-baseline"></line>
 
         <% row[:tasks].each do |task| %>

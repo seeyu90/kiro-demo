@@ -91,8 +91,8 @@ Controller／View／`docs/` 靜態頁；資料庫或任何持久化；`300_員�
 
 ### 需求 2：橫向總覽 — 篩選與清單
 
-**使用者故事：** 身為戰情室使用者，我希望在 `/project_history` 能依狀態、客戶、PM 篩選多專案清單，
-並看到每個專案的預計／實際完成日期。
+**使用者故事：** 身為戰情室使用者，我希望在 `/project_history` 能依客戶、PM 篩選多專案清單，並看到
+每個專案的預計／實際完成日期。
 
 #### 驗收標準
 
@@ -100,24 +100,25 @@ Controller／View／`docs/` 靜態頁；資料庫或任何持久化；`300_員�
    以 305 `Sheets::FetchProjectProgress` 的 `grouped_data`（全量、未受任何篩選條件過濾的任務資料）
    依專案彙總「預計完成日期」（該專案任務中最晚的 `planned_completion_date`）與「實際完成日期」
    （該專案任務中最晚的 `actual_completion_date`；任一任務尚無實際完成日期時顯示「進行中」）。
-2. THE **ProjectHistory_Page** SHALL 將 **ProjectRoster_Actor** 的客戶／PM／狀態資料，依 Roster 的
+2. THE **ProjectHistory_Page** SHALL 將 **ProjectRoster_Actor** 的客戶／PM 資料，依 Roster 的
    「專案」全名或「專案縮寫」（任一比對成功即算，見詞彙表「join（305↔Roster）」）對應到 305 專案
-   名稱後合併顯示；IF 305 專案名稱在 Roster 中兩欄皆找不到對應列，THEN 客戶／PM／狀態欄位顯示
+   名稱後合併顯示；IF 305 專案名稱在 Roster 中兩欄皆找不到對應列，THEN 客戶／PM 欄位顯示
    `—`，不視為錯誤、不中斷其餘專案的顯示。
-3. THE **ProjectHistory_Page** SHALL 提供依「狀態」（Roster 的「狀態」欄位值）、「客戶」、「PM」三個
-   下拉選單篩選，各自預設「全部」；WHEN 使用者同時選取多個條件，THE **ProjectHistory_Page** SHALL
-   只顯示同時符合已選條件（交集）的專案。
+3. THE **ProjectHistory_Page** SHALL 提供依「客戶」、「PM」兩個下拉選單篩選，各自預設「全部」；
+   WHEN 使用者同時選取多個條件，THE **ProjectHistory_Page** SHALL 只顯示同時符合已選條件（交集）
+   的專案。
 4. WHEN 篩選後無符合條件的專案，THE **ProjectHistory_Page** SHALL 顯示「目前無符合條件的專案」，
    不留白。
 
-> **設計變更紀錄**：需求 2.2、2.3 原本包含「狀態」（Roster 的「狀態」欄位）：卡片標籤與篩選下拉
-> 選單皆顯示／依此篩選。2026/09/18 對照真實資料稽核發現：Roster 29 筆專案裡有 20 筆狀態值是
+> **設計變更紀錄**：需求 2.2、2.3 原本各自包含「狀態」（Roster 的「狀態」欄位）：卡片標籤顯示、
+> 篩選下拉選單依此篩選。2026/09/18 對照真實資料稽核發現：Roster 29 筆專案裡有 20 筆狀態值是
 > 「維護」、其餘 9 筆是空白，**沒有任何一筆是別的值**，這個欄位在目前資料下完全沒有區分度，篩選
 > 選單等於只有「全部」跟「維護」兩個選項可選、卡片標籤永遠顯示「維護」或「—」，對使用者沒有實際
 > 篩選/辨識用途。使用者確認後移除：卡片不再顯示狀態標籤，篩選列拿掉「狀態」下拉（僅剩年度／客戶／
-> 專案／PM）。`Sheets::FetchProjectRoster` 本身的 `status` 解析不受影響（`executive_summary`／
-> `pm_weekly_report` 等其他頁面仍使用同一個 Actor），只有 `Sheets::FetchProjectHistory` 自己組出的
-> `overview_rows` 不再帶出這個欄位。若日後 Roster 的狀態值有更多變化，此決定可重新評估。
+> 專案／PM，上面 2.2、2.3 的條文已同步改寫，不再提及狀態）。`Sheets::FetchProjectRoster` 本身的
+> `status` 解析不受影響（`executive_summary`／`pm_weekly_report` 等其他頁面仍使用同一個 Actor），
+> 只有 `Sheets::FetchProjectHistory` 自己組出的 `overview_rows` 不再帶出這個欄位。若日後 Roster
+> 的狀態值有更多變化，此決定可重新評估。
 
 ---
 

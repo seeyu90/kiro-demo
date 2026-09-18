@@ -48,8 +48,6 @@ module Sheets
       # 選了某個年度就少了其他年度可選。
       self.overview_years = burndown_issues.filter_map { |i| i[:start_date].to_s[0, 4].presence }.uniq.sort.reverse
 
-      warn_on_ambiguous_burndown_mappings(roster, burndown_issues) if duration_data_available
-
       self.overview_rows =
         build_overview_rows(roster, progress_result.grouped_data, burndown_issues, year, duration_data_available)
     end
@@ -67,22 +65,28 @@ module Sheets
     # 307 工時會被兩個不同專案卡片同時比對到、重複計入。這是人工維護欄位的資料品質問題，不是
     # matched_burndown_issues 的比對邏輯錯誤，程式不代為判斷哪個專案才該擁有這筆議題（同稽核記錄
     # issue_id=4637 標題不一致的處理原則），只記錄警告讓問題可被發現，不擋頁、不改變既有計算結果。
-    def warn_on_ambiguous_burndown_mappings(roster, burndown_issues)
-      rows_with_mapping = roster.select { |r| r[:burndown_names_raw].present? }
-      return if rows_with_mapping.size < 2
+    #
+    # 直接沿用 build_overview_rows 迴圈裡已經跑過的 matched_burndown_issues 結果（見呼叫端），
+    # 不重新推導一次比對規則：(1) 只看真的會顯示在畫面上的專案（未在 305 清單裡的 Roster 列，
+    # 就算 burndown_names_raw 有重疊也不會有卡片可以重複計入，不該誤報）；(2) 「重複」的定義
+    # 是「同一個 issue_id 真的同時出現在兩個專案各自的比對結果裡」，不是兩個 burndown_names_raw
+    # 字串本身有子字串重疊就算——後者在短代號（如 "AG"／"PMS"）常見的情況下容易誤報兩個完全
+    # 無關的專案「疑似重複」。同一組專案的多筆議題彙整成一行警告，不逐筆各噴一行。
+    def warn_on_ambiguous_burndown_mappings(matched_by_project)
+      issue_owners = Hash.new { |h, k| h[k] = [] }
+      matched_by_project.each do |project_name, issues|
+        issues.each { |issue| issue_owners[issue[:issue_id]] << project_name }
+      end
 
-      burndown_issues.each do |issue|
-        project = issue[:project].to_s
-        next if project.blank?
+      ambiguous = issue_owners.select { |_issue_id, names| names.uniq.size > 1 }
+      return if ambiguous.empty?
 
-        matched_rows = rows_with_mapping.select { |r| r[:burndown_names_raw].include?(project) }
-        next if matched_rows.size < 2
-
-        names = matched_rows.map { |r| r[:project_name] }.join("、")
+      ambiguous.group_by { |_issue_id, names| names.uniq.sort }.each do |project_names, pairs|
+        issue_ids = pairs.map(&:first)
         Rails.logger.warn(
-          "[Sheets::FetchProjectHistory] 307 議題 project=#{project.inspect}" \
-          "（issue_id=#{issue[:issue_id]}）同時比對到多個 Roster 專案的「307對應專案」欄：" \
-          "#{names}，工時可能被重複計入多張卡片，請人工核對 300_員工專案 試算表。"
+          "[Sheets::FetchProjectHistory] #{issue_ids.size} 筆 307 議題（issue_id：" \
+          "#{issue_ids.join('、')}）同時比對到多個顯示中的專案卡片：#{project_names.join('、')}，" \
+          "工時可能被重複計入多張卡片，請人工核對 300_員工專案 試算表的「307對應專案」欄。"
         )
       end
     end
@@ -109,9 +113,12 @@ module Sheets
     # false）不套用這條排除規則，維持既有降級慣例——全部專案照常列出、只是議題清單是空的，
     # 不讓一個非核心資料源的問題把整個專案清單清空。
     def build_overview_rows(roster, progress_grouped, burndown_issues, year, duration_data_available)
-      progress_grouped.filter_map do |project_name, _progress_tasks|
+      matched_by_project = {}
+
+      rows = progress_grouped.filter_map do |project_name, _progress_tasks|
         roster_row = resolve_roster_row(roster, project_name)
         matched = matched_burndown_issues(roster_row, project_name, burndown_issues)
+        matched_by_project[project_name] = matched
         matched_in_year = filter_issues_by_year(matched, year)
 
         next if duration_data_available && year.present? && matched_in_year.empty?
@@ -129,6 +136,10 @@ module Sheets
           has_overdue: tasks.any? { |t| t[:overdue] }
         }
       end
+
+      warn_on_ambiguous_burndown_mappings(matched_by_project) if duration_data_available
+
+      rows
     end
 
     def filter_issues_by_year(issues, year)
