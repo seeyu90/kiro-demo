@@ -730,6 +730,26 @@ turbo-frame[busy]::after {
   text-overflow: clip;
 }
 
+/* 專案歷程頁的任務表格（_overview_list.html.erb）欄位順序（議題／負責人／開案日期／
+   預計完成日期／狀態／進度／工時）跟 305 儀表板不同，卻共用了 .project-tasks 依欄位「位置」
+   寫死的欄寬——同一個坑上面 .issue-tasks 已經踩過一次：nth-child(2) 原本是給 305「類型」用的
+   5rem，套到這裡變成「負責人」，多人 join 出來的字串（例如「王贊勛、楊采維、周詩御」）常常
+   超過 80px，疊加 table-layout: fixed 與非首欄一律 nowrap，文字會直接溢出蓋住右邊「開案日期」
+   欄（稽核截圖為證）。比照 .issue-tasks 的做法，改回瀏覽器自動配寬，並讓「負責人」欄允許換行。 */
+.project-history-tasks {
+  table-layout: auto;
+}
+
+.project-history-tasks th:nth-child(n),
+.project-history-tasks td:nth-child(n) {
+  width: auto;
+}
+
+.project-history-tasks th:nth-child(2),
+.project-history-tasks td:nth-child(2) {
+  white-space: normal;
+}
+
 .project-tasks tbody tr:hover td {
   background: var(--table-row-hover-bg);
 }
@@ -1565,13 +1585,6 @@ turbo-frame[busy]::after {
   display: block;
 }
 
-.gantt-row-label {
-  fill: var(--color-text-muted);
-  /* 拿掉 .gantt-svg 的 width:100% 改用真實像素捲動後（見 .gantt-scroll），SVG 不再被瀏覽器
-     等比例放大，這裡的 px 就是螢幕上實際看到的大小，所以比原本 11px（曾經被放大顯示）調大。 */
-  font-size: 13px;
-}
-
 .gantt-row-baseline {
   stroke: var(--color-border);
   stroke-width: 1;
@@ -1625,6 +1638,18 @@ turbo-frame[busy]::after {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 專案歷程頁的甘特圖標籤改用換行顯示完整專案名稱，不需要 hover 才看得到（使用者要求）。
+   只加一個修飾 class 覆寫 white-space/overflow，不動上面共用的 .gantt-label-text base rule，
+   避免影響 project_phase_tracking 那頁「全部年度」多達 87 列的密集清單原本的單行截斷版面。
+   152px 標籤欄寬在 13px 字級下最多換成兩行，現有的真實專案名稱（如「亞炬 Platform」）都放得下，
+   .gantt-label-row 固定的 GANTT_ROW_HEIGHT（42px）足夠容納兩行文字置中，不需要額外加高。 */
+.gantt-label-text-wrap {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.3;
 }
 
 .gantt-label-row-band {
@@ -1802,14 +1827,17 @@ turbo-frame[busy]::after {
   font-variant-numeric: tabular-nums;
 }
 
+/* 5.5ch／4.5ch 是舊寬度，只夠放兩位數工時（例如「72.5h／54h」）；稽核發現「237.75h」這種
+   三位數＋小數的真實資料（RAG「1.0.0」議題）會讓數字自己超出欄寬，多出來的部分直接疊到緊接
+   在後的「/」分隔符號上，把「/」蓋到幾乎看不見。加寬到能放 7 個字元（"237.75h" 剛好 7 碼）。 */
 .hours-pair .hours-num {
   display: inline-block;
-  width: 5.5ch;
+  width: 7ch;
   text-align: right;
 }
 
 .hours-pair .hours-num:last-child {
-  width: 4.5ch;
+  width: 6ch;
   text-align: left;
 }
 

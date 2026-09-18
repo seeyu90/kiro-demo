@@ -3,11 +3,6 @@
   <%= hidden_field_tag :view, @view %>
   <%= render "shared/year_select_field", available_years: @available_years, selected_year: @selected_year %>
   <div class="control-group">
-    <label for="status">狀態：</label>
-    <%= select_tag :status,
-                   options_for_select([ [ "全部狀態", "" ] ] + @statuses.map { |s| [ s, s ] }, @selected_status) %>
-  </div>
-  <div class="control-group">
     <label for="customer">客戶：</label>
     <%= select_tag :customer,
                    options_for_select([ [ "全部客戶", "" ] ] + @customers.map { |c| [ c, c ] }, @selected_customer) %>

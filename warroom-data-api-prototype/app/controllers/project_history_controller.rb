@@ -28,20 +28,17 @@ class ProjectHistoryController < ApplicationController
   def build_overview(all_rows, result, year)
     @roster_unavailable = result.roster_unavailable
     @gantt_duration_unavailable = result.gantt_duration_unavailable
-    @statuses = all_rows.map { |r| r[:status] }.compact.uniq
     @customers = all_rows.map { |r| r[:customer] }.compact.uniq
     @pms = all_rows.map { |r| r[:pm] }.compact.uniq
     @available_years = result.overview_years
 
-    @selected_status = params[:status].presence
     @selected_customer = params[:customer].presence
     @selected_pm = params[:pm].presence
     @selected_project_name = params[:project_name].presence
     @selected_year = year
 
     filtered = all_rows.select do |row|
-      (@selected_status.blank? || row[:status] == @selected_status) &&
-        (@selected_customer.blank? || row[:customer] == @selected_customer) &&
+      (@selected_customer.blank? || row[:customer] == @selected_customer) &&
         (@selected_pm.blank? || row[:pm] == @selected_pm) &&
         (@selected_project_name.blank? || row[:project_name] == @selected_project_name)
     end
@@ -54,10 +51,8 @@ class ProjectHistoryController < ApplicationController
     @view = DEFAULT_VIEW
     @roster_unavailable = false
     @gantt_duration_unavailable = false
-    @statuses = []
     @customers = []
     @pms = []
-    @selected_status = nil
     @selected_customer = nil
     @selected_pm = nil
     @selected_project_name = nil

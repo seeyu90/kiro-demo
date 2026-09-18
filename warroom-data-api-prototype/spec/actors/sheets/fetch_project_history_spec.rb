@@ -168,6 +168,51 @@ RSpec.describe Sheets::FetchProjectHistory do
     end
   end
 
+  # 稽核記錄：EW P2E／AMAS AIoT Platform 兩個 Roster 列的「307對應專案」欄曾經填成完全相同的
+  # 字串，導致同一筆 307 議題被兩個專案同時比對到、工時被重複計入多張卡片。程式不代為判斷哪個
+  # 專案才該擁有這筆議題（同 issue_id=4637 標題不一致的處理原則），只記錄警告讓問題可被發現。
+  describe "#warn_on_ambiguous_burndown_mappings" do
+    it "logs a warning when a 307 issue's project matches more than one roster row's burndown_names_raw" do
+      roster = [
+        { project_name: "EW P2E", burndown_names_raw: "AMAS Cloud" },
+        { project_name: "AMAS AIoT Platform", burndown_names_raw: "AMAS Cloud" }
+      ]
+      burndown_issues = [ { project: "AMAS Cloud", issue_id: "5054", issue_title: "專案優化" } ]
+
+      expect(Rails.logger).to receive(:warn)
+        .with(a_string_including("AMAS Cloud", "EW P2E", "AMAS AIoT Platform", "5054"))
+
+      actor.send(:warn_on_ambiguous_burndown_mappings, roster, burndown_issues)
+    end
+
+    it "does not warn when two roster rows have non-blank mappings but match different issues" do
+      roster = [
+        { project_name: "亞炬 Platform", burndown_names_raw: "亞炬 PMS" },
+        { project_name: "RAG", burndown_names_raw: "RAG" }
+      ]
+      burndown_issues = [
+        { project: "亞炬 PMS", issue_id: "1", issue_title: "x" },
+        { project: "RAG", issue_id: "2", issue_title: "y" }
+      ]
+
+      expect(Rails.logger).not_to receive(:warn)
+
+      actor.send(:warn_on_ambiguous_burndown_mappings, roster, burndown_issues)
+    end
+
+    it "does not warn when only one roster row has a non-blank mapping" do
+      roster = [
+        { project_name: "亞炬 Platform", burndown_names_raw: "亞炬 PMS" },
+        { project_name: "HRM", burndown_names_raw: "" }
+      ]
+      burndown_issues = [ { project: "亞炬 PMS", issue_id: "1", issue_title: "x" } ]
+
+      expect(Rails.logger).not_to receive(:warn)
+
+      actor.send(:warn_on_ambiguous_burndown_mappings, roster, burndown_issues)
+    end
+  end
+
   describe "#call" do
     let(:roster_result) { double("Result", success?: true, roster: []) }
     let(:progress_result) { double("Result", success?: true, grouped_data: {}) }

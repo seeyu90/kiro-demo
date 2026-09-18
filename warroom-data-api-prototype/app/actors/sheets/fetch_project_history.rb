@@ -15,7 +15,7 @@ module Sheets
       # 客戶/PM 只是錦上添花的補充欄位。實務上發現這份試算表常常還沒把 Service Account 加進
       # 共用名單（跟 305/307 是不同試算表、不同擁有者，共用設定各自獨立），若因此讓整頁
       # 連 305/307 都看不到，反而讓一個非核心資料源的權限問題擋住核心功能。找不到對應
-      # 專案時客戶/PM/狀態顯示 `—`（需求 2.2）；roster 整體失敗時所有專案都顯示 `—`，
+      # 專案時客戶/PM 顯示 `—`（需求 2.2）；roster 整體失敗時所有專案都顯示 `—`，
       # 差別只在於前者是「查得到 roster 但這個專案不在清單裡」，後者是「roster 整批查不到」，
       # 對畫面呈現而言是同一件事，故共用同一套「找不到就給空值」的處理方式。
       roster_result = Sheets::FetchProjectRoster.result
@@ -48,6 +48,8 @@ module Sheets
       # 選了某個年度就少了其他年度可選。
       self.overview_years = burndown_issues.filter_map { |i| i[:start_date].to_s[0, 4].presence }.uniq.sort.reverse
 
+      warn_on_ambiguous_burndown_mappings(roster, burndown_issues) if duration_data_available
+
       self.overview_rows =
         build_overview_rows(roster, progress_result.grouped_data, burndown_issues, year, duration_data_available)
     end
@@ -60,6 +62,31 @@ module Sheets
       fail!(failure_code: result.failure_code, message: result.message)
     end
 
+    # 防禦性檢查：稽核真實資料時發現兩個不同 Roster 列的「307對應專案」欄（burndown_names_raw）
+    # 曾經填成完全相同的字串（EW P2E／AMAS AIoT Platform 兩列都是 "AMAS Cloud"），代表同一筆
+    # 307 工時會被兩個不同專案卡片同時比對到、重複計入。這是人工維護欄位的資料品質問題，不是
+    # matched_burndown_issues 的比對邏輯錯誤，程式不代為判斷哪個專案才該擁有這筆議題（同稽核記錄
+    # issue_id=4637 標題不一致的處理原則），只記錄警告讓問題可被發現，不擋頁、不改變既有計算結果。
+    def warn_on_ambiguous_burndown_mappings(roster, burndown_issues)
+      rows_with_mapping = roster.select { |r| r[:burndown_names_raw].present? }
+      return if rows_with_mapping.size < 2
+
+      burndown_issues.each do |issue|
+        project = issue[:project].to_s
+        next if project.blank?
+
+        matched_rows = rows_with_mapping.select { |r| r[:burndown_names_raw].include?(project) }
+        next if matched_rows.size < 2
+
+        names = matched_rows.map { |r| r[:project_name] }.join("、")
+        Rails.logger.warn(
+          "[Sheets::FetchProjectHistory] 307 議題 project=#{project.inspect}" \
+          "（issue_id=#{issue[:issue_id]}）同時比對到多個 Roster 專案的「307對應專案」欄：" \
+          "#{names}，工時可能被重複計入多張卡片，請人工核對 300_員工專案 試算表。"
+        )
+      end
+    end
+
     # 實測發現 305 的專案名稱有時用 Roster 的「專案」全名（如 "Virtuous HRM"），有時用「專案
     # 縮寫」（如 "亞炬 Platform"、"RAG"），沒有固定用哪一欄，故兩欄都查找，任一欄比對到就算
     # （同一個縮寫理論上不會同時是另一個專案的全名，實務資料裡也沒出現這種衝突）。
@@ -69,7 +96,7 @@ module Sheets
         {}
     end
 
-    # 以 305 的專案名稱為主體（有進度可看的專案），Roster 找不到對應列時客戶/PM/狀態為 nil，
+    # 以 305 的專案名稱為主體（有進度可看的專案），Roster 找不到對應列時客戶/PM 為 nil，
     # 不視為錯誤（需求 2.1、2.2）。
     #
     # 每列的議題清單（:tasks）一律用該專案對應到的 307 議題（依 year 篩選開案年度，預設今年，
@@ -95,7 +122,6 @@ module Sheets
           project_name: project_name,
           customer: roster_row[:customer],
           pm: roster_row[:pm],
-          status: roster_row[:status],
           tasks: tasks,
           progress_percent: progress_percent_for(tasks),
           hours_estimated: sum_estimated_hours(tasks),

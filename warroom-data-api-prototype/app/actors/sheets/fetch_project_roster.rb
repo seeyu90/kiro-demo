@@ -33,8 +33,8 @@ module Sheets
     # 這份對照，不是每個專案都會填（沒有 307 追蹤的專案留空是正常狀態，不是缺漏）。實務上這欄
     # 有時用逗號分隔、有時用空白分隔，且每個 307 名稱本身也可能含空白（如「亞炬 PMS」），無法
     # 用固定分隔符可靠拆開；故不在這裡拆解，原樣保留整段文字，比對時改用「307 真實名稱是否為
-    # 這段文字的子字串」判斷（見 Sheets::FetchProjectHistory#build_detail），不管分隔符是什麼
-    # 都能正確比對。
+    # 這段文字的子字串」判斷（見 Sheets::FetchProjectHistory#matched_burndown_issues），不管
+    # 分隔符是什麼都能正確比對。
     def parse_rows(rows)
       return [] if rows.nil? || rows.size <= 1
 
