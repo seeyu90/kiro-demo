@@ -1872,6 +1872,17 @@ turbo-frame[busy]::after {
   font-weight: 700;
 }
 
+/* 「目前階段」標籤：使用者要求拿掉「目前階段：」文字，改用跟甘特圖圖例一致的階段專屬色
+   （疊加 .gantt-stage-* class，見 phase_gantt_chart_stage_class）取代文字說明——同一組顏色
+   使用者已經在甘特圖圖例看過一次，不需要重新學一套新配色。.gantt-stage-* 本身只定義了
+   background（給甘特圖圖例的小色塊用，本來沒有文字），5 種階段色都是刻意不隨主題變動的
+   固定淺色系（見 .gantt-stage-* 的 --gantt-stage-* 變數定義），直接繼承 .tag 預設的
+   var(--color-text-muted) 在深色主題下會是淺灰字疊淺色底、對比不足，故另外固定一個不隨
+   主題變動的深色文字，跟階段色本身「刻意不隨主題變動」的設計精神一致。 */
+.tag-stage {
+  color: #1a202c;
+}
+
 .tag-hours {
   font-variant-numeric: tabular-nums;
 }
