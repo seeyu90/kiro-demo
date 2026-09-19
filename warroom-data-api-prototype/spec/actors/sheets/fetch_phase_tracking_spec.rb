@@ -121,6 +121,22 @@ RSpec.describe Sheets::FetchPhaseTracking do
       expect(described_class.result.cards.first[:status]).to eq("延誤未完成")
     end
 
+    # 迴歸測試：使用者反應卡片摘要列的「預計完成」日期看不出是哪個階段的日期。status／
+    # current_stage_name／planned_completion_date 三者都必須來自同一個「目前階段」（STAGE_ORDER
+    # 由後往前第一個有記錄的階段），不能各自用不同規則挑出不同階段。
+    it "derives current_stage_name and planned_completion_date from the same stage status is derived from" do
+      rows = [
+        record_row(project: "HRM", issue_id: "4656", stage: "開案", planned: "2026-01-01", actual: "2026-01-01", status: "完成"),
+        record_row(project: "HRM", issue_id: "4656", stage: "開發", planned: "2026-01-10", actual: nil, status: "延誤未完成")
+      ]
+      allow(PhaseRecordsSheetsClient).to receive(:fetch_rows).and_return(rows)
+
+      card = described_class.result.cards.first
+
+      expect(card[:current_stage_name]).to eq("開發")
+      expect(card[:planned_completion_date]).to eq("2026-01-10")
+    end
+
     it "orders a stage's history newest-superseded-first, oldest last" do
       rows = [
         record_row(project: "HRM", issue_id: "4656", stage: "開案", planned: "2026-01-01", actual: "2026-01-01", reason: "第一次"),

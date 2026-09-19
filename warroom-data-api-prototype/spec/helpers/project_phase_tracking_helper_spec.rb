@@ -1,6 +1,22 @@
 require "rails_helper"
 
 RSpec.describe ProjectPhaseTrackingHelper, type: :helper do
+  # 迴歸測試：使用者反應「延誤已完成」「延誤未完成」原本分別跟「完成」「未完成」共用同一種
+  # 顏色，字面上寫著「延誤」卻看不出跟準時的差別，兩個「延誤」值必須有自己專屬的樣式。
+  describe "#phase_tracking_status_class" do
+    it "gives the two 延誤 statuses their own class, distinct from their non-delayed counterparts" do
+      expect(helper.phase_tracking_status_class("延誤已完成")).to eq("tag-status-delayed")
+      expect(helper.phase_tracking_status_class("延誤未完成")).to eq("tag-status-delayed")
+      expect(helper.phase_tracking_status_class("完成")).not_to eq(helper.phase_tracking_status_class("延誤已完成"))
+      expect(helper.phase_tracking_status_class("未完成")).not_to eq(helper.phase_tracking_status_class("延誤未完成"))
+    end
+
+    it "keeps 暫緩 and unknown values on their existing classes" do
+      expect(helper.phase_tracking_status_class("暫緩")).to eq("tag-status-paused")
+      expect(helper.phase_tracking_status_class("進行中")).to eq("tag-status")
+    end
+  end
+
   describe "#parse_date_only" do
     it "parses a strict YYYY-MM-DD string" do
       expect(helper.parse_date_only("2026-08-20")).to eq(Date.new(2026, 8, 20))

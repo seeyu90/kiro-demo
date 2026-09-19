@@ -1867,6 +1867,11 @@ turbo-frame[busy]::after {
   color: var(--color-text-muted);
 }
 
+.tag-status-delayed {
+  color: var(--overdue-text);
+  font-weight: 700;
+}
+
 .tag-hours {
   font-variant-numeric: tabular-nums;
 }

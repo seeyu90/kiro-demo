@@ -71,7 +71,7 @@ module Sheets
     # Roster（客戶/PM 對照）失敗時降級顯示，不擋整頁：階段紀錄才是本頁面的核心資料（比照既有
     # Sheets::FetchProjectHistory 對 Roster 失敗的降級慣例）。找不到就回傳 nil，呼叫端顯示 —。
     # 「專案」分頁的「狀態」欄（維護／…）是專案層級的維運狀態，不是議題狀態，本頁的「狀態」
-    # 篩選指的是議題目前所在階段的完成狀態（見 build_card 的 current_issue_status），故不讀
+    # 篩選指的是議題目前所在階段的完成狀態（見 build_card 的 current_stage），故不讀
     # 這個 Roster 狀態欄。
     def fetch_profiles_by_project
       rows = ProjectProfilesSheetsClient.fetch_rows
@@ -108,6 +108,8 @@ module Sheets
         { stage: stage_name, primary: stage_records.last, history: stage_records[0...-1].reverse }
       end
 
+      current = current_stage(stages)
+
       {
         project: project,
         issue_id: issue_id,
@@ -115,28 +117,26 @@ module Sheets
         issue_name: issue_records.filter_map { |r| r[:issue_name] }.first,
         customer: profile[:customer],
         pm: profile[:pm],
-        status: current_issue_status(stages),
-        planned_completion_date: planned_completion_date_for(stages),
+        status: current&.dig(:primary, :status),
+        current_stage_name: current&.dig(:stage),
+        planned_completion_date: current&.dig(:primary, :planned_date),
         stages: stages,
         record_years: issue_records.filter_map { |r| r[:planned_date].to_s[0, 4].presence }.uniq
       }
     end
 
-    # 「狀態」指議題目前所在階段的完成狀態（完成／延誤已完成／延誤未完成／暫緩／未完成），
-    # 不是專案層級的維運狀態（見 fetch_profiles_by_project 附註）。取 STAGE_ORDER 由後往前
-    # 第一個有主要記錄的階段（即議題目前推進到的最新階段）的 status 欄位；完全沒有任何階段
-    # 記錄時回傳 nil。
-    def current_issue_status(stages)
-      stages.reverse.find { |s| s[:primary] }&.dig(:primary, :status)
-    end
-
-    # 沒有獨立的「專案層級預計完成日期」欄位（不像 static prototype 假設的那樣），改用終點
-    # 階段（發布）的預計完成日期近似；「發布」缺紀錄時退回所有階段裡最晚的 planned_date，
-    # 避免完全沒有排序依據（依預計完成日期排序，需求 4.1）。
-    def planned_completion_date_for(stages)
-      release_stage = stages.find { |s| s[:stage] == "發布" }
-      release_stage&.dig(:primary, :planned_date) ||
-        stages.filter_map { |s| s[:primary]&.dig(:planned_date) }.max
+    # 「目前階段」＝ STAGE_ORDER 由後往前第一個有主要記錄的階段（即議題目前推進到的最新階段），
+    # 完全沒有任何階段記錄時回傳 nil。跟 Summary::BuildPmWeeklyReport#current_stage 同一個定義
+    # （該檔案的註解也是這樣說的），這裡是原始定義所在——「狀態」「目前階段名稱」「預計完成
+    # 日期」三者都從同一個階段取值，確保三者指的是同一件事，不會出現「狀態顯示某階段的完成度，
+    # 日期卻是另一個階段」的不一致。
+    #
+    # 「預計完成日期」原本沒有獨立的「專案層級」欄位（不像 static prototype 假設的那樣），舊版
+    # 邏輯優先取「發布」階段近似、「發布」缺紀錄時才退回所有階段裡最晚的 planned_date；改用
+    # 「目前階段」取代後語意更一致（使用者反應「看不出來卡片摘要列的日期是指哪個階段」），且
+    # STAGE_ORDER 順序遞增時（真實資料皆是如此）兩者實務上結果相同。
+    def current_stage(stages)
+      stages.reverse.find { |s| s[:primary] }
     end
   end
 end

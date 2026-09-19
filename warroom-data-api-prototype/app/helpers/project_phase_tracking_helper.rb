@@ -220,10 +220,14 @@ module ProjectPhaseTrackingHelper
   # 狀態標籤配色，三段式：完成／延誤已完成＝已完成（綠色）；延誤未完成／未完成＝還在等待
   # 處理、需要注意（紅色，且加粗）；暫緩＝刻意擱置，視覺上刻意跟紅色的「需要注意」區分開來，
   # 用中性灰。未知狀態值（理論上不會發生，防禦性 fallback）維持 .tag-status 藍色。
+  # 「延誤已完成」原本跟「完成」共用綠色、「延誤未完成」原本跟「未完成」共用同一個顏色——
+  # 使用者反應「當前階段延誤應該要改色」：明明字面上已經寫著「延誤」，色彩卻看不出跟準時的
+  # 差別，兩個「延誤」值改成自己專屬的警示色（跟其他地方 diff_days 為正、逾期未完成等
+  # 「延誤／逾期」語意共用 --overdue-text，不是另外發明一個顏色）。
   STATUS_TAG_CLASS = {
     "完成" => "tag-status-done",
-    "延誤已完成" => "tag-status-done",
-    "延誤未完成" => "tag-status-pending",
+    "延誤已完成" => "tag-status-delayed",
+    "延誤未完成" => "tag-status-delayed",
     "未完成" => "tag-status-pending",
     "暫緩" => "tag-status-paused"
   }.freeze

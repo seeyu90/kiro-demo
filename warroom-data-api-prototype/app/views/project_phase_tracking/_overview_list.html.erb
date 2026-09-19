@@ -7,6 +7,7 @@
           <span class="tag"><%= card[:customer] || "—" %></span>
           <span class="tag"><%= card[:pm] || "—" %></span>
           <span class="tag <%= phase_tracking_status_class(card[:status]) %>"><%= card[:status] || "—" %></span>
+          <span class="tag">目前階段：<%= card[:current_stage_name] || "—" %></span>
           <span class="tag">預計完成：<%= card[:planned_completion_date] || "—" %></span>
         </span>
       </summary>
