@@ -44,8 +44,8 @@ RSpec.describe Summary::BuildPmWeeklyReport do
   let(:month_kpi_rows) { [ %w[year_month 客訴 測試 總Bug 攔截率 完成數 未結案 平均天數 SLA達標率 Top3] ] }
   let(:daily_kpi_rows) { [ %w[日期 客訴 測試 其他 總計] ] }
 
-  def phase_row(project:, issue_id:, stage:, planned:, status:, issue_name: "", reason: "")
-    [ project, issue_id, issue_name, stage, planned, nil, status, reason,
+  def phase_row(project:, issue_id:, stage:, planned:, status:, issue_name: "", reason: "", actual: nil)
+    [ project, issue_id, issue_name, stage, planned, actual, status, reason,
       "#{project}|#{issue_id}|#{stage}", planned.to_s[0, 4] ]
   end
 
@@ -241,6 +241,26 @@ RSpec.describe Summary::BuildPmWeeklyReport do
 
     it "excludes finished stages" do
       expect(result.phase_items.map { |i| i[:issue_id] }).not_to include("9003")
+    end
+  end
+
+  describe "階段追蹤：目前階段判斷" do
+    # 迴歸測試：跟 Sheets::FetchPhaseTracking#current_stage 同一個 bug、同一個修法（見該檔案
+    # 附註的真實案例）——「測試」還在進行中（有主要記錄、無 actual_date），但「發布」已經
+    # 預先排定了目標日期（同樣有主要記錄、也還沒有 actual_date）。修正前的規則（陣列由後往前
+    # 第一個有記錄的階段）會誤判成目前在「發布」。
+    let(:phase_rows) do
+      [
+        phase_row(project: "RAG", issue_id: "9201", stage: "開案", planned: "2026-08-24", actual: "2026-08-24", status: "完成"),
+        phase_row(project: "RAG", issue_id: "9201", stage: "測試", planned: "2026-09-01", status: "未完成"),
+        phase_row(project: "RAG", issue_id: "9201", stage: "發布", planned: "2026-09-25", status: "未完成")
+      ]
+    end
+
+    it "reports the earliest not-yet-completed stage (測試), not a later stage that only has a pre-scheduled placeholder (發布)" do
+      item = result.phase_items.find { |i| i[:issue_id] == "9201" }
+
+      expect(item[:stage]).to eq("測試")
     end
   end
 

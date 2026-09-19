@@ -11,9 +11,45 @@ RSpec.describe ProjectPhaseTrackingHelper, type: :helper do
       expect(helper.phase_tracking_status_class("未完成")).not_to eq(helper.phase_tracking_status_class("延誤未完成"))
     end
 
-    it "keeps 暫緩 and unknown values on their existing classes" do
+    it "keeps 暫緩 on its own class and truly unknown values on the generic fallback" do
       expect(helper.phase_tracking_status_class("暫緩")).to eq("tag-status-paused")
-      expect(helper.phase_tracking_status_class("進行中")).to eq("tag-status")
+      expect(helper.phase_tracking_status_class("這不是真實資料裡出現過的值")).to eq("tag-status")
+    end
+
+    # 「進行中」是稽核真實資料時發現、規格文件原本沒列出的第 6 種原始狀態值（修正 current_stage
+    # 選錯階段的 bug 後才第一次真的浮現到畫面上），語意上跟「未完成」同一類，歸到同一個 class。
+    it "treats 進行中 the same as 未完成 — both mean still in progress, no delay signal" do
+      expect(helper.phase_tracking_status_class("進行中")).to eq(helper.phase_tracking_status_class("未完成"))
+    end
+  end
+
+  # 迴歸測試：使用者看到一整排「未完成」卡片的「預計完成」日期其實都已經過了今天，反應
+  # 「不應該用紅色加強已經逾期的概念嗎」。
+  describe "#phase_tracking_overdue?" do
+    around { |example| travel_to(Date.new(2026, 9, 19)) { example.run } }
+
+    it "is true for an unfinished status whose planned_completion_date has already passed" do
+      expect(helper.phase_tracking_overdue?("未完成", "2026-09-01")).to be true
+      expect(helper.phase_tracking_overdue?("延誤未完成", "2026-09-01")).to be true
+      expect(helper.phase_tracking_overdue?("進行中", "2026-09-01")).to be true
+    end
+
+    it "is false when the planned_completion_date is today or still in the future" do
+      expect(helper.phase_tracking_overdue?("未完成", "2026-09-19")).to be false
+      expect(helper.phase_tracking_overdue?("未完成", "2026-10-08")).to be false
+    end
+
+    it "is false once the stage is actually done, even if the date is in the past — it's not still overdue" do
+      expect(helper.phase_tracking_overdue?("完成", "2026-09-01")).to be false
+      expect(helper.phase_tracking_overdue?("延誤已完成", "2026-09-01")).to be false
+    end
+
+    it "is false for 暫緩 — deliberately paused, not something to flag as overdue" do
+      expect(helper.phase_tracking_overdue?("暫緩", "2026-09-01")).to be false
+    end
+
+    it "is false when there is no planned_completion_date to judge by" do
+      expect(helper.phase_tracking_overdue?("未完成", nil)).to be false
     end
   end
 

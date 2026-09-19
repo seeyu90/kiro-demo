@@ -217,22 +217,41 @@ module ProjectPhaseTrackingHelper
     card[:issue_name].present? ? "#{card[:issue_name]}（#{card[:issue_id]}）" : card[:issue_id]
   end
 
-  # 狀態標籤配色，三段式：完成／延誤已完成＝已完成（綠色）；延誤未完成／未完成＝還在等待
-  # 處理、需要注意（紅色，且加粗）；暫緩＝刻意擱置，視覺上刻意跟紅色的「需要注意」區分開來，
-  # 用中性灰。未知狀態值（理論上不會發生，防禦性 fallback）維持 .tag-status 藍色。
+  # 狀態標籤配色，三段式：完成／延誤已完成＝已完成（綠色）；延誤未完成／未完成／進行中＝還在
+  # 等待處理、需要注意（紅色，且加粗）；暫緩＝刻意擱置，視覺上刻意跟紅色的「需要注意」區分
+  # 開來，用中性灰。未知狀態值（防禦性 fallback）維持 .tag-status 藍色。
   # 「延誤已完成」原本跟「完成」共用綠色、「延誤未完成」原本跟「未完成」共用同一個顏色——
   # 使用者反應「當前階段延誤應該要改色」：明明字面上已經寫著「延誤」，色彩卻看不出跟準時的
   # 差別，兩個「延誤」值改成自己專屬的警示色（跟其他地方 diff_days 為正、逾期未完成等
   # 「延誤／逾期」語意共用 --overdue-text，不是另外發明一個顏色）。
+  # 「進行中」是稽核真實資料時發現的第 6 種原始狀態值（不在原本假設的 5 種裡），修正
+  # current_stage 選錯階段的 bug 後才第一次真的浮現到畫面上（之前一直被後面階段的佔位記錄
+  # 蓋過，見 Sheets::FetchPhaseTracking#current_stage 附註）；語意上就是「還在做、沒有延誤
+  # 訊號」，跟「未完成」同一類，歸到同一個 class，不另外發明一個顏色。
   STATUS_TAG_CLASS = {
     "完成" => "tag-status-done",
     "延誤已完成" => "tag-status-delayed",
     "延誤未完成" => "tag-status-delayed",
     "未完成" => "tag-status-pending",
+    "進行中" => "tag-status-pending",
     "暫緩" => "tag-status-paused"
   }.freeze
 
   def phase_tracking_status_class(status)
     STATUS_TAG_CLASS.fetch(status, "tag-status")
+  end
+
+  # 「完成」／「延誤已完成」代表已經做完，預計完成日期是不是過去式都不算「還在逾期中」；
+  # 「暫緩」是刻意擱置，比照狀態標籤本身已經把暫緩跟其他「需要注意」狀態區分開來的設計，
+  # 這裡也不套用逾期判斷。其餘狀態（未完成／延誤未完成／進行中）若預計完成日期已經過了
+  # 今天，代表目前階段已逾期，卡片摘要列的「預計完成」標籤要用跟 tag-status-delayed 同一個
+  # 警示色強調（使用者反應「不應該用紅色加強已經逾期的概念嗎」），不另外發明一個顏色。
+  COMPLETED_STATUSES = %w[完成 延誤已完成].freeze
+
+  def phase_tracking_overdue?(status, planned_completion_date)
+    return false if status.blank? || COMPLETED_STATUSES.include?(status) || status == "暫緩"
+
+    date = parse_date_only(planned_completion_date)
+    date.present? && date < Date.current
   end
 end
