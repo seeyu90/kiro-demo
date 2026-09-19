@@ -768,6 +768,23 @@ turbo-frame[busy]::after {
   white-space: normal;
 }
 
+/* 專案階段追蹤頁的卡片展開表格（_overview_list.html.erb，5 欄：階段／預計完成日期／
+   實際完成日期／差異／完成狀態）：這裡的問題跟上面幾個不一樣，不是「欄序跟 305 不同、
+   套錯欄寬」，而是每張卡片各自是獨立 <table>，若沿用 .auto-width-tasks 的 table-layout:
+   auto，瀏覽器會依「這張表自己的內容」各自計算欄寬——多數階段名稱只有 2~4 字（開發／
+   測試／發布／需求確認），但含重排歷史的列會多出「↳ 測試（曾經延誤的舊排程）」這種
+   10+ 字的長字串（見 _overview_list.html.erb:57），稽核發現這會把「階段」欄撐寬，連帶
+   把後面所有欄位往右推，跟其他沒有重排歷史的卡片對不上（實測落差約 165px）。這正是
+   .project-tasks 當初改用 table-layout: fixed 要解決的「每張表各自計算欄寬」問題，只是
+   這次觸發條件是同一張表「列與列之間」內容長度不同，不是跨頁欄序不同——所以不套用
+   .auto-width-tasks（那是給「欄序不同」用的），改成沿用 .project-tasks 本身的
+   table-layout: fixed，另外為這頁欄位語意訂一組自己的固定寬度，這樣不管某一列的階段
+   名稱多長，所有卡片的欄位分界都固定在同一個位置。 */
+.phase-tracking-tasks th:nth-child(2), .phase-tracking-tasks td:nth-child(2) { width: 7.5rem; } /* 預計完成日期 */
+.phase-tracking-tasks th:nth-child(3), .phase-tracking-tasks td:nth-child(3) { width: 7.5rem; } /* 實際完成日期 */
+.phase-tracking-tasks th:nth-child(4), .phase-tracking-tasks td:nth-child(4) { width: 4rem; }   /* 差異 */
+.phase-tracking-tasks th:nth-child(5), .phase-tracking-tasks td:nth-child(5) { width: 6rem; }   /* 完成狀態 */
+
 .project-tasks tbody tr:hover td {
   background: var(--table-row-hover-bg);
 }
@@ -1763,6 +1780,18 @@ turbo-frame[busy]::after {
 
 .legend-swatch-delayed {
   background: var(--overdue-text);
+}
+
+/* 稽核發現兩頁甘特圖的圖例都只列出色塊時程軌，沒有任何一項對應到 .gantt-today-line 那條
+   紅色虛線——它跟「延誤完成」用同一個紅色系（--overdue-text），沒有圖例對照容易被誤認成
+   另一種延誤標示。用一個窄的虛線樣式（border 模擬 stroke-dasharray）而非實心方塊，視覺上
+   對應真正的參考線樣式，不是另一個時程色塊。 */
+.legend-swatch-today {
+  width: 2px;
+  height: 14px;
+  border-radius: 0;
+  background: none;
+  border-left: 2px dashed var(--overdue-text);
 }
 
 /* 專案總覽清單：卡片原地展開（<details>/<summary>，不需要 JS），點卡片標題展開該專案本年度
