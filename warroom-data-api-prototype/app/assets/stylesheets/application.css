@@ -1696,6 +1696,23 @@ turbo-frame[busy]::after {
   overflow: hidden;
 }
 
+/* 專案階段追蹤頁的甘特圖標籤固定拆兩行（見 helper 的 phase_gantt_chart_label_lines）：
+   第一行「專案代碼 - 議題 ID」、第二行議題名稱，取代讓瀏覽器對整串文字自動換行（容易斷在
+   名稱／ID 中間，使用者反應難以辨識）。每行各自單行截斷＋省略號，不再往下多行。 */
+.gantt-label-lines {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  white-space: normal;
+}
+
+.gantt-label-line {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .gantt-label-row-band {
   background: var(--table-row-hover-bg);
 }
@@ -1782,6 +1799,10 @@ turbo-frame[busy]::after {
 
 .legend-swatch-delayed {
   background: var(--overdue-text);
+}
+
+.legend-swatch-in-progress {
+  background: var(--color-accent);
 }
 
 /* 稽核發現兩頁甘特圖的圖例都只列出色塊時程軌，沒有任何一項對應到 .gantt-today-line 那條
@@ -1994,6 +2015,14 @@ turbo-frame[busy]::after {
 /* 甘特圖「提前完成」色塊：既有 .gantt-task-actual-delayed 已可沿用，僅缺這一個 variant。 */
 .gantt-task-actual-early {
   fill: var(--delay-negative);
+}
+
+/* 使用者反應「未完成不代表沒有進度條」：目前階段還沒完成但真的在做，畫到今天為止的色塊，
+   用中性的強調色（跟站內連結／強調文字同一個 --color-accent）表示「還在期限內、進行中」，
+   跟已完成的準時（綠）／延誤（紅）區分開來；一旦超過預計日期還沒完成，改用既有的
+   .gantt-task-actual-delayed（紅），不用再發明第三種顏色。 */
+.gantt-task-actual-in_progress {
+  fill: var(--color-accent);
 }
 
 /* 甘特圖雙軌設計：上軌固定依階段配色（不印文字，對照圖例辨識），下軌只依準時／延誤上色，

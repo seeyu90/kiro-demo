@@ -53,6 +53,22 @@ RSpec.describe ProjectPhaseTrackingHelper, type: :helper do
     end
   end
 
+  # 迴歸測試：使用者反應甘特圖側欄標籤讓瀏覽器對「LXPMS - v2.0 調整（5005）」整串自動換行，
+  # 容易斷在名稱／ID 中間難以辨識，要求固定拆成「專案代碼 - ID」／「議題名稱」兩行。
+  describe "#phase_gantt_chart_label_lines" do
+    it "puts the project code and issue id on the first line, the issue name on the second" do
+      card = { project: "LXPMS", issue_id: "5005", issue_name: "v2.0 調整" }
+
+      expect(helper.phase_gantt_chart_label_lines(card)).to eq([ "LXPMS - 5005", "v2.0 調整" ])
+    end
+
+    it "returns a single line when there is no issue_name" do
+      card = { project: "LXPMS", issue_id: "5005", issue_name: nil }
+
+      expect(helper.phase_gantt_chart_label_lines(card)).to eq([ "LXPMS - 5005" ])
+    end
+  end
+
   describe "#parse_date_only" do
     it "parses a strict YYYY-MM-DD string" do
       expect(helper.parse_date_only("2026-08-20")).to eq(Date.new(2026, 8, 20))
@@ -235,9 +251,11 @@ RSpec.describe ProjectPhaseTrackingHelper, type: :helper do
     end
 
     describe "#phase_gantt_chart_actual_segment" do
-      it "returns nil when the stage has no primary record, or has no actual_date yet (nothing 'actual' to draw)" do
-        expect(helper.phase_gantt_chart_actual_segment([ stage(primary: false) ], 0, domain, width)).to be_nil
-        expect(helper.phase_gantt_chart_actual_segment([ stage(planned_date: "2026-01-01", actual_date: nil) ], 0, domain, width)).to be_nil
+      # current_stage_name 傳 nil（或不相符的名稱）＝這個階段不是「目前階段」，維持修正前的
+      # 既有行為；下面另有專門測試「未完成不代表沒有進度條」新增的 in_progress 情境。
+      it "returns nil when the stage has no primary record, or has no actual_date and isn't the current stage" do
+        expect(helper.phase_gantt_chart_actual_segment([ stage(primary: false) ], 0, domain, width, nil)).to be_nil
+        expect(helper.phase_gantt_chart_actual_segment([ stage(planned_date: "2026-01-01", actual_date: nil) ], 0, domain, width, nil)).to be_nil
       end
 
       it "spans from the previous stage's own actual_date to this stage's actual_date, marked :delayed when genuinely late" do
@@ -246,7 +264,7 @@ RSpec.describe ProjectPhaseTrackingHelper, type: :helper do
           stage(planned_date: "2026-03-10", actual_date: "2026-03-20")
         ]
 
-        segment = helper.phase_gantt_chart_actual_segment(stages, 1, domain, width)
+        segment = helper.phase_gantt_chart_actual_segment(stages, 1, domain, width, nil)
 
         expect(segment[:variant]).to eq(:delayed)
         expect(segment[:diff_days]).to eq(10)
@@ -262,7 +280,7 @@ RSpec.describe ProjectPhaseTrackingHelper, type: :helper do
           stage(planned_date: "2026-03-10", actual_date: "2026-03-01")
         ]
 
-        segment = helper.phase_gantt_chart_actual_segment(stages, 1, domain, width)
+        segment = helper.phase_gantt_chart_actual_segment(stages, 1, domain, width, nil)
 
         expect(segment[:variant]).to eq(:early)
         expect(segment[:diff_days]).to eq(-9)
@@ -276,7 +294,7 @@ RSpec.describe ProjectPhaseTrackingHelper, type: :helper do
           stage(planned_date: "2026-03-10", actual_date: "2026-03-10")
         ]
 
-        segment = helper.phase_gantt_chart_actual_segment(stages, 1, domain, width)
+        segment = helper.phase_gantt_chart_actual_segment(stages, 1, domain, width, nil)
 
         expect(segment[:variant]).to eq(:early)
         expect(segment[:diff_days]).to eq(0)
@@ -289,7 +307,7 @@ RSpec.describe ProjectPhaseTrackingHelper, type: :helper do
           stage(planned_date: "2026-03-10", actual_date: "2026-03-10")
         ]
 
-        segment = helper.phase_gantt_chart_actual_segment(stages, 2, domain, width)
+        segment = helper.phase_gantt_chart_actual_segment(stages, 2, domain, width, nil)
 
         x1 = helper.phase_gantt_chart_x(Date.new(2026, 1, 20), domain, width)
         expect(segment[:x]).to eq(x1.round(2))
@@ -297,7 +315,7 @@ RSpec.describe ProjectPhaseTrackingHelper, type: :helper do
 
       it "falls back to its own actual_date (zero-width, clamped) when it's the first stage with actual data" do
         segment = helper.phase_gantt_chart_actual_segment(
-          [ stage(planned_date: "2026-03-10", actual_date: "2026-03-10") ], 0, domain, width
+          [ stage(planned_date: "2026-03-10", actual_date: "2026-03-10") ], 0, domain, width, nil
         )
 
         x1 = helper.phase_gantt_chart_x(Date.new(2026, 3, 10), domain, width)
@@ -313,9 +331,51 @@ RSpec.describe ProjectPhaseTrackingHelper, type: :helper do
           stage(planned_date: "2026-01-01", actual_date: "2026-01-01")
         ]
 
-        segment = helper.phase_gantt_chart_actual_segment(stages, 1, narrow_domain, narrow_width)
+        segment = helper.phase_gantt_chart_actual_segment(stages, 1, narrow_domain, narrow_width, nil)
 
         expect(segment[:width]).to be >= ProjectPhaseTrackingHelper::GANTT_MIN_SEGMENT_WIDTH
+      end
+
+      # 迴歸測試：使用者反應「未完成不代表沒有進度條」——這個階段還沒有 actual_date，但它是
+      # 議題「目前階段」（current_stage_name 相符），代表真的在做，不該完全不畫。
+      describe "the current, not-yet-completed stage" do
+        around { |example| travel_to(Date.new(2026, 9, 19)) { example.run } }
+
+        it "draws a segment extending to today (not to the future planned_date) when still within its deadline" do
+          # 前一階段有明確的 actual_date（銜接點），跟「今日」隔了好幾個月，確保量到的終點
+          # 不是被 GANTT_MIN_SEGMENT_WIDTH 的最小寬度撐開，而是真的落在 Date.current。
+          stages = [
+            stage(planned_date: "2026-05-01", actual_date: "2026-06-01"),
+            stage(planned_date: "2026-10-08", actual_date: nil)
+          ]
+
+          segment = helper.phase_gantt_chart_actual_segment(stages, 1, domain, width, "x")
+
+          expect(segment).not_to be_nil
+          expect(segment[:variant]).to eq(:in_progress)
+          expect(segment[:diff_days]).to be_nil
+          x2 = helper.phase_gantt_chart_x(Date.current, domain, width)
+          expect(segment[:x] + segment[:width]).to eq(x2.round(2))
+        end
+
+        it "marks :delayed (not :in_progress) once today has passed the planned_date, even though still unfinished" do
+          stages = [ stage(planned_date: "2026-09-08", actual_date: nil) ]
+
+          segment = helper.phase_gantt_chart_actual_segment(stages, 0, domain, width, "x")
+
+          expect(segment[:variant]).to eq(:delayed)
+        end
+
+        it "still returns nil for a not-yet-completed stage that is NOT the current stage — a later stage having a pre-scheduled record doesn't mean work has started on it" do
+          stages = [
+            stage(planned_date: "2026-01-01", actual_date: "2026-01-01"),
+            stage(planned_date: "2026-10-08", actual_date: nil) # 有記錄但還沒開始，不是目前階段
+          ]
+
+          segment = helper.phase_gantt_chart_actual_segment(stages, 1, domain, width, "開發")
+
+          expect(segment).to be_nil
+        end
       end
     end
   end
