@@ -134,13 +134,19 @@ module ProjectPhaseTrackingHelper
   # - 上軌（phase_gantt_chart_planned_segment）＝純粹按「預計」時程排：從上一個有資料階段的
   #   planned_date 銜接到這個階段自己的 planned_date，只要有 planned_date 就畫（不論這個階段
   #   完成與否），每個階段固定配色（不印文字，對照圖例辨識），呈現「整個計畫應該長怎樣」。
-  # - 下軌（phase_gantt_chart_actual_segment）＝純粹按「實際」時程排：從上一個有 actual_date
-  #   階段的 actual_date 銜接到這個階段自己的 actual_date，**只在這個階段已有 actual_date 時
-  #   才畫**（還沒做完的階段下軌沒有東西可畫，這是刻意的——沒發生的事沒有「實際」時程），顏色
-  #   依這個階段是否準時／延誤決定（比照既有 delay/early 語意），用來標出跟預計的落差。
+  # - 下軌（phase_gantt_chart_actual_segment）＝按「實際」時程排：已有 actual_date 時從上一個
+  #   有 actual_date 階段的 actual_date 銜接到這個階段自己的 actual_date，顏色依這個階段是否
+  #   準時／延誤決定（比照既有 delay/early 語意）。使用者反應「未完成不代表沒有進度條」：這個
+  #   階段還沒完成，不代表完全沒有畫的必要——如果這個階段正是議題「目前階段」（current_stage_
+  #   name，見 Sheets::FetchPhaseTracking#current_stage），代表真的有人在做，即使還沒完成也該
+  #   畫一段延伸到「今天」的色塊，呈現「做到現在這裡了、還沒結束」；還沒被推進到的階段（例如
+  #   後面的階段已經預先排定日期，但根本還沒開始）維持不畫，不能只看「有沒有 actual_date」。
+  #   顏色再依「今天有沒有超過這個階段的預計日期」分成「進行中」（藍，還在期限內）跟「延誤」
+  #   （紅，已經超過預計日期還沒完成，跟卡片摘要列的逾期變色是同一個概念）。
   #
   # stages：單一卡片的完整 STAGE_ORDER 陣列（{ stage:, primary:, history: }，見
-  # Sheets::FetchPhaseTracking#build_card），index：要畫的這個階段在陣列中的位置。
+  # Sheets::FetchPhaseTracking#build_card），index：要畫的這個階段在陣列中的位置，
+  # current_stage_name：這張卡片的「目前階段」名稱（card[:current_stage_name]）。
 
   def phase_gantt_chart_planned_segment(stages, index, domain, width)
     row = stages[index][:primary]
@@ -156,25 +162,39 @@ module ProjectPhaseTrackingHelper
     { x: x1.round(2), width: (x2 - x1).round(2), stage: stages[index][:stage] }
   end
 
-  def phase_gantt_chart_actual_segment(stages, index, domain, width)
-    row = stages[index][:primary]
-    return nil if row.nil? || row[:actual_date].blank?
+  def phase_gantt_chart_actual_segment(stages, index, domain, width, current_stage_name)
+    stage = stages[index]
+    row = stage[:primary]
+    return nil if row.nil?
 
     actual = parse_date_only(row[:actual_date])
-    return nil if actual.nil?
+    planned = parse_date_only(row[:planned_date])
 
-    start_date = phase_gantt_chart_previous_boundary(stages, index, :actual_date) || actual
+    if actual
+      end_date = actual
+      # 圖例寫的是「準時／提前完成」＝綠色、「延誤完成」＝紅色（見 _gantt_legend.html.erb），
+      # 準時（diff_days == 0）理當跟提前一樣算綠色。不能用 `.negative?` 判斷：那只有嚴格小於 0
+      # 才算 :early，diff_days 剛好等於 0（真正準時）會落到 else 分支被標成 :delayed，跟圖例
+      # 文字自相矛盾。`diff_days <= 0`（不是正數就算準時／提前）才是唯一正確的「沒有延誤」
+      # 判斷式。
+      state = compute_row_state(row[:planned_date], row[:actual_date])
+      variant = state[:diff_days].present? && !state[:diff_days].positive? ? :early : :delayed
+      diff_days = state[:diff_days]
+    elsif stage[:stage] == current_stage_name
+      # 還沒完成，但這是「目前階段」：畫到今天為止，不是畫到（可能還沒到）的 planned_date——
+      # 「實際」時程只能呈現已經過去的時間，畫到未來的預計日期會變成「還沒發生的事已經發生」。
+      end_date = Date.current
+      variant = planned && Date.current > planned ? :delayed : :in_progress
+      diff_days = nil
+    else
+      return nil
+    end
+
+    start_date = phase_gantt_chart_previous_boundary(stages, index, :actual_date) || end_date
     x1 = phase_gantt_chart_x(start_date, domain, width)
-    x2 = [ phase_gantt_chart_x(actual, domain, width), x1 + GANTT_MIN_SEGMENT_WIDTH ].max
+    x2 = [ phase_gantt_chart_x(end_date, domain, width), x1 + GANTT_MIN_SEGMENT_WIDTH ].max
 
-    # 圖例寫的是「準時／提前完成」＝綠色、「延誤完成」＝紅色（見 _gantt_legend.html.erb），
-    # 準時（diff_days == 0）理當跟提前一樣算綠色。不能用 `.negative?` 判斷：那只有嚴格小於 0
-    # 才算 :early，diff_days 剛好等於 0（真正準時）會落到 else 分支被標成 :delayed，跟圖例文字
-    # 自相矛盾。`diff_days <= 0`（不是正數就算準時／提前）才是唯一正確的「沒有延誤」判斷式。
-    state = compute_row_state(row[:planned_date], row[:actual_date])
-    variant = state[:diff_days].present? && !state[:diff_days].positive? ? :early : :delayed
-
-    { x: x1.round(2), width: (x2 - x1).round(2), variant: variant, diff_days: state[:diff_days] }
+    { x: x1.round(2), width: (x2 - x1).round(2), variant: variant, diff_days: diff_days }
   end
 
   # 由 index 往前找上一個「有主要記錄、且 date_key 這個日期欄位有值」的階段，回傳該日期
@@ -217,18 +237,50 @@ module ProjectPhaseTrackingHelper
     card[:issue_name].present? ? "#{card[:issue_name]}（#{card[:issue_id]}）" : card[:issue_id]
   end
 
-  # 狀態標籤配色，三段式：完成／延誤已完成＝已完成（綠色）；延誤未完成／未完成＝還在等待
-  # 處理、需要注意（紅色，且加粗）；暫緩＝刻意擱置，視覺上刻意跟紅色的「需要注意」區分開來，
-  # 用中性灰。未知狀態值（理論上不會發生，防禦性 fallback）維持 .tag-status 藍色。
+  # 甘特圖側欄標籤：跟清單卡片標題（上面 phase_tracking_issue_label）不同排法——側欄只有
+  # 152px 寬，讓瀏覽器對「LXPMS - v2.0 調整（5005）」整串自動換行，容易斷在奇怪的地方（例如
+  # 名稱／ID 中間），使用者反應難以辨識。改成固定兩行：第一行永遠是「專案代碼 - 議題 ID」
+  # （辨識用的短代碼，優先看到），第二行才是議題名稱（無名稱時只有一行）。
+  def phase_gantt_chart_label_lines(card)
+    first_line = "#{card[:project]} - #{card[:issue_id]}"
+    card[:issue_name].present? ? [ first_line, card[:issue_name] ] : [ first_line ]
+  end
+
+  # 狀態標籤配色，三段式：完成／延誤已完成＝已完成（綠色）；延誤未完成／未完成／進行中＝還在
+  # 等待處理、需要注意（紅色，且加粗）；暫緩＝刻意擱置，視覺上刻意跟紅色的「需要注意」區分
+  # 開來，用中性灰。未知狀態值（防禦性 fallback）維持 .tag-status 藍色。
+  # 「延誤已完成」原本跟「完成」共用綠色、「延誤未完成」原本跟「未完成」共用同一個顏色——
+  # 使用者反應「當前階段延誤應該要改色」：明明字面上已經寫著「延誤」，色彩卻看不出跟準時的
+  # 差別，兩個「延誤」值改成自己專屬的警示色（跟其他地方 diff_days 為正、逾期未完成等
+  # 「延誤／逾期」語意共用 --overdue-text，不是另外發明一個顏色）。
+  # 「進行中」是稽核真實資料時發現的第 6 種原始狀態值（不在原本假設的 5 種裡），修正
+  # current_stage 選錯階段的 bug 後才第一次真的浮現到畫面上（之前一直被後面階段的佔位記錄
+  # 蓋過，見 Sheets::FetchPhaseTracking#current_stage 附註）；語意上就是「還在做、沒有延誤
+  # 訊號」，跟「未完成」同一類，歸到同一個 class，不另外發明一個顏色。
   STATUS_TAG_CLASS = {
     "完成" => "tag-status-done",
-    "延誤已完成" => "tag-status-done",
-    "延誤未完成" => "tag-status-pending",
+    "延誤已完成" => "tag-status-delayed",
+    "延誤未完成" => "tag-status-delayed",
     "未完成" => "tag-status-pending",
+    "進行中" => "tag-status-pending",
     "暫緩" => "tag-status-paused"
   }.freeze
 
   def phase_tracking_status_class(status)
     STATUS_TAG_CLASS.fetch(status, "tag-status")
+  end
+
+  # 「完成」／「延誤已完成」代表已經做完，預計完成日期是不是過去式都不算「還在逾期中」；
+  # 「暫緩」是刻意擱置，比照狀態標籤本身已經把暫緩跟其他「需要注意」狀態區分開來的設計，
+  # 這裡也不套用逾期判斷。其餘狀態（未完成／延誤未完成／進行中）若預計完成日期已經過了
+  # 今天，代表目前階段已逾期，卡片摘要列的「預計完成」標籤要用跟 tag-status-delayed 同一個
+  # 警示色強調（使用者反應「不應該用紅色加強已經逾期的概念嗎」），不另外發明一個顏色。
+  COMPLETED_STATUSES = %w[完成 延誤已完成].freeze
+
+  def phase_tracking_overdue?(status, planned_completion_date)
+    return false if status.blank? || COMPLETED_STATUSES.include?(status) || status == "暫緩"
+
+    date = parse_date_only(planned_completion_date)
+    date.present? && date < Date.current
   end
 end

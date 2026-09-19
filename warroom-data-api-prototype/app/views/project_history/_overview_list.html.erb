@@ -6,7 +6,6 @@
         <span class="project-card-tags">
           <span class="tag"><%= row[:customer] || "—" %></span>
           <span class="tag"><%= row[:pm] || "—" %></span>
-          <span class="tag tag-status"><%= row[:status] || "—" %></span>
           <span class="tag tag-hours">
             <%= row[:hours_estimated].present? ? hours_pair(row[:hours_consumed] || 0, row[:hours_estimated]) : "—" %>
           </span>
@@ -17,7 +16,7 @@
         <% if row[:tasks].empty? %>
           <p class="empty-state">所選年度無議題資料</p>
         <% else %>
-          <table class="project-tasks">
+          <table class="project-tasks auto-width-tasks project-history-tasks">
             <thead>
               <tr>
                 <th scope="col">議題</th>

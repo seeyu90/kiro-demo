@@ -34,9 +34,13 @@ module ProjectHistoryHelper
   GANTT_MIN_WIDTH = 720
   GANTT_MONTH_PX = 90
   GANTT_ROW_HEIGHT = 42
-  # 專案列標籤欄寬度：字級加大後（見 CSS .gantt-row-label）留寬一點，避免「亞炬 Platform」這種
-  # 較長的專案名稱被壓到跟時間軸格線重疊。
-  GANTT_PADDING_LEFT = 152
+  # 專案名稱標籤欄寬度：稽核發現橫向捲動看後面月份時，畫在 SVG 裡面的標籤會跟著被捲走，認不出
+  # 色塊屬於哪個專案（比照 project_phase_tracking 既有做法，見 _overview_gantt.html.erb 與
+  # application.css .gantt-labels 的說明），改成獨立於 SVG 之外、position: sticky 固定在左側的
+  # HTML 側欄，不畫在 SVG 座標系裡；SVG 本身因此不再需要幫標籤留大片留白。
+  GANTT_LABEL_WIDTH = 152
+  # SVG 內部左邊留白：標籤欄移出 SVG 後，這裡只是色塊起點前的一點呼吸空間，不再需要容納文字。
+  GANTT_PADDING_LEFT = 12
   GANTT_PADDING_RIGHT = 16
   # 頂部留白給月份時間軸標籤（水平呈現在第一列的正上方，使用者要求時間軸放在上方，比照參考圖
   # 的版面配置，而不是既有 trend chart 那種畫在底部、旋轉 -45 度的做法）。
@@ -97,9 +101,10 @@ module ProjectHistoryHelper
   # min_date 通常不是當月 1 號（例如某議題 3/15 開案，min_date 就是 3/15），但這裡刻意從
   # 「min_date 所在月份的 1 號」開始畫格線，讓月份標籤對齊完整月份、不是從資料剛好開始的那天
   # 算起的畸零日期。這代表第一個刻度（該月 1 號）本身可能早於 min_date，算出來的 x 座標會
-  # 小於 GANTT_PADDING_LEFT（畫布上專案列標籤欄的右邊界），沒有 clamp 的話格線與標籤會畫到
-  # 標籤欄裡面、蓋住專案名稱。故 clamp 在 [GANTT_PADDING_LEFT, 右邊界] 之間，格線視覺上對齊
-  # 繪圖區左緣，標籤文字內容仍是正確的月份，只是不會畫出繪圖區以外。
+  # 小於 GANTT_PADDING_LEFT（SVG 繪圖區的左邊界），沒有 clamp 的話格線／標籤會畫到繪圖區
+  # 左邊界以外去。故 clamp 在 [GANTT_PADDING_LEFT, 右邊界] 之間，格線視覺上對齊繪圖區左緣，
+  # 標籤文字內容仍是正確的月份，只是不會畫出繪圖區以外（專案名稱標籤是獨立於 SVG 之外的
+  # HTML 側欄，不會被這裡的格線／月份標籤蓋到，見 GANTT_LABEL_WIDTH 的說明）。
   def gantt_chart_month_ticks(min_date, max_date)
     left = GANTT_PADDING_LEFT
     right = gantt_chart_svg_width(min_date, max_date) - GANTT_PADDING_RIGHT

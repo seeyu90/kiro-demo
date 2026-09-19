@@ -1,6 +1,74 @@
 require "rails_helper"
 
 RSpec.describe ProjectPhaseTrackingHelper, type: :helper do
+  # 迴歸測試：使用者反應「延誤已完成」「延誤未完成」原本分別跟「完成」「未完成」共用同一種
+  # 顏色，字面上寫著「延誤」卻看不出跟準時的差別，兩個「延誤」值必須有自己專屬的樣式。
+  describe "#phase_tracking_status_class" do
+    it "gives the two 延誤 statuses their own class, distinct from their non-delayed counterparts" do
+      expect(helper.phase_tracking_status_class("延誤已完成")).to eq("tag-status-delayed")
+      expect(helper.phase_tracking_status_class("延誤未完成")).to eq("tag-status-delayed")
+      expect(helper.phase_tracking_status_class("完成")).not_to eq(helper.phase_tracking_status_class("延誤已完成"))
+      expect(helper.phase_tracking_status_class("未完成")).not_to eq(helper.phase_tracking_status_class("延誤未完成"))
+    end
+
+    it "keeps 暫緩 on its own class and truly unknown values on the generic fallback" do
+      expect(helper.phase_tracking_status_class("暫緩")).to eq("tag-status-paused")
+      expect(helper.phase_tracking_status_class("這不是真實資料裡出現過的值")).to eq("tag-status")
+    end
+
+    # 「進行中」是稽核真實資料時發現、規格文件原本沒列出的第 6 種原始狀態值（修正 current_stage
+    # 選錯階段的 bug 後才第一次真的浮現到畫面上），語意上跟「未完成」同一類，歸到同一個 class。
+    it "treats 進行中 the same as 未完成 — both mean still in progress, no delay signal" do
+      expect(helper.phase_tracking_status_class("進行中")).to eq(helper.phase_tracking_status_class("未完成"))
+    end
+  end
+
+  # 迴歸測試：使用者看到一整排「未完成」卡片的「預計完成」日期其實都已經過了今天，反應
+  # 「不應該用紅色加強已經逾期的概念嗎」。
+  describe "#phase_tracking_overdue?" do
+    around { |example| travel_to(Date.new(2026, 9, 19)) { example.run } }
+
+    it "is true for an unfinished status whose planned_completion_date has already passed" do
+      expect(helper.phase_tracking_overdue?("未完成", "2026-09-01")).to be true
+      expect(helper.phase_tracking_overdue?("延誤未完成", "2026-09-01")).to be true
+      expect(helper.phase_tracking_overdue?("進行中", "2026-09-01")).to be true
+    end
+
+    it "is false when the planned_completion_date is today or still in the future" do
+      expect(helper.phase_tracking_overdue?("未完成", "2026-09-19")).to be false
+      expect(helper.phase_tracking_overdue?("未完成", "2026-10-08")).to be false
+    end
+
+    it "is false once the stage is actually done, even if the date is in the past — it's not still overdue" do
+      expect(helper.phase_tracking_overdue?("完成", "2026-09-01")).to be false
+      expect(helper.phase_tracking_overdue?("延誤已完成", "2026-09-01")).to be false
+    end
+
+    it "is false for 暫緩 — deliberately paused, not something to flag as overdue" do
+      expect(helper.phase_tracking_overdue?("暫緩", "2026-09-01")).to be false
+    end
+
+    it "is false when there is no planned_completion_date to judge by" do
+      expect(helper.phase_tracking_overdue?("未完成", nil)).to be false
+    end
+  end
+
+  # 迴歸測試：使用者反應甘特圖側欄標籤讓瀏覽器對「LXPMS - v2.0 調整（5005）」整串自動換行，
+  # 容易斷在名稱／ID 中間難以辨識，要求固定拆成「專案代碼 - ID」／「議題名稱」兩行。
+  describe "#phase_gantt_chart_label_lines" do
+    it "puts the project code and issue id on the first line, the issue name on the second" do
+      card = { project: "LXPMS", issue_id: "5005", issue_name: "v2.0 調整" }
+
+      expect(helper.phase_gantt_chart_label_lines(card)).to eq([ "LXPMS - 5005", "v2.0 調整" ])
+    end
+
+    it "returns a single line when there is no issue_name" do
+      card = { project: "LXPMS", issue_id: "5005", issue_name: nil }
+
+      expect(helper.phase_gantt_chart_label_lines(card)).to eq([ "LXPMS - 5005" ])
+    end
+  end
+
   describe "#parse_date_only" do
     it "parses a strict YYYY-MM-DD string" do
       expect(helper.parse_date_only("2026-08-20")).to eq(Date.new(2026, 8, 20))
@@ -183,9 +251,11 @@ RSpec.describe ProjectPhaseTrackingHelper, type: :helper do
     end
 
     describe "#phase_gantt_chart_actual_segment" do
-      it "returns nil when the stage has no primary record, or has no actual_date yet (nothing 'actual' to draw)" do
-        expect(helper.phase_gantt_chart_actual_segment([ stage(primary: false) ], 0, domain, width)).to be_nil
-        expect(helper.phase_gantt_chart_actual_segment([ stage(planned_date: "2026-01-01", actual_date: nil) ], 0, domain, width)).to be_nil
+      # current_stage_name 傳 nil（或不相符的名稱）＝這個階段不是「目前階段」，維持修正前的
+      # 既有行為；下面另有專門測試「未完成不代表沒有進度條」新增的 in_progress 情境。
+      it "returns nil when the stage has no primary record, or has no actual_date and isn't the current stage" do
+        expect(helper.phase_gantt_chart_actual_segment([ stage(primary: false) ], 0, domain, width, nil)).to be_nil
+        expect(helper.phase_gantt_chart_actual_segment([ stage(planned_date: "2026-01-01", actual_date: nil) ], 0, domain, width, nil)).to be_nil
       end
 
       it "spans from the previous stage's own actual_date to this stage's actual_date, marked :delayed when genuinely late" do
@@ -194,7 +264,7 @@ RSpec.describe ProjectPhaseTrackingHelper, type: :helper do
           stage(planned_date: "2026-03-10", actual_date: "2026-03-20")
         ]
 
-        segment = helper.phase_gantt_chart_actual_segment(stages, 1, domain, width)
+        segment = helper.phase_gantt_chart_actual_segment(stages, 1, domain, width, nil)
 
         expect(segment[:variant]).to eq(:delayed)
         expect(segment[:diff_days]).to eq(10)
@@ -210,7 +280,7 @@ RSpec.describe ProjectPhaseTrackingHelper, type: :helper do
           stage(planned_date: "2026-03-10", actual_date: "2026-03-01")
         ]
 
-        segment = helper.phase_gantt_chart_actual_segment(stages, 1, domain, width)
+        segment = helper.phase_gantt_chart_actual_segment(stages, 1, domain, width, nil)
 
         expect(segment[:variant]).to eq(:early)
         expect(segment[:diff_days]).to eq(-9)
@@ -224,7 +294,7 @@ RSpec.describe ProjectPhaseTrackingHelper, type: :helper do
           stage(planned_date: "2026-03-10", actual_date: "2026-03-10")
         ]
 
-        segment = helper.phase_gantt_chart_actual_segment(stages, 1, domain, width)
+        segment = helper.phase_gantt_chart_actual_segment(stages, 1, domain, width, nil)
 
         expect(segment[:variant]).to eq(:early)
         expect(segment[:diff_days]).to eq(0)
@@ -237,7 +307,7 @@ RSpec.describe ProjectPhaseTrackingHelper, type: :helper do
           stage(planned_date: "2026-03-10", actual_date: "2026-03-10")
         ]
 
-        segment = helper.phase_gantt_chart_actual_segment(stages, 2, domain, width)
+        segment = helper.phase_gantt_chart_actual_segment(stages, 2, domain, width, nil)
 
         x1 = helper.phase_gantt_chart_x(Date.new(2026, 1, 20), domain, width)
         expect(segment[:x]).to eq(x1.round(2))
@@ -245,7 +315,7 @@ RSpec.describe ProjectPhaseTrackingHelper, type: :helper do
 
       it "falls back to its own actual_date (zero-width, clamped) when it's the first stage with actual data" do
         segment = helper.phase_gantt_chart_actual_segment(
-          [ stage(planned_date: "2026-03-10", actual_date: "2026-03-10") ], 0, domain, width
+          [ stage(planned_date: "2026-03-10", actual_date: "2026-03-10") ], 0, domain, width, nil
         )
 
         x1 = helper.phase_gantt_chart_x(Date.new(2026, 3, 10), domain, width)
@@ -261,9 +331,51 @@ RSpec.describe ProjectPhaseTrackingHelper, type: :helper do
           stage(planned_date: "2026-01-01", actual_date: "2026-01-01")
         ]
 
-        segment = helper.phase_gantt_chart_actual_segment(stages, 1, narrow_domain, narrow_width)
+        segment = helper.phase_gantt_chart_actual_segment(stages, 1, narrow_domain, narrow_width, nil)
 
         expect(segment[:width]).to be >= ProjectPhaseTrackingHelper::GANTT_MIN_SEGMENT_WIDTH
+      end
+
+      # 迴歸測試：使用者反應「未完成不代表沒有進度條」——這個階段還沒有 actual_date，但它是
+      # 議題「目前階段」（current_stage_name 相符），代表真的在做，不該完全不畫。
+      describe "the current, not-yet-completed stage" do
+        around { |example| travel_to(Date.new(2026, 9, 19)) { example.run } }
+
+        it "draws a segment extending to today (not to the future planned_date) when still within its deadline" do
+          # 前一階段有明確的 actual_date（銜接點），跟「今日」隔了好幾個月，確保量到的終點
+          # 不是被 GANTT_MIN_SEGMENT_WIDTH 的最小寬度撐開，而是真的落在 Date.current。
+          stages = [
+            stage(planned_date: "2026-05-01", actual_date: "2026-06-01"),
+            stage(planned_date: "2026-10-08", actual_date: nil)
+          ]
+
+          segment = helper.phase_gantt_chart_actual_segment(stages, 1, domain, width, "x")
+
+          expect(segment).not_to be_nil
+          expect(segment[:variant]).to eq(:in_progress)
+          expect(segment[:diff_days]).to be_nil
+          x2 = helper.phase_gantt_chart_x(Date.current, domain, width)
+          expect(segment[:x] + segment[:width]).to eq(x2.round(2))
+        end
+
+        it "marks :delayed (not :in_progress) once today has passed the planned_date, even though still unfinished" do
+          stages = [ stage(planned_date: "2026-09-08", actual_date: nil) ]
+
+          segment = helper.phase_gantt_chart_actual_segment(stages, 0, domain, width, "x")
+
+          expect(segment[:variant]).to eq(:delayed)
+        end
+
+        it "still returns nil for a not-yet-completed stage that is NOT the current stage — a later stage having a pre-scheduled record doesn't mean work has started on it" do
+          stages = [
+            stage(planned_date: "2026-01-01", actual_date: "2026-01-01"),
+            stage(planned_date: "2026-10-08", actual_date: nil) # 有記錄但還沒開始，不是目前階段
+          ]
+
+          segment = helper.phase_gantt_chart_actual_segment(stages, 1, domain, width, "開發")
+
+          expect(segment).to be_nil
+        end
       end
     end
   end

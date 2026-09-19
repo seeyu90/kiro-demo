@@ -49,6 +49,12 @@ Google Sheets 資料。不修改 305/306/307 既有檔案，燃盡圖直接重�
     - _需求：2.1, 2.2_
 
 - [x] 4. Sheets::FetchProjectHistory — 縱向歷程彙總
+  - **後續移除**：本任務實作的縱向歷程彙總（花費工時趨勢、理想／實際剩餘人時燃盡、測試問題趨勢、
+    客訴議題狀態）已於 af05e11（2026/08/18，「專案歷程甘特圖改用307真實開發區間，總覽改卡片式並
+    支援年度篩選」）整個移除，改為橫向總覽卡片展開直接檢視議題明細；`issue_weekly_spent`／
+    `aggregate_work_hours`／`ideal_hours_at`／`aggregate_ideal_series`／`aggregate_actual_series`／
+    `weekly_testing_counts`／`complaint_status` 等方法目前皆不存在於 `fetch_project_history.rb`。
+    詳見 requirements.md 需求 4／5 的設計變更紀錄。以下勾選狀態為移除前的實作紀錄，予以保留。
   - [x] 4.1 `issue_weekly_spent` + `aggregate_work_hours`（依 actual_series 差值反推花費工時）
     - _需求：4.2_
   - [x] 4.2 `ideal_hours_at` + `aggregate_ideal_series`（逐日期即時計算再加總，不可直接加總各議題
@@ -85,6 +91,10 @@ Google Sheets 資料。不修改 305/306/307 既有檔案，燃盡圖直接重�
     - _需求：3.1, 3.2_
 
 - [x] 8. View — 縱向歷程
+  - **後續移除**：本任務實作的縱向歷程 view（花費工時趨勢圖、燃盡圖、測試問題趨勢圖、客訴議題狀態
+    區塊）已於 af05e11（2026/08/18，同任務 4 附註）一併整個移除，`_detail.html.erb`／
+    `_simple_trend_chart.html.erb` 已刪除，目前 `ProjectHistory_Page` 無 `project` 參數路徑。
+    詳見 requirements.md 需求 4／5 的設計變更紀錄。以下勾選狀態為移除前的實作紀錄，予以保留。
   - [x] 8.1 花費工時趨勢：重用 `IssuesHelper.trend_chart_*`
     - **實作變更**：未各自新增 `_work_hours_trend.html.erb`／`_testing_trend.html.erb` 兩份幾乎
       相同的樣板，改為單一共用的 `_simple_trend_chart.html.erb`（locals: `records`／`empty_text`／

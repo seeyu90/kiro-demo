@@ -13,7 +13,7 @@
   <% elsif @phase_items.empty? %>
     <p class="empty-state">目前無逾期或本週／下週到期的階段項目。</p>
   <% else %>
-    <table class="project-tasks">
+    <table class="project-tasks auto-width-tasks pm-weekly-phase-tasks">
       <thead>
         <tr>
           <th scope="col">專案代碼</th>
@@ -30,26 +30,26 @@
         <% @phase_items.each do |item| %>
           <%= tag.tr(class: ("row-overdue" if item[:bucket] == :overdue)) do %>
             <td><%= item[:project].presence || "—" %></td>
-            <td>
+            <td data-label="議題">
               <%= item[:issue_id].presence || "—" %>
               <% if item[:issue_name].present? %>
                 <br>
                 <span class="issue-project-sub"><%= item[:issue_name] %></span>
               <% end %>
             </td>
-            <td><%= item[:customer].presence || "—" %></td>
-            <td><%= item[:pm].presence || "—" %></td>
-            <td><%= item[:stage].presence || "—" %></td>
-            <td>
+            <td data-label="客戶"><%= item[:customer].presence || "—" %></td>
+            <td data-label="PM"><%= item[:pm].presence || "—" %></td>
+            <td data-label="目前階段"><%= item[:stage].presence || "—" %></td>
+            <td data-label="狀態">
               <span class="tag <%= phase_tracking_status_class(item[:status]) %>"><%= item[:status] %></span>
             </td>
-            <td>
+            <td data-label="階段預計日期">
               <%= pm_weekly_date_label(item[:planned_date]) %>
               <% if item[:bucket] == :overdue %>
                 <span class="overdue-tag">逾期</span>
               <% end %>
             </td>
-            <td><%= item[:reason].presence || "—" %></td>
+            <td data-label="原因"><%= item[:reason].presence || "—" %></td>
           <% end %>
         <% end %>
       </tbody>

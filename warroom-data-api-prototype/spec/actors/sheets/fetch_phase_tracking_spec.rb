@@ -121,6 +121,74 @@ RSpec.describe Sheets::FetchPhaseTracking do
       expect(described_class.result.cards.first[:status]).to eq("延誤未完成")
     end
 
+    # 迴歸測試：使用者反應卡片摘要列的「預計完成」日期看不出是哪個階段的日期。status／
+    # current_stage_name／planned_completion_date 三者都必須來自同一個「目前階段」，不能各自
+    # 用不同規則挑出不同階段。
+    it "derives current_stage_name and planned_completion_date from the same stage status is derived from" do
+      rows = [
+        record_row(project: "HRM", issue_id: "4656", stage: "開案", planned: "2026-01-01", actual: "2026-01-01", status: "完成"),
+        record_row(project: "HRM", issue_id: "4656", stage: "開發", planned: "2026-01-10", actual: nil, status: "延誤未完成")
+      ]
+      allow(PhaseRecordsSheetsClient).to receive(:fetch_rows).and_return(rows)
+
+      card = described_class.result.cards.first
+
+      expect(card[:current_stage_name]).to eq("開發")
+      expect(card[:planned_completion_date]).to eq("2026-01-10")
+    end
+
+    # code review 發現的行為變化：改用 current_stage 之前，「發布」沒有主要記錄時的
+    # planned_completion_date 是「所有已有記錄的階段裡最晚的 planned_date」（.max，字串比較），
+    # 不是「目前階段」自己的日期——兩者在階段重新排程、較後面的階段反而排到較早日期時會不同。
+    # 這裡明確釘住新行為：即使「開案」的 planned_date 比「目前階段」（開發）晚，也是取「開發」
+    # 自己的日期，不是全部階段裡最晚的那個。這個欄位同時是 ProjectPhaseTrackingController#
+    # sort_by_planned_completion 的排序鍵，此行為變化會影響清單排序，是刻意的設計決定
+    # （見 fetch_phase_tracking.rb #current_stage 的附註），不是這個測試想額外驗證的排序邏輯
+    # 本身，只釘住這個 Actor 自己輸出的值。
+    it "uses the current stage's own planned_date, not the max across all recorded stages, when 發布 has no record" do
+      rows = [
+        record_row(project: "HRM", issue_id: "4656", stage: "開案", planned: "2026-05-01", actual: "2026-05-01", status: "完成"),
+        record_row(project: "HRM", issue_id: "4656", stage: "開發", planned: "2026-01-01", actual: nil, status: "未完成")
+      ]
+      allow(PhaseRecordsSheetsClient).to receive(:fetch_rows).and_return(rows)
+
+      card = described_class.result.cards.first
+
+      expect(card[:current_stage_name]).to eq("開發")
+      expect(card[:planned_completion_date]).to eq("2026-01-01")
+    end
+
+    # 迴歸測試：使用者用真實資料回報的案例（RAG 202608B／issue 5188）——「測試」還在進行中
+    # （有主要記錄、無 actual_date），但「發布」已經預先排定了目標日期（同樣有主要記錄、也還
+    # 沒有 actual_date）。修正前的規則（陣列由後往前第一個有記錄的階段）會誤判成目前在
+    # 「發布」，明明真正在動的是「測試」。
+    it "picks the earliest not-yet-completed stage as current, not a later stage that only has a pre-scheduled placeholder record" do
+      rows = [
+        record_row(project: "RAG", issue_id: "5188", stage: "開案", planned: "2026-08-24", actual: "2026-08-24", status: "完成"),
+        record_row(project: "RAG", issue_id: "5188", stage: "測試", planned: "2026-09-14", actual: nil, status: "未完成"),
+        record_row(project: "RAG", issue_id: "5188", stage: "發布", planned: "2026-09-16", actual: nil, status: "未完成")
+      ]
+      allow(PhaseRecordsSheetsClient).to receive(:fetch_rows).and_return(rows)
+
+      card = described_class.result.cards.first
+
+      expect(card[:current_stage_name]).to eq("測試")
+      expect(card[:planned_completion_date]).to eq("2026-09-14")
+      expect(card[:status]).to eq("未完成")
+    end
+
+    it "falls back to the last recorded stage (by STAGE_ORDER position) when every recorded stage is already complete" do
+      rows = [
+        record_row(project: "HRM", issue_id: "9", stage: "開案", planned: "2026-01-01", actual: "2026-01-01", status: "完成"),
+        record_row(project: "HRM", issue_id: "9", stage: "發布", planned: "2026-02-01", actual: "2026-02-01", status: "完成")
+      ]
+      allow(PhaseRecordsSheetsClient).to receive(:fetch_rows).and_return(rows)
+
+      card = described_class.result.cards.first
+
+      expect(card[:current_stage_name]).to eq("發布")
+    end
+
     it "orders a stage's history newest-superseded-first, oldest last" do
       rows = [
         record_row(project: "HRM", issue_id: "4656", stage: "開案", planned: "2026-01-01", actual: "2026-01-01", reason: "第一次"),
