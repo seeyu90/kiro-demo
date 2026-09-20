@@ -24,7 +24,7 @@ RSpec.describe ProjectHistoryHelper, type: :helper do
   describe "#gantt_chart_month_ticks" do
     # 迴歸測試：使用者截圖回報「三月疊到標題」——min_date 是 3/15（不是當月 1 號）時，第一個
     # 月份刻度（3/1）早於 min_date，算出來的 x 座標會小於 GANTT_PADDING_LEFT，沒 clamp 的話
-    # 格線／標籤會畫進專案列標籤欄，蓋住專案名稱文字。
+    # 格線／標籤會畫到 SVG 繪圖區左邊界以外。
     it "clamps the first tick to GANTT_PADDING_LEFT when min_date falls mid-month" do
       min = Date.new(2026, 3, 15)
       max = Date.new(2026, 8, 1)

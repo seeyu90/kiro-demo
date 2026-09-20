@@ -34,20 +34,23 @@ RSpec.describe Summary::BuildExecutiveSummary do
   end
 
   describe "#build_phase_exceptions" do
+    # current_stage_name／planned_completion_date 是 Sheets::FetchPhaseTracking#current_stage
+    # 已經算好的「目前階段」與其 planned_date（build_phase_exceptions 直接讀這兩個欄位，不再
+    # 自己從 :stages 重新推導一次同樣的邏輯，見 build_executive_summary.rb 附註）。
     let(:cards) do
       [
         { project: "HRM", issue_id: "1", issue_name: "請假模組", customer: "AMAS", pm: "楊欣翰", status: "延誤未完成",
-          stages: [ { stage: "開發", primary: { status: "延誤未完成", planned_date: "2026-08-01" }, history: [] } ] },
+          current_stage_name: "開發", planned_completion_date: "2026-08-01" },
         { project: "HRM", issue_id: "2", issue_name: "報表模組", customer: "AMAS", pm: "楊欣翰", status: "暫緩",
-          stages: [ { stage: "開案", primary: { status: "暫緩", planned_date: "2026-08-01" }, history: [] } ] },
+          current_stage_name: "開案", planned_completion_date: "2026-08-01" },
         { project: "HRM", issue_id: "3", issue_name: "已完成模組", customer: "AMAS", pm: "楊欣翰", status: "完成",
-          stages: [ { stage: "發布", primary: { status: "完成", planned_date: "2026-08-01" }, history: [] } ] },
+          current_stage_name: "發布", planned_completion_date: "2026-08-01" },
         { project: "HRM", issue_id: "4", issue_name: "曾延誤但已完成", customer: "AMAS", pm: "楊欣翰", status: "延誤已完成",
-          stages: [ { stage: "發布", primary: { status: "延誤已完成", planned_date: "2026-08-01" }, history: [] } ] },
+          current_stage_name: "發布", planned_completion_date: "2026-08-01" },
         { project: "HRM", issue_id: "5", issue_name: "很久以前的未完成項目", customer: "AMAS", pm: "楊欣翰", status: "未完成",
-          stages: [ { stage: "開發", primary: { status: "未完成", planned_date: "2020-01-01" }, history: [] } ] },
+          current_stage_name: "開發", planned_completion_date: "2020-01-01" },
         { project: "HRM", issue_id: "6", issue_name: "沒有日期的未完成項目", customer: "AMAS", pm: "楊欣翰", status: "未完成",
-          stages: [ { stage: "開發", primary: { status: "未完成", planned_date: nil }, history: [] } ] }
+          current_stage_name: "開發", planned_completion_date: nil }
       ]
     end
 

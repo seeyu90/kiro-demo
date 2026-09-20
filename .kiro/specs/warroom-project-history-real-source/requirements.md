@@ -15,9 +15,10 @@
 `project-standards.md`「技術限制」「響應式設計」段落約束；遵守 `rails-standards.md` 分層慣例與統一
 錯誤格式。
 
-**範圍**：讀取 300_員工專案試算表取得客戶／PM；彙總 305 任務資料為橫向總覽（清單＋甘特圖，可依狀態
-／客戶／PM 篩選）；彙總 307 燃盡議題資料為單一專案的花費工時趨勢與理想／實際剩餘人時燃盡圖；彙總
-306 議題資料為單一專案的測試問題趨勢與客訴議題解決狀態。
+**範圍**：讀取 300_員工專案試算表取得客戶／PM；彙總 305 任務資料為橫向總覽（清單＋甘特圖，可依客戶
+／PM 篩選——需求 2.2、2.3 原本另有「狀態」篩選，已移除，見需求 2 的設計變更紀錄）；彙總 307 燃盡
+議題資料為單一專案的花費工時趨勢與理想／實際剩餘人時燃盡圖；彙總 306 議題資料為單一專案的測試問題
+趨勢與客訴議題解決狀態。
 
 **不納入範圍**：JSON API endpoint（比照 307，先做 HTML 頁面）；修改 305/306/307 既有 Client／Actor／
 Controller／View／`docs/` 靜態頁；資料庫或任何持久化；`300_員工專案`「工程師負載表」分頁的呈現。
@@ -91,8 +92,8 @@ Controller／View／`docs/` 靜態頁；資料庫或任何持久化；`300_員�
 
 ### 需求 2：橫向總覽 — 篩選與清單
 
-**使用者故事：** 身為戰情室使用者，我希望在 `/project_history` 能依狀態、客戶、PM 篩選多專案清單，
-並看到每個專案的預計／實際完成日期。
+**使用者故事：** 身為戰情室使用者，我希望在 `/project_history` 能依客戶、PM 篩選多專案清單，並看到
+每個專案的預計／實際完成日期。
 
 #### 驗收標準
 
@@ -100,15 +101,25 @@ Controller／View／`docs/` 靜態頁；資料庫或任何持久化；`300_員�
    以 305 `Sheets::FetchProjectProgress` 的 `grouped_data`（全量、未受任何篩選條件過濾的任務資料）
    依專案彙總「預計完成日期」（該專案任務中最晚的 `planned_completion_date`）與「實際完成日期」
    （該專案任務中最晚的 `actual_completion_date`；任一任務尚無實際完成日期時顯示「進行中」）。
-2. THE **ProjectHistory_Page** SHALL 將 **ProjectRoster_Actor** 的客戶／PM／狀態資料，依 Roster 的
+2. THE **ProjectHistory_Page** SHALL 將 **ProjectRoster_Actor** 的客戶／PM 資料，依 Roster 的
    「專案」全名或「專案縮寫」（任一比對成功即算，見詞彙表「join（305↔Roster）」）對應到 305 專案
-   名稱後合併顯示；IF 305 專案名稱在 Roster 中兩欄皆找不到對應列，THEN 客戶／PM／狀態欄位顯示
+   名稱後合併顯示；IF 305 專案名稱在 Roster 中兩欄皆找不到對應列，THEN 客戶／PM 欄位顯示
    `—`，不視為錯誤、不中斷其餘專案的顯示。
-3. THE **ProjectHistory_Page** SHALL 提供依「狀態」（Roster 的「狀態」欄位值）、「客戶」、「PM」三個
-   下拉選單篩選，各自預設「全部」；WHEN 使用者同時選取多個條件，THE **ProjectHistory_Page** SHALL
-   只顯示同時符合已選條件（交集）的專案。
+3. THE **ProjectHistory_Page** SHALL 提供依「客戶」、「PM」兩個下拉選單篩選，各自預設「全部」；
+   WHEN 使用者同時選取多個條件，THE **ProjectHistory_Page** SHALL 只顯示同時符合已選條件（交集）
+   的專案。
 4. WHEN 篩選後無符合條件的專案，THE **ProjectHistory_Page** SHALL 顯示「目前無符合條件的專案」，
    不留白。
+
+> **設計變更紀錄**：需求 2.2、2.3 原本各自包含「狀態」（Roster 的「狀態」欄位）：卡片標籤顯示、
+> 篩選下拉選單依此篩選。2026/09/18 對照真實資料稽核發現：Roster 29 筆專案裡有 20 筆狀態值是
+> 「維護」、其餘 9 筆是空白，**沒有任何一筆是別的值**，這個欄位在目前資料下完全沒有區分度，篩選
+> 選單等於只有「全部」跟「維護」兩個選項可選、卡片標籤永遠顯示「維護」或「—」，對使用者沒有實際
+> 篩選/辨識用途。使用者確認後移除：卡片不再顯示狀態標籤，篩選列拿掉「狀態」下拉（僅剩年度／客戶／
+> 專案／PM，上面 2.2、2.3 的條文已同步改寫，不再提及狀態）。`Sheets::FetchProjectRoster` 本身的
+> `status` 解析不受影響（`executive_summary`／`pm_weekly_report` 等其他頁面仍使用同一個 Actor），
+> 只有 `Sheets::FetchProjectHistory` 自己組出的 `overview_rows` 不再帶出這個欄位。若日後 Roster
+> 的狀態值有更多變化，此決定可重新評估。
 
 ---
 
@@ -129,6 +140,17 @@ Controller／View／`docs/` 靜態頁；資料庫或任何持久化；`300_員�
 ### 需求 4：縱向歷程 — 花費工時與燃盡
 
 **使用者故事：** 身為戰情室使用者，我希望選定一個專案後，看到花費工時趨勢與人時燃盡圖。
+
+（**設計變更紀錄**：本需求描述的「選定專案後另開頁面顯示花費工時趨勢圖＋理想／實際剩餘人時燃盡圖」
+功能已於 af05e11（2026/08/18，「專案歷程甘特圖改用307真實開發區間，總覽改卡片式並支援年度篩選」）
+整個移除。原因：橫向總覽改為卡片式後，展開卡片（`_overview_list.html.erb` 的 `<details>`）已能
+直接看到該專案底下每個 307 議題的負責人／日期／狀態／進度／工時，加上卡片摘要列本身就有進度%、
+工時（消耗／預估）KPI，足以取代原本要另開頁才能看到的花費工時趨勢圖與燃盡圖，不需要再維護一個
+獨立的縱向歷程頁。現況：`ProjectHistory_Page`／`Sheets::FetchProjectHistory` 已不接受 `project`
+參數（`input` 只剩 `year`），`build_detail`、`issue_weekly_spent`、`aggregate_work_hours`、
+`ideal_hours_at`、`aggregate_ideal_series`、`aggregate_actual_series` 等方法與
+`_detail.html.erb`、`_simple_trend_chart.html.erb` 皆已刪除；以下驗收標準保留作為歷史紀錄，
+目前程式碼中沒有對應行為。）
 
 #### 驗收標準
 
@@ -161,6 +183,14 @@ Controller／View／`docs/` 靜態頁；資料庫或任何持久化；`300_員�
 
 **使用者故事：** 身為戰情室使用者，我希望看到所選專案的測試問題趨勢，以及客訴議題目前解決了幾個、
 還有哪些未解決。
+
+（**設計變更紀錄**：本需求描述的「選定專案後顯示 306 測試問題趨勢圖＋客訴議題解決狀態」功能已於
+af05e11（2026/08/18，同需求 4 附註）與需求 4 一併整個移除。原因：除了需求 4 附註提到的「卡片展開
+已能檢視議題明細」外，306 資料（`Sheets::FetchIssueDashboard`）在橫向總覽改版後從未被這頁實際
+使用過——目前 `Sheets::FetchProjectHistory` 完全沒有呼叫 `Sheets::FetchIssueDashboard`，卡片展開後
+看到的議題明細（`_overview_list.html.erb`）只來自 307 燃盡議題，不含 306 的測試問題／客訴分類。
+現況：無 `project` 參數路徑，`weekly_testing_counts`／`complaint_status` 方法與相關 view 皆已
+刪除；以下驗收標準保留作為歷史紀錄，目前程式碼中沒有對應行為。）
 
 #### 驗收標準
 

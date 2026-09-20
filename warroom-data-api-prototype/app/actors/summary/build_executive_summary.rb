@@ -202,8 +202,10 @@ module Summary
       cards.filter_map do |card|
         next unless NEEDS_ATTENTION_STATUSES.include?(card[:status])
 
-        current_stage = card[:stages].reverse.find { |s| s[:primary] }
-        planned_date = Sheets::FetchProjectProgress.parse_date(current_stage&.dig(:primary, :planned_date))
+        # card[:current_stage_name]／card[:planned_completion_date] 已經是
+        # Sheets::FetchPhaseTracking#current_stage 算好的「目前階段」與其 planned_date，
+        # 不在這裡重新用 card[:stages] 推導一次同樣的邏輯。
+        planned_date = Sheets::FetchProjectProgress.parse_date(card[:planned_completion_date])
         next if planned_date.nil? || planned_date < cutoff
 
         {
@@ -211,7 +213,7 @@ module Summary
           issue_label: card[:issue_name].presence || card[:issue_id],
           customer: card[:customer],
           pm: card[:pm],
-          stage: current_stage&.dig(:stage),
+          stage: card[:current_stage_name],
           status: card[:status]
         }
       end

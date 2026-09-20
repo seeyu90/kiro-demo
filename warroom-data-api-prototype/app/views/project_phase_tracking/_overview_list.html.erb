@@ -7,12 +7,13 @@
           <span class="tag"><%= card[:customer] || "—" %></span>
           <span class="tag"><%= card[:pm] || "—" %></span>
           <span class="tag <%= phase_tracking_status_class(card[:status]) %>"><%= card[:status] || "—" %></span>
-          <span class="tag">預計完成：<%= card[:planned_completion_date] || "—" %></span>
+          <span class="tag tag-stage <%= phase_gantt_chart_stage_class(card[:current_stage_name]) if card[:current_stage_name] %>"><%= card[:current_stage_name] || "—" %></span>
+          <span class="tag <%= "tag-status-delayed" if phase_tracking_overdue?(card[:status], card[:planned_completion_date]) %>">預計完成：<%= card[:planned_completion_date] || "—" %></span>
         </span>
       </summary>
 
       <div class="project-card-body">
-        <table class="project-tasks">
+        <table class="project-tasks phase-tracking-tasks">
           <thead>
             <tr>
               <th scope="col">階段</th>

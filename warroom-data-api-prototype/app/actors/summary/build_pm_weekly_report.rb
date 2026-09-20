@@ -204,10 +204,15 @@ module Summary
       end.sort_by { |item| [ PHASE_BUCKET_ORDER.fetch(item[:bucket]), item[:planned_date], item[:issue_id].to_s ] }
     end
 
-    # 「目前階段」＝ STAGE_ORDER 由後往前第一個有主要紀錄的階段，與
-    # Sheets::FetchPhaseTracking#current_issue_status 同一個定義，不另外發明一套。
+    # 「目前階段」＝有排定記錄、但還沒有 actual_date 的最前面一個階段；全部有記錄的階段都已
+    # 完成時才退回由後往前第一個有記錄的階段。與 Sheets::FetchPhaseTracking#current_stage
+    # 同一個定義（見該檔案附註，含真實案例說明為什麼不能只挑「陣列由後往前第一個有記錄的」），
+    # 不另外發明一套，兩處要保持同步。這裡仍需要自己一份（不能直接讀
+    # card[:current_stage_name]／card[:planned_completion_date]），因為下面還要用到
+    # stage[:primary][:reason]，這個欄位沒有被 PhaseTrackingCardBlueprint 往外暴露。
     def current_stage(card)
-      card[:stages].reverse.find { |stage| stage[:primary] }
+      card[:stages].find { |stage| stage[:primary] && stage[:primary][:actual_date].blank? } ||
+        card[:stages].reverse.find { |stage| stage[:primary] }
     end
 
     # ── 共用小工具 ──────────────────────────────────────────────

@@ -168,6 +168,113 @@ RSpec.describe Sheets::FetchProjectHistory do
     end
   end
 
+  # 稽核記錄：EW P2E／AMAS AIoT Platform 兩個 Roster 列的「307對應專案」欄曾經填成完全相同的
+  # 字串，導致同一筆 307 議題被兩個專案同時比對到、工時被重複計入多張卡片。程式不代為判斷哪個
+  # 專案才該擁有這筆議題（同 issue_id=4637 標題不一致的處理原則），只記錄警告讓問題可被發現。
+  #
+  # 直接吃 build_overview_rows 迴圈裡已經跑過的 matched_burndown_issues 結果（{project_name =>
+  # [issue, ...]}），不重新用 burndown_names_raw 字串各自獨立推導一次子字串比對——這樣「重複」
+  # 的定義是「同一個 issue_id 真的同時出現在兩個專案各自的比對結果裡」，不會因為兩個 Roster 列
+  # 的 burndown_names_raw 字串本身有子字串重疊（例如 "AG" 剛好是 "AGENCY 帳務" 的子字串）就
+  # 誤報兩個完全無關的專案「疑似重複」，也不會把「Roster 有這個對應但根本沒有 305 進度資料、
+  # 從未顯示成卡片」的專案算進來。
+  describe "#warn_on_ambiguous_burndown_mappings" do
+    it "logs one aggregated warning when a 307 issue is matched into more than one project's task list" do
+      matched_by_project = {
+        "EW P2E" => [ { issue_id: "5054", issue_title: "專案優化" } ],
+        "AMAS AIoT Platform" => [ { issue_id: "5054", issue_title: "專案優化" } ]
+      }
+
+      expect(Rails.logger).to receive(:warn)
+        .with(a_string_including("EW P2E", "AMAS AIoT Platform", "5054"))
+
+      actor.send(:warn_on_ambiguous_burndown_mappings, matched_by_project)
+    end
+
+    # 同一組專案若同時有好幾筆議題重複，彙整成一行警告，不逐筆各噴一行 log。
+    it "collapses multiple ambiguous issues shared by the same pair of projects into a single warning" do
+      matched_by_project = {
+        "EW P2E" => [ { issue_id: "1", issue_title: "a" }, { issue_id: "2", issue_title: "b" } ],
+        "AMAS AIoT Platform" => [ { issue_id: "1", issue_title: "a" }, { issue_id: "2", issue_title: "b" } ]
+      }
+
+      expect(Rails.logger).to receive(:warn).once.with(a_string_including("2 筆", "1", "2"))
+
+      actor.send(:warn_on_ambiguous_burndown_mappings, matched_by_project)
+    end
+
+    it "does not warn when each project's matched issues are disjoint" do
+      matched_by_project = {
+        "亞炬 Platform" => [ { issue_id: "1", issue_title: "x" } ],
+        "RAG" => [ { issue_id: "2", issue_title: "y" } ]
+      }
+
+      expect(Rails.logger).not_to receive(:warn)
+
+      actor.send(:warn_on_ambiguous_burndown_mappings, matched_by_project)
+    end
+
+    it "does not warn when only one project has any matched issues" do
+      matched_by_project = {
+        "亞炬 Platform" => [ { issue_id: "1", issue_title: "x" } ],
+        "HRM" => []
+      }
+
+      expect(Rails.logger).not_to receive(:warn)
+
+      actor.send(:warn_on_ambiguous_burndown_mappings, matched_by_project)
+    end
+  end
+
+  describe "#build_overview_rows ambiguous-mapping detection" do
+    # 修正前的版本會拿全部 Roster 列（不管有沒有 305 進度資料、會不會顯示成卡片）去互相比對，
+    # 導致一個從未顯示在畫面上的專案，也可能因為 burndown_names_raw 字串重疊而觸發「疑似重複」
+    # 警告。現在只用真的會建成卡片（存在於 progress_grouped 裡）的專案去比對。
+    it "does not warn about a roster row that never becomes a displayed card" do
+      roster = [
+        { project_name: "現行專案", burndown_names_raw: "RAG" },
+        { project_name: "已下架專案（無305資料）", burndown_names_raw: "RAG" }
+      ]
+      grouped = { "現行專案" => [ { planned_completion_date: "2026-07-01", actual_completion_date: "2026-07-02", status: "完成" } ] }
+      burndown_issues = [ { project: "RAG", issue_id: "1", issue_title: "x", status: "in_progress", actual_series: [] } ]
+
+      expect(Rails.logger).not_to receive(:warn)
+
+      actor.send(:build_overview_rows, roster, grouped, burndown_issues, nil, true)
+    end
+
+    # 迴歸測試：修正前 matched_by_project 記錄的是年度篩選前的 matched（不是 matched_in_year），
+    # 且在「這個專案因年度篩選被排除、不會產生任何一列」的 next 判斷之前就先記錄了——導致選了
+    # 年度篩選時，一個因為篩選而完全不會顯示在畫面上的專案，仍可能因為它「篩選前」比對到的議題
+    # 跟另一個真的有顯示的專案重疊，觸發一則不該出現的告警，跟上面「只看真的會顯示在畫面上的
+    # 專案」的說明字面不一致。
+    it "does not count a year-excluded project's out-of-year matched issue toward the ambiguity check" do
+      roster = [
+        { project_name: "現行專案", burndown_names_raw: "Foo Bar" },
+        { project_name: "另一個專案", burndown_names_raw: "Bar" }
+      ]
+      grouped = {
+        "現行專案" => [ { planned_completion_date: "2026-07-01", actual_completion_date: "2026-07-02", status: "完成" } ],
+        "另一個專案" => [ { planned_completion_date: "2025-07-01", actual_completion_date: "2025-07-02", status: "完成" } ]
+      }
+      # issue_a（project: Foo）只有「現行專案」比對到，開案於 2026；issue_b（project: Bar）
+      # 兩個專案都比對到（現行專案的 burndown_names_raw 含 "Bar"），但開案於 2025——選 2026 年度
+      # 篩選時，「另一個專案」唯一比對到的議題就是這筆 2025 年的 issue_b，整個專案會被年度篩選
+      # 排除、不會產生任何一列；「現行專案」則因為還比對到 2026 年的 issue_a 而留著，但顯示的
+      # 議題清單（matched_in_year）只有 issue_a，不含 issue_b。
+      burndown_issues = [
+        { project: "Foo", issue_id: "a", issue_title: "x", status: "in_progress", start_date: "2026-05-01", actual_series: [] },
+        { project: "Bar", issue_id: "b", issue_title: "y", status: "in_progress", start_date: "2025-05-01", actual_series: [] }
+      ]
+
+      expect(Rails.logger).not_to receive(:warn)
+
+      rows = actor.send(:build_overview_rows, roster, grouped, burndown_issues, "2026", true)
+
+      expect(rows.map { |r| r[:project_name] }).to eq([ "現行專案" ])
+    end
+  end
+
   describe "#call" do
     let(:roster_result) { double("Result", success?: true, roster: []) }
     let(:progress_result) { double("Result", success?: true, grouped_data: {}) }

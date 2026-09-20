@@ -20,8 +20,13 @@
           開始畫（上面留給月份格線），標籤欄若從 y=0 排列會整體偏高，跟色塊對不上。 %>
       <div class="gantt-labels" style="width: <%= ProjectPhaseTrackingHelper::GANTT_LABEL_WIDTH %>px; height: <%= height %>px; padding-top: <%= ProjectPhaseTrackingHelper::GANTT_PADDING_TOP %>px; box-sizing: border-box;">
         <% cards.each_with_index do |card, index| %>
-          <div class="gantt-label-row <%= "gantt-label-row-band" if index.odd? %>" style="height: <%= ProjectPhaseTrackingHelper::GANTT_ROW_HEIGHT %>px;" title="<%= card[:project] %> - <%= phase_tracking_issue_label(card) %>">
-            <span class="gantt-label-text"><%= card[:project] %> - <%= phase_tracking_issue_label(card) %></span>
+          <% label_lines = phase_gantt_chart_label_lines(card) %>
+          <div class="gantt-label-row <%= "gantt-label-row-band" if index.odd? %>" style="height: <%= ProjectPhaseTrackingHelper::GANTT_ROW_HEIGHT %>px;" title="<%= label_lines.join(" ") %>">
+            <span class="gantt-label-lines">
+              <% label_lines.each do |line| %>
+                <span class="gantt-label-line"><%= line %></span>
+              <% end %>
+            </span>
           </div>
         <% end %>
       </div>
@@ -67,11 +72,14 @@
               </rect>
             <% end %>
 
-            <% actual = phase_gantt_chart_actual_segment(card[:stages], stage_index, domain, width) %>
+            <% actual = phase_gantt_chart_actual_segment(card[:stages], stage_index, domain, width, card[:current_stage_name]) %>
             <% if actual %>
               <% diff_text = actual[:diff_days].nil? ? "" : "｜差異 #{actual[:diff_days] > 0 ? "+" : ""}#{actual[:diff_days]} 天" %>
+              <%# 還沒有 actual_date 時，tooltip 文字要跟色塊顏色（actual[:variant]）一致——
+                  紅色（:delayed，已逾期）不能顯示跟藍色（:in_progress）一樣的「進行中」字樣。 %>
+              <% actual_date_text = stage[:primary][:actual_date].presence || (actual[:variant] == :delayed ? "已逾期（尚未完成）" : "進行中（尚未完成）") %>
               <rect x="<%= actual[:x] %>" y="<%= actual_y %>" width="<%= actual[:width] %>" height="<%= ProjectPhaseTrackingHelper::GANTT_ACTUAL_BAR_HEIGHT %>" rx="2" class="gantt-task-actual-<%= actual[:variant] %>">
-                <title><%= stage[:stage] %>（實際）｜<%= stage[:primary][:actual_date] %><%= diff_text %></title>
+                <title><%= stage[:stage] %>（實際）｜<%= actual_date_text %><%= diff_text %></title>
               </rect>
             <% end %>
           <% end %>

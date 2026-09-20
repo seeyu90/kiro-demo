@@ -54,6 +54,8 @@
   --gantt-stage-development: #faf089;
   --gantt-stage-testing: #d6bcfa;
   --gantt-stage-release: #9decf9;
+  /* 疊在上面 5 種淺色系底色上的固定深色文字（.tag-stage），同樣刻意不隨主題切換。 */
+  --tag-stage-text: #1a202c;
 }
 
 /* ── 主題變數：深色（由 data-theme="dark" 啟用；屬性選擇器權重高於 :root，
@@ -698,15 +700,6 @@ turbo-frame[busy]::after {
    版面下，.issue-subject-truncate 的 overflow: hidden 疊加這個塌陷的欄寬，甚至讓欄寬直接變成
    0px、主旨完全看不見（CSS Grid／Flex 子項目 overflow 非 visible 時，自動最小寬度規格上是
    0，不是內容實際寬度）。兩張表都改回瀏覽器依內容自動配欄寬，並允許換行。 */
-.issue-tasks {
-  table-layout: auto;
-}
-
-.issue-tasks th:nth-child(n),
-.issue-tasks td:nth-child(n) {
-  width: auto;
-}
-
 /* 上面把每一欄都設成 white-space: normal（可換行）時，瀏覽器的自動配寬演算法會平均看待
    所有欄位，「負責人」「時程與天數」「花費時間」這些原本一行就放得下的短欄位反而被主旨
    這種長文字欄擠壓到只剩兩三個字寬，短欄位標題「負責人」「花費時間」因此被迫斷成兩行
@@ -729,6 +722,70 @@ turbo-frame[busy]::after {
   white-space: normal;
   text-overflow: clip;
 }
+
+/* 306 頁的議題明細／依專案分類、專案歷程頁的任務表格、專案階段追蹤／PM 週報／跨來源週報的
+   表格，欄位順序都跟 305 儀表板不同，卻共用了 .project-tasks 依欄位「位置」寫死的欄寬（例如
+   nth-child(2) 是給 305「類型」用的 5rem），套到別的欄位順序上就會對錯欄——.issue-tasks 先
+   踩過一次，.project-history-tasks（議題／負責人／開案日期／預計完成日期／狀態／進度／工時，
+   「負責人」欄多人 join 出來的字串常超過 80px，稽核截圖為證）又踩了第二次，稽核時發現同一個
+   坑其實還沒被回報地存在於另外 3 個頁面的表格裡，一併修正。共同的修法（改回瀏覽器自動配寬）
+   抽成 .auto-width-tasks，各表格額外疊加這個 class；各表格欄數與欄位語意彼此不同，「哪一欄
+   該允許換行」不共用單一 nth-child 位置，各自用專屬 class（.project-history-tasks／
+   .pm-weekly-phase-tasks／.phase-exceptions-tasks）精準覆寫，避免像 .issue-tasks 當初直接
+   放開全部欄位換行、反而把短欄位擠壓斷行的教訓重演。
+   注意：.auto-width-tasks 與各專屬 class 的 nth-child 規則要能覆寫上面 .project-tasks 的
+   nth-child 規則，兩者 specificity 完全相同，只靠寫在檔案「後面」贏過前面（比照
+   .burndown-status-header／.burndown-status-row 那組的既有慣例）——這些區塊都不能搬到
+   .project-tasks 的 nth-child 規則前面，否則覆寫會失效、欄寬對錯欄的 bug 會原封不動地
+   重新出現。 */
+.auto-width-tasks {
+  table-layout: auto;
+}
+
+.auto-width-tasks th:nth-child(n),
+.auto-width-tasks td:nth-child(n) {
+  width: auto;
+}
+
+.project-history-tasks th:nth-child(2),
+.project-history-tasks td:nth-child(2) {
+  white-space: normal;
+}
+
+/* PM 週報階段追蹤表（_phase_section.html.erb，8 欄）：第 2 欄「議題」換行時第二行是議題
+   全名、第 8 欄「原因」是延誤說明全文，長度都不固定，繼承 .project-tasks 的 nowrap 會被
+   固定寬度擠出表格；其餘欄位（專案代碼／客戶／PM／目前階段／狀態／日期）維持 nowrap 即可，
+   一起放開換行反而會把這些短欄位擠壓變形（同前面 .issue-tasks 的教訓）。 */
+.pm-weekly-phase-tasks th:nth-child(2),
+.pm-weekly-phase-tasks td:nth-child(2),
+.pm-weekly-phase-tasks th:nth-child(8),
+.pm-weekly-phase-tasks td:nth-child(8) {
+  white-space: normal;
+}
+
+/* 跨來源週報階段追蹤例外表（_phase_exceptions.html.erb，5 欄）：第 2 欄「議題」是
+   issue_name 全文（沒有 issue_name 時才退回 issue_id），長度不定，允許換行。 */
+.phase-exceptions-tasks th:nth-child(2),
+.phase-exceptions-tasks td:nth-child(2) {
+  white-space: normal;
+}
+
+/* 專案階段追蹤頁的卡片展開表格（_overview_list.html.erb，5 欄：階段／預計完成日期／
+   實際完成日期／差異／完成狀態）：這裡的問題跟上面幾個不一樣，不是「欄序跟 305 不同、
+   套錯欄寬」，而是每張卡片各自是獨立 <table>，若沿用 .auto-width-tasks 的 table-layout:
+   auto，瀏覽器會依「這張表自己的內容」各自計算欄寬——多數階段名稱只有 2~4 字（開發／
+   測試／發布／需求確認），但含重排歷史的列會多出「↳ 測試（曾經延誤的舊排程）」這種
+   10+ 字的長字串（見 _overview_list.html.erb:57），稽核發現這會把「階段」欄撐寬，連帶
+   把後面所有欄位往右推，跟其他沒有重排歷史的卡片對不上（實測落差約 165px）。這正是
+   .project-tasks 當初改用 table-layout: fixed 要解決的「每張表各自計算欄寬」問題，只是
+   這次觸發條件是同一張表「列與列之間」內容長度不同，不是跨頁欄序不同——所以不套用
+   .auto-width-tasks（那是給「欄序不同」用的），改成沿用 .project-tasks 本身的
+   table-layout: fixed，另外為這頁欄位語意訂一組自己的固定寬度，這樣不管某一列的階段
+   名稱多長，所有卡片的欄位分界都固定在同一個位置。 */
+.phase-tracking-tasks th:nth-child(2), .phase-tracking-tasks td:nth-child(2) { width: 7.5rem; } /* 預計完成日期 */
+.phase-tracking-tasks th:nth-child(3), .phase-tracking-tasks td:nth-child(3) { width: 7.5rem; } /* 實際完成日期 */
+.phase-tracking-tasks th:nth-child(4), .phase-tracking-tasks td:nth-child(4) { width: 4rem; }   /* 差異 */
+.phase-tracking-tasks th:nth-child(5), .phase-tracking-tasks td:nth-child(5) { width: 6rem; }   /* 完成狀態 */
 
 .project-tasks tbody tr:hover td {
   background: var(--table-row-hover-bg);
@@ -1565,13 +1622,6 @@ turbo-frame[busy]::after {
   display: block;
 }
 
-.gantt-row-label {
-  fill: var(--color-text-muted);
-  /* 拿掉 .gantt-svg 的 width:100% 改用真實像素捲動後（見 .gantt-scroll），SVG 不再被瀏覽器
-     等比例放大，這裡的 px 就是螢幕上實際看到的大小，所以比原本 11px（曾經被放大顯示）調大。 */
-  font-size: 13px;
-}
-
 .gantt-row-baseline {
   stroke: var(--color-border);
   stroke-width: 1;
@@ -1622,9 +1672,50 @@ turbo-frame[busy]::after {
 
 .gantt-label-text {
   min-width: 0; /* flex item 預設 min-width: auto 會擋掉 text-overflow，需要明確歸零 */
+}
+
+/* .gantt-label-text（project_history 單行標籤）跟 .gantt-label-line（project_phase_tracking
+   兩行標籤裡的每一行）都是 152px 側欄裡的單行文字，截斷規則完全一樣，合併成一份共用規則，
+   不要各自宣告一份幾乎一字不差的 overflow/text-overflow/white-space。 */
+.gantt-label-text,
+.gantt-label-line {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 專案歷程頁的甘特圖標籤改用換行顯示完整專案名稱，不需要 hover 才看得到（使用者要求）。
+   只加一個修飾 class 覆寫 white-space/overflow，不動上面共用的 .gantt-label-text base rule，
+   避免影響 project_phase_tracking 那頁「全部年度」多達 87 列的密集清單原本的單行截斷版面。
+   overflow-wrap: anywhere 是防禦性補強：預設斷行規則只在空白／連字號處換行，若專案名稱是
+   一長串不含空白的英數代號，沒有這條會整行溢出 152px 側欄、蓋到右邊的 SVG 圖表。
+   152px 標籤欄寬在 13px 字級下最多放兩行；-webkit-line-clamp 把這個「最多兩行」從單純的
+   期望變成強制限制——真的出現三行以上的極端長名稱時會截斷顯示「…」，不會往上下相鄰列溢出
+   （.gantt-label-row 固定的 GANTT_ROW_HEIGHT／42px 沒有隨文字行數自動加高的機制）。 */
+.gantt-label-text-wrap {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+/* 專案階段追蹤頁的甘特圖標籤固定拆兩行（見 helper 的 phase_gantt_chart_label_lines）：
+   第一行「專案代碼 - 議題 ID」、第二行議題名稱，取代讓瀏覽器對整串文字自動換行（容易斷在
+   名稱／ID 中間，使用者反應難以辨識）。每行各自單行截斷＋省略號（見上面共用的
+   .gantt-label-line 規則），不再往下多行。這個 span 直接是 .gantt-label-row 的 flex item
+   （不疊 .gantt-label-text），所以 min-width: 0 要自己宣告一次，理由同上面 .gantt-label-text
+   那行註解——不能靠疊 class 借用，疊 class 會讓 display: flex 等屬性互相覆蓋，變成前後屬性
+   互蓋、難以追蹤的隱性耦合。 */
+.gantt-label-lines {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
 }
 
 .gantt-label-row-band {
@@ -1690,6 +1781,18 @@ turbo-frame[busy]::after {
   color: var(--color-text-muted);
 }
 
+/* 專案階段追蹤頁的圖例拆成「上軌／下軌」兩個 .gantt-legend-row，靠 flex-basis: 100%
+   強制each各自佔滿一行（比照既有 .filter-row 同樣目的的寫法）——不能只靠 .gantt-legend 的
+   flex-wrap 自然換行：兩排圖例文字加總寬度目前恰好超過容器寬度才會意外分行，內容變少或容器
+   變寬時，沒有這條規則兩排會被排進同一條視覺列，擠成一長串。 */
+.gantt-legend-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+  flex-basis: 100%;
+}
+
 .legend-item {
   display: inline-flex;
   align-items: center;
@@ -1713,6 +1816,22 @@ turbo-frame[busy]::after {
 
 .legend-swatch-delayed {
   background: var(--overdue-text);
+}
+
+.legend-swatch-in-progress {
+  background: var(--color-accent);
+}
+
+/* 稽核發現兩頁甘特圖的圖例都只列出色塊時程軌，沒有任何一項對應到 .gantt-today-line 那條
+   紅色虛線——它跟「延誤完成」用同一個紅色系（--overdue-text），沒有圖例對照容易被誤認成
+   另一種延誤標示。用一個窄的虛線樣式（border 模擬 stroke-dasharray）而非實心方塊，視覺上
+   對應真正的參考線樣式，不是另一個時程色塊。 */
+.legend-swatch-today {
+  width: 2px;
+  height: 14px;
+  border-radius: 0;
+  background: none;
+  border-left: 2px dashed var(--overdue-text);
 }
 
 /* 專案總覽清單：卡片原地展開（<details>/<summary>，不需要 JS），點卡片標題展開該專案本年度
@@ -1788,6 +1907,21 @@ turbo-frame[busy]::after {
   color: var(--color-text-muted);
 }
 
+.tag-status-delayed {
+  color: var(--overdue-text);
+  font-weight: 700;
+}
+
+/* 「目前階段」標籤：使用者要求拿掉「目前階段：」文字，改用跟甘特圖圖例一致的階段專屬色
+   （疊加 .gantt-stage-* class，見 phase_gantt_chart_stage_class）取代文字說明——同一組顏色
+   使用者已經在甘特圖圖例看過一次，不需要重新學一套新配色。.gantt-stage-* 本身只定義了
+   background（給甘特圖圖例的小色塊用，本來沒有文字），直接繼承 .tag 預設的
+   var(--color-text-muted) 在深色主題下會是淺灰字疊淺色底、對比不足，故另外固定一個不隨
+   主題變動的深色文字（--tag-stage-text，定義見 :root，跟 --gantt-stage-* 放在一起）。 */
+.tag-stage {
+  color: var(--tag-stage-text);
+}
+
 .tag-hours {
   font-variant-numeric: tabular-nums;
 }
@@ -1802,14 +1936,21 @@ turbo-frame[busy]::after {
   font-variant-numeric: tabular-nums;
 }
 
+/* 5.5ch／4.5ch 是舊寬度，只夠放兩位數工時（例如「72.5h／54h」）；稽核發現「237.75h」這種
+   三位數＋小數的真實資料（RAG「1.0.0」議題）會讓數字自己超出欄寬，多出來的部分直接疊到緊接
+   在後的「/」分隔符號上，把「/」蓋到幾乎看不見。兩個數字都加寬到能放 7 個字元（"237.75h"
+   剛好 7 碼）——第二格（預估人時）原本只加到 6ch，但 estimated_hours 是試算表原始值、未經
+   任何位數限制（不像 consumed_hours 是扣減後 round(2) 的衍生值），一樣可能是三位數＋小數；
+   多專案彙總的 hours_estimated／hours_consumed 也是加總後 round(1)，同樣可能跨過三位數，
+   兩格用同一個寬度才不會只修好其中一邊。 */
 .hours-pair .hours-num {
   display: inline-block;
-  width: 5.5ch;
+  width: 7ch;
   text-align: right;
 }
 
 .hours-pair .hours-num:last-child {
-  width: 4.5ch;
+  width: 7ch;
   text-align: left;
 }
 
@@ -1891,6 +2032,14 @@ turbo-frame[busy]::after {
 /* 甘特圖「提前完成」色塊：既有 .gantt-task-actual-delayed 已可沿用，僅缺這一個 variant。 */
 .gantt-task-actual-early {
   fill: var(--delay-negative);
+}
+
+/* 使用者反應「未完成不代表沒有進度條」：目前階段還沒完成但真的在做，畫到今天為止的色塊，
+   用中性的強調色（跟站內連結／強調文字同一個 --color-accent）表示「還在期限內、進行中」，
+   跟已完成的準時（綠）／延誤（紅）區分開來；一旦超過預計日期還沒完成，改用既有的
+   .gantt-task-actual-delayed（紅），不用再發明第三種顏色。 */
+.gantt-task-actual-in_progress {
+  fill: var(--color-accent);
 }
 
 /* 甘特圖雙軌設計：上軌固定依階段配色（不印文字，對照圖例辨識），下軌只依準時／延誤上色，

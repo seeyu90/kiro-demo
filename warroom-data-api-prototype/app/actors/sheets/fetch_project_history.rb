@@ -15,7 +15,7 @@ module Sheets
       # 客戶/PM 只是錦上添花的補充欄位。實務上發現這份試算表常常還沒把 Service Account 加進
       # 共用名單（跟 305/307 是不同試算表、不同擁有者，共用設定各自獨立），若因此讓整頁
       # 連 305/307 都看不到，反而讓一個非核心資料源的權限問題擋住核心功能。找不到對應
-      # 專案時客戶/PM/狀態顯示 `—`（需求 2.2）；roster 整體失敗時所有專案都顯示 `—`，
+      # 專案時客戶/PM 顯示 `—`（需求 2.2）；roster 整體失敗時所有專案都顯示 `—`，
       # 差別只在於前者是「查得到 roster 但這個專案不在清單裡」，後者是「roster 整批查不到」，
       # 對畫面呈現而言是同一件事，故共用同一套「找不到就給空值」的處理方式。
       roster_result = Sheets::FetchProjectRoster.result
@@ -60,6 +60,37 @@ module Sheets
       fail!(failure_code: result.failure_code, message: result.message)
     end
 
+    # 防禦性檢查：稽核真實資料時發現兩個不同 Roster 列的「307對應專案」欄（burndown_names_raw）
+    # 曾經填成完全相同的字串（EW P2E／AMAS AIoT Platform 兩列都是 "AMAS Cloud"），代表同一筆
+    # 307 工時會被兩個不同專案卡片同時比對到、重複計入。這是人工維護欄位的資料品質問題，不是
+    # matched_burndown_issues 的比對邏輯錯誤，程式不代為判斷哪個專案才該擁有這筆議題（同稽核記錄
+    # issue_id=4637 標題不一致的處理原則），只記錄警告讓問題可被發現，不擋頁、不改變既有計算結果。
+    #
+    # 直接沿用 build_overview_rows 迴圈裡已經跑過的 matched_burndown_issues 結果（見呼叫端），
+    # 不重新推導一次比對規則：(1) 只看真的會顯示在畫面上的專案（未在 305 清單裡的 Roster 列，
+    # 就算 burndown_names_raw 有重疊也不會有卡片可以重複計入，不該誤報）；(2) 「重複」的定義
+    # 是「同一個 issue_id 真的同時出現在兩個專案各自的比對結果裡」，不是兩個 burndown_names_raw
+    # 字串本身有子字串重疊就算——後者在短代號（如 "AG"／"PMS"）常見的情況下容易誤報兩個完全
+    # 無關的專案「疑似重複」。同一組專案的多筆議題彙整成一行警告，不逐筆各噴一行。
+    def warn_on_ambiguous_burndown_mappings(matched_by_project)
+      issue_owners = Hash.new { |h, k| h[k] = [] }
+      matched_by_project.each do |project_name, issues|
+        issues.each { |issue| issue_owners[issue[:issue_id]] << project_name }
+      end
+
+      ambiguous = issue_owners.select { |_issue_id, names| names.uniq.size > 1 }
+      return if ambiguous.empty?
+
+      ambiguous.group_by { |_issue_id, names| names.uniq.sort }.each do |project_names, pairs|
+        issue_ids = pairs.map(&:first)
+        Rails.logger.warn(
+          "[Sheets::FetchProjectHistory] #{issue_ids.size} 筆 307 議題（issue_id：" \
+          "#{issue_ids.join('、')}）同時比對到多個顯示中的專案卡片：#{project_names.join('、')}，" \
+          "工時可能被重複計入多張卡片，請人工核對 300_員工專案 試算表的「307對應專案」欄。"
+        )
+      end
+    end
+
     # 實測發現 305 的專案名稱有時用 Roster 的「專案」全名（如 "Virtuous HRM"），有時用「專案
     # 縮寫」（如 "亞炬 Platform"、"RAG"），沒有固定用哪一欄，故兩欄都查找，任一欄比對到就算
     # （同一個縮寫理論上不會同時是另一個專案的全名，實務資料裡也沒出現這種衝突）。
@@ -69,7 +100,7 @@ module Sheets
         {}
     end
 
-    # 以 305 的專案名稱為主體（有進度可看的專案），Roster 找不到對應列時客戶/PM/狀態為 nil，
+    # 以 305 的專案名稱為主體（有進度可看的專案），Roster 找不到對應列時客戶/PM 為 nil，
     # 不視為錯誤（需求 2.1、2.2）。
     #
     # 每列的議題清單（:tasks）一律用該專案對應到的 307 議題（依 year 篩選開案年度，預設今年，
@@ -82,20 +113,25 @@ module Sheets
     # false）不套用這條排除規則，維持既有降級慣例——全部專案照常列出、只是議題清單是空的，
     # 不讓一個非核心資料源的問題把整個專案清單清空。
     def build_overview_rows(roster, progress_grouped, burndown_issues, year, duration_data_available)
-      progress_grouped.filter_map do |project_name, _progress_tasks|
+      matched_by_project = {}
+
+      rows = progress_grouped.filter_map do |project_name, _progress_tasks|
         roster_row = resolve_roster_row(roster, project_name)
         matched = matched_burndown_issues(roster_row, project_name, burndown_issues)
         matched_in_year = filter_issues_by_year(matched, year)
 
         next if duration_data_available && year.present? && matched_in_year.empty?
 
+        # 用 matched_in_year（不是 matched）記錄，且只在確定會產生一列（不被上面的年度篩選排除）
+        # 之後才記錄：跟上面「只看真的會顯示在畫面上的專案」的說明保持字面一致——選了年度篩選時，
+        # 不因為某個議題落在畫面看不到的其他年度，就把它算進本次的重複比對告警。
+        matched_by_project[project_name] = matched_in_year
         tasks = duration_tasks_from_burndown(matched_in_year)
 
         {
           project_name: project_name,
           customer: roster_row[:customer],
           pm: roster_row[:pm],
-          status: roster_row[:status],
           tasks: tasks,
           progress_percent: progress_percent_for(tasks),
           hours_estimated: sum_estimated_hours(tasks),
@@ -103,6 +139,10 @@ module Sheets
           has_overdue: tasks.any? { |t| t[:overdue] }
         }
       end
+
+      warn_on_ambiguous_burndown_mappings(matched_by_project) if duration_data_available
+
+      rows
     end
 
     def filter_issues_by_year(issues, year)
