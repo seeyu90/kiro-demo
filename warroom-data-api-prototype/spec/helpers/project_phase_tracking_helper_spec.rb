@@ -202,8 +202,8 @@ RSpec.describe ProjectPhaseTrackingHelper, type: :helper do
     let(:domain) { { min_date: Date.new(2026, 1, 1), max_date: Date.new(2026, 12, 31) } }
     let(:width) { helper.phase_gantt_chart_svg_width(domain) }
 
-    def stage(planned_date: nil, actual_date: nil, primary: true)
-      row = primary ? { planned_date: planned_date, actual_date: actual_date } : nil
+    def stage(planned_date: nil, actual_date: nil, primary: true, status: "未完成")
+      row = primary ? { planned_date: planned_date, actual_date: actual_date, status: status } : nil
       { stage: "x", primary: row, history: [] }
     end
 
@@ -373,6 +373,26 @@ RSpec.describe ProjectPhaseTrackingHelper, type: :helper do
           ]
 
           segment = helper.phase_gantt_chart_actual_segment(stages, 1, domain, width, "開發")
+
+          expect(segment).to be_nil
+        end
+
+        # 迴歸測試：逾期判斷改呼叫既有的 phase_tracking_overdue?（見 code review），不能自己
+        # 重寫 `Date.current > planned`——自己重寫會漏掉「暫緩不算逾期」這條排除規則。
+        it "stays :in_progress (not :delayed) when the status is 暫緩, even past the planned_date — 暫緩 is never overdue" do
+          stages = [ stage(planned_date: "2026-09-08", actual_date: nil, status: "暫緩") ]
+
+          segment = helper.phase_gantt_chart_actual_segment(stages, 0, domain, width, "x")
+
+          expect(segment[:variant]).to eq(:in_progress)
+        end
+
+        # 迴歸測試：actual_date 非空但格式不合法時，不該被當成「尚未完成、正在進行」——資料
+        # 品質問題應該維持舊行為（不畫），不能偽裝成合理的進度呈現。
+        it "returns nil (draws nothing) when actual_date is present but unparseable, even though it is the current stage" do
+          stages = [ stage(planned_date: "2026-09-08", actual_date: "TBD") ]
+
+          segment = helper.phase_gantt_chart_actual_segment(stages, 0, domain, width, "x")
 
           expect(segment).to be_nil
         end

@@ -1672,6 +1672,13 @@ turbo-frame[busy]::after {
 
 .gantt-label-text {
   min-width: 0; /* flex item 預設 min-width: auto 會擋掉 text-overflow，需要明確歸零 */
+}
+
+/* .gantt-label-text（project_history 單行標籤）跟 .gantt-label-line（project_phase_tracking
+   兩行標籤裡的每一行）都是 152px 側欄裡的單行文字，截斷規則完全一樣，合併成一份共用規則，
+   不要各自宣告一份幾乎一字不差的 overflow/text-overflow/white-space。 */
+.gantt-label-text,
+.gantt-label-line {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1698,19 +1705,17 @@ turbo-frame[busy]::after {
 
 /* 專案階段追蹤頁的甘特圖標籤固定拆兩行（見 helper 的 phase_gantt_chart_label_lines）：
    第一行「專案代碼 - 議題 ID」、第二行議題名稱，取代讓瀏覽器對整串文字自動換行（容易斷在
-   名稱／ID 中間，使用者反應難以辨識）。每行各自單行截斷＋省略號，不再往下多行。 */
+   名稱／ID 中間，使用者反應難以辨識）。每行各自單行截斷＋省略號（見上面共用的
+   .gantt-label-line 規則），不再往下多行。這個 span 直接是 .gantt-label-row 的 flex item
+   （不疊 .gantt-label-text），所以 min-width: 0 要自己宣告一次，理由同上面 .gantt-label-text
+   那行註解——不能靠疊 class 借用，疊 class 會讓 display: flex 等屬性互相覆蓋，變成前後屬性
+   互蓋、難以追蹤的隱性耦合。 */
 .gantt-label-lines {
   display: flex;
   flex-direction: column;
   justify-content: center;
   gap: 2px;
-  white-space: normal;
-}
-
-.gantt-label-line {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0;
 }
 
 .gantt-label-row-band {
@@ -1774,6 +1779,18 @@ turbo-frame[busy]::after {
   margin-bottom: 8px;
   font-size: 12px;
   color: var(--color-text-muted);
+}
+
+/* 專案階段追蹤頁的圖例拆成「上軌／下軌」兩個 .gantt-legend-row，靠 flex-basis: 100%
+   強制each各自佔滿一行（比照既有 .filter-row 同樣目的的寫法）——不能只靠 .gantt-legend 的
+   flex-wrap 自然換行：兩排圖例文字加總寬度目前恰好超過容器寬度才會意外分行，內容變少或容器
+   變寬時，沒有這條規則兩排會被排進同一條視覺列，擠成一長串。 */
+.gantt-legend-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+  flex-basis: 100%;
 }
 
 .legend-item {

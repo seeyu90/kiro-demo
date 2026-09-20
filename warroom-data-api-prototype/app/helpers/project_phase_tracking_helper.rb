@@ -142,7 +142,9 @@ module ProjectPhaseTrackingHelper
   #   畫一段延伸到「今天」的色塊，呈現「做到現在這裡了、還沒結束」；還沒被推進到的階段（例如
   #   後面的階段已經預先排定日期，但根本還沒開始）維持不畫，不能只看「有沒有 actual_date」。
   #   顏色再依「今天有沒有超過這個階段的預計日期」分成「進行中」（藍，還在期限內）跟「延誤」
-  #   （紅，已經超過預計日期還沒完成，跟卡片摘要列的逾期變色是同一個概念）。
+  #   （紅，已經超過預計日期還沒完成）——逾期判斷直接呼叫 phase_tracking_overdue?，不自己
+  #   重寫日期比較：這個模組開頭的不變式明訂完成狀態／差異判斷邏輯只能有一份，且只有
+  #   phase_tracking_overdue? 知道「暫緩」狀態不算逾期，自己重寫會漏掉這條排除規則。
   #
   # stages：單一卡片的完整 STAGE_ORDER 陣列（{ stage:, primary:, history: }，見
   # Sheets::FetchPhaseTracking#build_card），index：要畫的這個階段在陣列中的位置，
@@ -168,24 +170,27 @@ module ProjectPhaseTrackingHelper
     return nil if row.nil?
 
     actual = parse_date_only(row[:actual_date])
-    planned = parse_date_only(row[:planned_date])
 
     if actual
       end_date = actual
-      # 圖例寫的是「準時／提前完成」＝綠色、「延誤完成」＝紅色（見 _gantt_legend.html.erb），
-      # 準時（diff_days == 0）理當跟提前一樣算綠色。不能用 `.negative?` 判斷：那只有嚴格小於 0
-      # 才算 :early，diff_days 剛好等於 0（真正準時）會落到 else 分支被標成 :delayed，跟圖例
-      # 文字自相矛盾。`diff_days <= 0`（不是正數就算準時／提前）才是唯一正確的「沒有延誤」
-      # 判斷式。
+      # 圖例寫的是「準時／提前完成」＝綠色、「延誤（完成或未完成）」＝紅色（見
+      # _gantt_legend.html.erb），準時（diff_days == 0）理當跟提前一樣算綠色。不能用
+      # `.negative?` 判斷：那只有嚴格小於 0 才算 :early，diff_days 剛好等於 0（真正準時）
+      # 會落到 else 分支被標成 :delayed，跟圖例文字自相矛盾。`diff_days <= 0`（不是正數就算
+      # 準時／提前）才是唯一正確的「沒有延誤」判斷式。
       state = compute_row_state(row[:planned_date], row[:actual_date])
       variant = state[:diff_days].present? && !state[:diff_days].positive? ? :early : :delayed
-      diff_days = state[:diff_days]
-    elsif stage[:stage] == current_stage_name
+      segment_diff_days = state[:diff_days]
+    elsif row[:actual_date].blank? && stage[:stage] == current_stage_name
       # 還沒完成，但這是「目前階段」：畫到今天為止，不是畫到（可能還沒到）的 planned_date——
       # 「實際」時程只能呈現已經過去的時間，畫到未來的預計日期會變成「還沒發生的事已經發生」。
+      # 這裡明確要求 actual_date「真的空白」（不是只看 parse 失敗）：日期正規化失敗時保留原始
+      # 字串、不拋例外是既有慣例（見 Sheets::FetchPhaseTracking），代表非空但格式不合法的
+      # actual_date 是真實可能發生的資料品質問題，不該被當成「尚未完成、正在進行」畫出色塊，
+      # 維持舊行為（落到下面 else 分支不畫）。
       end_date = Date.current
-      variant = planned && Date.current > planned ? :delayed : :in_progress
-      diff_days = nil
+      variant = phase_tracking_overdue?(row[:status], row[:planned_date]) ? :delayed : :in_progress
+      segment_diff_days = nil
     else
       return nil
     end
@@ -194,7 +199,7 @@ module ProjectPhaseTrackingHelper
     x1 = phase_gantt_chart_x(start_date, domain, width)
     x2 = [ phase_gantt_chart_x(end_date, domain, width), x1 + GANTT_MIN_SEGMENT_WIDTH ].max
 
-    { x: x1.round(2), width: (x2 - x1).round(2), variant: variant, diff_days: diff_days }
+    { x: x1.round(2), width: (x2 - x1).round(2), variant: variant, diff_days: segment_diff_days }
   end
 
   # 由 index 往前找上一個「有主要記錄、且 date_key 這個日期欄位有值」的階段，回傳該日期
