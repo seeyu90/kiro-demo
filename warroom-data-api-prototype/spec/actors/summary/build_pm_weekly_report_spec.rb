@@ -244,6 +244,24 @@ RSpec.describe Summary::BuildPmWeeklyReport do
     end
   end
 
+  describe "階段追蹤：進行中狀態" do
+    # 迴歸測試：稽核真實資料時發現「進行中」是規格原本沒列出的第 6 種狀態值，
+    # PHASE_EXCEPTION_STATUSES 白名單原本沒涵蓋它，導致真的還在做、甚至已經逾期的卡片
+    # （真實案例：RAG 202608B／5188，逾期 6 天）整張消失在 PM 週報上，見
+    # Sheets::FetchPhaseTracking 附註。
+    let(:phase_rows) do
+      [
+        phase_row(project: "RAG", issue_id: "9301", issue_name: "202608B", stage: "測試",
+                  planned: "2026-09-10", status: "進行中")
+      ]
+    end
+
+    it "still surfaces a 進行中 stage that is overdue, instead of silently dropping the card" do
+      expect(result.phase_items.map { |i| [ i[:issue_id], i[:bucket] ] })
+        .to eq([ [ "9301", :overdue ] ])
+    end
+  end
+
   describe "階段追蹤：目前階段判斷" do
     # 迴歸測試：跟 Sheets::FetchPhaseTracking#current_stage 同一個 bug、同一個修法（見該檔案
     # 附註的真實案例）——「測試」還在進行中（有主要記錄、無 actual_date），但「發布」已經

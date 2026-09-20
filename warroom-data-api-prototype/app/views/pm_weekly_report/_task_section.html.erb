@@ -22,21 +22,21 @@
   <tbody>
     <% items.each do |task| %>
       <%= tag.tr(class: ("row-overdue" if variant == :overdue)) do %>
-        <td><%= task[:task_name] %></td>
-        <td><%= task[:task_type].presence || "—" %></td>
-        <td>
+        <td data-label="任務名稱"><%= task[:task_name] %></td>
+        <td data-label="類型"><%= task[:task_type].presence || "—" %></td>
+        <td data-label="狀態">
           <span class="status-badge status-<%= task[:status].to_s.gsub(" ", "_") %>"><%= task[:status].presence || "—" %></span>
         </td>
-        <td><%= task[:owner].presence || "—" %></td>
-        <td><%= pm_weekly_date_label(task[:planned_completion_date]) %></td>
+        <td data-label="負責人"><%= task[:owner].presence || "—" %></td>
+        <td data-label="預計完成日"><%= pm_weekly_date_label(task[:planned_completion_date]) %></td>
         <% if variant == :overdue %>
-          <td>
+          <td data-label="逾期天數">
             <% days = pm_weekly_overdue_days(task) %>
             <span class="delay-days delayed"><%= days ? "#{days} 天" : "—" %></span>
           </td>
         <% elsif variant == :completed %>
-          <td><%= pm_weekly_date_label(task[:actual_completion_date]) %></td>
-          <td>
+          <td data-label="實際完成日"><%= pm_weekly_date_label(task[:actual_completion_date]) %></td>
+          <td data-label="延誤天數">
             <% delay = task[:delay_days].to_i %>
             <span class="delay-days <%= delay.positive? ? "delayed" : "on-time" %>">
               <%= delay.positive? ? "+#{delay} 天" : (task[:delay_days].nil? ? "—" : "準時") %>

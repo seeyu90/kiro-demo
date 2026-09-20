@@ -36,7 +36,10 @@ module Summary
     output :message
 
     # 階段追蹤只列「還沒結束」的狀態；「完成」「延誤已完成」已結束，不是本週要處理的工作。
-    PHASE_EXCEPTION_STATUSES = [ "延誤未完成", "未完成", "暫緩" ].freeze
+    # 「進行中」是稽核真實資料時發現的第 6 種原始狀態值（原本規格只列出前 4 種，見
+    # Sheets::FetchPhaseTracking 附註）；語意上也是「還沒結束」，漏掉會讓真的在做、甚至已經
+    # 逾期的工作（真實案例：RAG 202608B／5188，逾期 6 天）整張卡片消失在 PM 週報上。
+    PHASE_EXCEPTION_STATUSES = [ "延誤未完成", "未完成", "暫緩", "進行中" ].freeze
 
     PHASE_BUCKET_ORDER = { overdue: 0, this_week: 1, next_week: 2 }.freeze
 

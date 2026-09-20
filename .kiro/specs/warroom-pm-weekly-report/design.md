@@ -104,8 +104,14 @@ next_week = Sheets::FetchProjectProgress.week_range(Date.current + 7)
 
 ### 階段追蹤
 
-對每張 card 取 `status` ∈ {延誤未完成, 未完成, 暫緩} 者，取「目前階段」（`stages` 由後往前第一個
-有 `primary` 的階段，與 `FetchPhaseTracking#current_issue_status` 同一個定義）的 `planned_date`：
+> **設計變更紀錄**：稽核真實資料時發現「進行中」是規格撰寫當時未觀察到的第 6 種狀態值，
+> 已補進下方白名單；同時「目前階段」的判定規則也已修正（見下方說明），本節同步更新以符合
+> 現況實作。
+
+對每張 card 取 `status` ∈ {延誤未完成, 未完成, 暫緩, 進行中} 者，取「目前階段」（`stages` 由前
+往後第一個「有 `primary` 記錄、但還沒有 `actual_date`」的階段；全部有記錄的階段都已完成時，
+才退回由後往前第一個有 `primary` 的階段——與 `FetchPhaseTracking#current_stage` 同一個定義，
+見該檔案附註的真實案例說明）的 `planned_date`：
 < 今天 → 逾期；∈ 本週／下週 → 對應區塊；其餘不列入（需求 4.2）。
 
 ## 逾期天數
